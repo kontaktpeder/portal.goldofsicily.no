@@ -5,7 +5,9 @@ import {
   flavorLabel,
   productName,
   type CatalogProduct,
+  type DeliveryFlavorQty,
   type ReportFlavorLine,
+  type StoredDeliveryLine,
   type StoredFlavorLine,
   type FlavorQty,
 } from "@/lib/flavors";
@@ -151,6 +153,69 @@ export function FlavorBreakdown({
             {line.remaining_stock} {t("stock").toLowerCase()}
             {" · "}
             {line.next_required_quantity ?? 0} {t("next_need").toLowerCase()}
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+export function DeliveryFlavorEditor({
+  lines,
+  onChange,
+}: {
+  lines: DeliveryFlavorQty[];
+  onChange: (lines: DeliveryFlavorQty[]) => void;
+}) {
+  const { t, lang } = useI18n();
+  if (lines.length === 0) {
+    return <p className="text-sm text-muted-foreground">{t("no_products")}</p>;
+  }
+  return (
+    <div className="space-y-3">
+      {lines.map((line) => (
+        <article key={line.productId} className="rounded-2xl border border-border bg-background/60 p-4">
+          <NumberStepper
+            compact
+            step={10}
+            label={lang === "en" ? line.nameEn : line.nameNo}
+            value={line.quantity}
+            onChange={(quantity) =>
+              onChange(
+                lines.map((item) =>
+                  item.productId === line.productId ? { ...item, quantity } : item,
+                ),
+              )
+            }
+          />
+        </article>
+      ))}
+    </div>
+  );
+}
+
+export function DeliveryFlavorBreakdown({
+  lines,
+  className,
+}: {
+  lines: StoredDeliveryLine[] | null | undefined;
+  className?: string;
+}) {
+  const { t, lang } = useI18n();
+  const items = (lines ?? []).filter((line) => line.quantity > 0);
+  if (items.length === 0) return null;
+  return (
+    <ul className={cn("mt-3 space-y-1.5", className)}>
+      {items.map((line) => (
+        <li
+          key={line.product_id}
+          className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 text-sm"
+        >
+          <span className="font-medium">
+            {line.products ? productName(line.products, lang) : t("flavors")}
+          </span>
+          <span className="tabular-nums text-muted-foreground">
+            {line.quantity} {t("pcs")}
           </span>
         </li>
       ))}

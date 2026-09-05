@@ -26,6 +26,19 @@ export type StoredFlavorLine = {
   products: { name_no: string; name_en: string } | null;
 };
 
+export type DeliveryFlavorQty = {
+  productId: string;
+  nameNo: string;
+  nameEn: string;
+  quantity: FlavorQty;
+};
+
+export type StoredDeliveryLine = {
+  product_id: string;
+  quantity: number;
+  products: { name_no: string; name_en: string } | null;
+};
+
 export function qty(value: FlavorQty) {
   return value === "" ? 0 : value;
 }
@@ -81,4 +94,27 @@ export function linesPayload(lines: ReportFlavorLine[]) {
     remaining_stock: qty(line.remaining),
     next_required_quantity: qty(line.nextNeed),
   }));
+}
+
+export function initialDeliveryQtys(products: CatalogProduct[]): DeliveryFlavorQty[] {
+  return products.map((product) => ({
+    productId: product.id,
+    nameNo: product.name_no,
+    nameEn: product.name_en,
+    quantity: 0,
+  }));
+}
+
+export function sumDeliveryQty(lines: DeliveryFlavorQty[]) {
+  return lines.reduce((sum, line) => sum + qty(line.quantity), 0);
+}
+
+export function deliveryLinesPayload(deliveryId: string, lines: DeliveryFlavorQty[]) {
+  return lines
+    .filter((line) => qty(line.quantity) > 0)
+    .map((line) => ({
+      delivery_id: deliveryId,
+      product_id: line.productId,
+      quantity: qty(line.quantity),
+    }));
 }
