@@ -12,12 +12,12 @@ import { isValidUsername, parseLoginIdentifier } from "@/lib/username";
 import { errorMessage } from "@/lib/utils";
 import { PrimaryButton, TextField } from "@/components/field";
 
-export const Route = createFileRoute("/_authenticated/admin/customers/")({
+export const Route = createFileRoute("/_authenticated/admin/venues/")({
   head: () => ({
     meta: [
-      { title: "Customers — Gold of Sicily admin" },
-      { name: "description", content: "Create and manage Gold of Sicily partner venues." },
-      { property: "og:title", content: "Customers — Gold of Sicily admin" },
+      { title: "Serveringssteder — Gold of Sicily admin" },
+      { name: "description", content: "Create and manage Gold of Sicily serving venues." },
+      { property: "og:title", content: "Serveringssteder — Gold of Sicily admin" },
       { property: "og:description", content: "Create and manage partner venues and their logins." },
     ],
   }),
@@ -93,8 +93,8 @@ function AdminCustomers() {
       await queryClient.invalidateQueries({ queryKey: ["admin-overview"] });
       if (created?.customerId) {
         void navigate({
-          to: "/admin/customers/$customerId",
-          params: { customerId: created.customerId },
+          to: "/admin/venues/$venueId",
+          params: { venueId: created.customerId },
         });
       }
     } catch (error) {
@@ -234,8 +234,8 @@ function AdminCustomers() {
           data?.rows.map((row) => (
             <Link
               key={row.id}
-              to="/admin/customers/$customerId"
-              params={{ customerId: row.id }}
+              to="/admin/venues/$venueId"
+              params={{ venueId: row.id }}
               className="surface-card flex items-center gap-4 p-4"
             >
               <span className={`size-3 shrink-0 rounded-full ${statusToken(row.status)}`} />

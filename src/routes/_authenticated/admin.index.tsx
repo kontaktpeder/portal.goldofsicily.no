@@ -42,6 +42,21 @@ function AdminDashboard() {
         <Metric label={t("new_venues")} value={metrics?.newVenues ?? 0} plain />
       </div>
 
+      {(data?.flavorWeek ?? []).length > 0 ? (
+        <>
+          <h2 className="eyebrow mt-10">{t("flavors_this_week")}</h2>
+          <div className="mt-3 grid grid-cols-2 gap-3 lg:grid-cols-4">
+            {data?.flavorWeek.map((flavor) => (
+              <Metric
+                key={flavor.productId}
+                label={lang === "en" ? flavor.nameEn : flavor.nameNo}
+                value={flavor.sold}
+              />
+            ))}
+          </div>
+        </>
+      ) : null}
+
       <h2 className="eyebrow mt-10">{t("partners")}</h2>
       <div className="mt-3 space-y-3">
         {(data?.partners ?? []).length === 0 && (data?.unassigned ?? []).length === 0 ? (
@@ -104,8 +119,8 @@ function VenueRow({ row, compact }: { row: CustomerRow; compact?: boolean }) {
   const { t, lang } = useI18n();
   return (
     <Link
-      to="/admin/customers/$customerId"
-      params={{ customerId: row.id }}
+      to="/admin/venues/$venueId"
+      params={{ venueId: row.id }}
       className={
         compact
           ? "flex items-center gap-3 rounded-xl bg-background/60 px-3 py-2"

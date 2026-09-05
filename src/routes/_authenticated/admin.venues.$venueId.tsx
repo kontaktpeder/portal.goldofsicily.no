@@ -10,11 +10,13 @@ import { formatDate } from "@/lib/sign-out";
 import { errorMessage } from "@/lib/utils";
 import { resetCustomerPassword } from "@/lib/admin.functions";
 import { PrimaryButton, TextAreaField, TextField } from "@/components/field";
+import { FlavorBreakdown } from "@/components/flavor-lines";
+import type { StoredFlavorLine } from "@/lib/flavors";
 
-export const Route = createFileRoute("/_authenticated/admin/customers/$customerId")({
+export const Route = createFileRoute("/_authenticated/admin/venues/$venueId")({
   head: () => ({
     meta: [
-      { title: "Customer detail — Gold of Sicily admin" },
+      { title: "Serveringssted — Gold of Sicily admin" },
       {
         name: "description",
         content: "Stock, sales, feedback, deliveries and account settings for one partner venue.",
@@ -32,41 +34,43 @@ export const Route = createFileRoute("/_authenticated/admin/customers/$customerI
 type Tab = "overview" | "reports" | "deliveries" | "profile" | "menu" | "account";
 
 function CustomerDetail() {
-  const { customerId } = Route.useParams();
+  const { venueId } = Route.useParams();
   const { t, lang } = useI18n();
   const queryClient = useQueryClient();
   const [tab, setTab] = useState<Tab>("overview");
 
   const { data } = useQuery({
-    queryKey: ["customer-detail", customerId],
+    queryKey: ["venue-detail", venueId],
     queryFn: async () => {
       const [customer, reports, deliveries, profile, menu, products, partners] = await Promise.all([
         supabase
-          .from("customers")
+          .from("venues")
           .select("*, partners(id, name)")
-          .eq("id", customerId)
+          .eq("id", venueId)
           .maybeSingle(),
         supabase
           .from("shift_reports")
-          .select("*")
-          .eq("customer_id", customerId)
+          .select(
+            "*, shift_report_lines(product_id, sold, remaining_stock, next_required_quantity, products(name_no, name_en))",
+          )
+          .eq("venue_id", venueId)
           .order("created_at", { ascending: false })
           .limit(100),
         supabase
           .from("deliveries")
           .select("*")
-          .eq("customer_id", customerId)
+          .eq("venue_id", venueId)
           .order("delivered_at", { ascending: false })
           .limit(100),
         supabase
           .from("profiles")
           .select("id, username, preferred_language")
-          .eq("customer_id", customerId)
+          .eq("venue_id", venueId)
           .maybeSingle(),
         supabase
           .from("venue_menu_items")
           .select("*, products(*)")
-          .eq("customer_id", customerId)
+          .eq("venue_id", venueId)
           .order("sort_order"),
         supabase.from("products").select("*").eq("active", true).order("sort_order"),
         supabase.from("partners").select("id, name, kind").eq("active", true).order("name"),
@@ -104,7 +108,7 @@ function CustomerDetail() {
     <main className="mx-auto w-full max-w-5xl px-5 pb-16">
       <div className="pt-6">
         <Link
-          to="/admin/customers"
+          to="/admin/venues"
           className="inline-flex items-center gap-1.5 text-xs text-muted-foreground"
         >
           <ArrowLeft className="size-3.5" /> {t("customers")}
@@ -188,6 +192,7 @@ function CustomerDetail() {
                     <strong className="tabular-nums">{report.next_required_quantity ?? "—"}</strong>
                   </span>
                 </div>
+                <FlavorBreakdown lines={report.shift_report_lines as StoredFlavorLine[] | null} />
                 {report.needs_review ? (
                   <p className="mt-3 flex items-start gap-2 rounded-xl bg-warning/15 px-3 py-2 text-xs">
                     <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
@@ -237,7 +242,7 @@ function CustomerDetail() {
 
       {tab === "menu" && data?.customer ? (
         <MenuTab
-          customerId={customerId}
+          customerId={venueId}
           menu={data.menu}
           products={data.products}
           onSaved={() => queryClient.invalidateQueries()}
@@ -308,7 +313,7 @@ function AccountTab({
   async function save() {
     setBusy(true);
     const { error } = await supabase
-      .from("customers")
+      .from("venues")
       .update({
         name,
         location: location.trim() || null,
@@ -490,7 +495,7 @@ function ProfileTab({
   async function save() {
     setBusy(true);
     const { error } = await supabase
-      .from("customers")
+      .from("venues")
       .update({
         name: form.name.trim(),
         city: form.city.trim() || null,
@@ -665,7 +670,7 @@ function MenuTab({
     setBusy(true);
     const priceNok = Number(price.replace(",", "."));
     const { error } = await supabase.from("venue_menu_items").insert({
-      customer_id: customerId,
+      venue_id: customerId,
       product_id: productId,
       display_name: displayName.trim() || null,
       price_ore: Number.isFinite(priceNok) ? Math.round(priceNok * 100) : null,

@@ -6,6 +6,8 @@ import { useSessionInfo } from "@/hooks/use-session";
 import { useI18n } from "@/lib/i18n";
 import { formatDate } from "@/lib/sign-out";
 import { Wordmark } from "@/components/brand";
+import { FlavorBreakdown } from "@/components/flavor-lines";
+import type { StoredFlavorLine } from "@/lib/flavors";
 
 export const Route = createFileRoute("/_authenticated/history")({
   head: () => ({
@@ -32,15 +34,15 @@ function HistoryPage() {
         supabase
           .from("shift_reports")
           .select(
-            "id, created_at, sold_this_shift, remaining_stock, next_required_quantity, guest_feedback_rating, preparation_issue",
+            "id, created_at, sold_this_shift, remaining_stock, next_required_quantity, guest_feedback_rating, preparation_issue, shift_report_lines(product_id, sold, remaining_stock, next_required_quantity, products(name_no, name_en))",
           )
-          .eq("customer_id", customerId!)
+          .eq("venue_id", customerId!)
           .order("created_at", { ascending: false })
           .limit(50),
         supabase
           .from("deliveries")
           .select("id, quantity, delivered_at, note")
-          .eq("customer_id", customerId!)
+          .eq("venue_id", customerId!)
           .order("delivered_at", { ascending: false })
           .limit(50),
       ]);
@@ -90,6 +92,7 @@ function HistoryPage() {
                     unit={t("pcs")}
                   />
                 </div>
+                <FlavorBreakdown lines={report.shift_report_lines as StoredFlavorLine[] | null} />
               </article>
             ))
           )}

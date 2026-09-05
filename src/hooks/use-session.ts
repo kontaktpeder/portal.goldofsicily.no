@@ -29,19 +29,19 @@ async function loadSessionInfo(): Promise<SessionInfo> {
   const [{ data: profile }, { data: roles }] = await Promise.all([
     supabase
       .from("profiles")
-      .select("username, customer_id, preferred_language, customers(name)")
+      .select("username, venue_id, preferred_language, venues(name)")
       .eq("id", session.user.id)
       .maybeSingle(),
     supabase.from("user_roles").select("role").eq("user_id", session.user.id),
   ]);
 
-  const customer = (profile?.customers as { name: string } | null) ?? null;
+  const customer = (profile?.venues as { name: string } | null) ?? null;
 
   return {
     session,
     isAdmin: (roles ?? []).some((r) => r.role === "admin"),
     username: profile?.username ?? null,
-    customerId: profile?.customer_id ?? null,
+    customerId: profile?.venue_id ?? null,
     customerName: customer?.name ?? null,
     preferredLanguage: profile?.preferred_language === "en" ? "en" : "no",
   };

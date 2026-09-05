@@ -91,6 +91,7 @@ function AdminProducts() {
           {t("new_product")}
         </button>
       </div>
+      <p className="mt-2 max-w-xl text-sm text-muted-foreground">{t("products_intro")}</p>
 
       {open ? (
         <form className="surface-card mt-5 space-y-4 p-5" onSubmit={submit}>

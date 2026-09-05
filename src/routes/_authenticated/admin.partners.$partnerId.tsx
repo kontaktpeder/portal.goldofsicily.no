@@ -114,7 +114,16 @@ function PartnerDetail() {
                     : "border border-border text-muted-foreground"
                 }`}
               >
-                {option === "distributor" ? t("kind_distributor") : t("kind_direct")}
+                <span className="block">
+                  {option === "distributor" ? t("kind_distributor") : t("kind_direct")}
+                </span>
+                <span
+                  className={`mt-1 block text-xs font-normal ${
+                    kind === option ? "text-primary-foreground/80" : "text-muted-foreground"
+                  }`}
+                >
+                  {option === "distributor" ? t("kind_distributor_hint") : t("kind_direct_hint")}
+                </span>
               </button>
             ))}
           </div>
@@ -153,8 +162,8 @@ function PartnerDetail() {
           partnerCard?.venues.map((row) => (
             <Link
               key={row.id}
-              to="/admin/customers/$customerId"
-              params={{ customerId: row.id }}
+              to="/admin/venues/$venueId"
+              params={{ venueId: row.id }}
               className="surface-card flex items-center gap-4 p-4"
             >
               <span className={`size-3 shrink-0 rounded-full ${statusToken(row.status)}`} />

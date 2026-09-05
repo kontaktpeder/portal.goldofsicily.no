@@ -19,8 +19,8 @@ import { Route as AuthenticatedAdminIndexRouteImport } from './routes/_authentic
 import { Route as AuthenticatedAdminDeliveriesRouteImport } from './routes/_authenticated/admin.deliveries'
 import { Route as AuthenticatedAdminProductsRouteImport } from './routes/_authenticated/admin.products'
 import { Route as AuthenticatedAdminReportsRouteImport } from './routes/_authenticated/admin.reports'
-import { Route as AuthenticatedAdminCustomersIndexRouteImport } from './routes/_authenticated/admin.customers.index'
-import { Route as AuthenticatedAdminCustomersCustomerIdRouteImport } from './routes/_authenticated/admin.customers.$customerId'
+import { Route as AuthenticatedAdminVenuesIndexRouteImport } from './routes/_authenticated/admin.venues.index'
+import { Route as AuthenticatedAdminVenuesVenueIdRouteImport } from './routes/_authenticated/admin.venues.$venueId'
 import { Route as AuthenticatedAdminPartnersIndexRouteImport } from './routes/_authenticated/admin.partners.index'
 import { Route as AuthenticatedAdminPartnersPartnerIdRouteImport } from './routes/_authenticated/admin.partners.$partnerId'
 import { Route as ApiPublicV1VenuesRouteImport } from './routes/api/public/v1/venues'
@@ -78,16 +78,16 @@ const AuthenticatedAdminReportsRoute =
     path: '/reports',
     getParentRoute: () => AuthenticatedAdminRoute,
   } as any)
-const AuthenticatedAdminCustomersIndexRoute =
-  AuthenticatedAdminCustomersIndexRouteImport.update({
-    id: '/customers/',
-    path: '/customers/',
+const AuthenticatedAdminVenuesIndexRoute =
+  AuthenticatedAdminVenuesIndexRouteImport.update({
+    id: '/venues/',
+    path: '/venues/',
     getParentRoute: () => AuthenticatedAdminRoute,
   } as any)
-const AuthenticatedAdminCustomersCustomerIdRoute =
-  AuthenticatedAdminCustomersCustomerIdRouteImport.update({
-    id: '/customers/$customerId',
-    path: '/customers/$customerId',
+const AuthenticatedAdminVenuesVenueIdRoute =
+  AuthenticatedAdminVenuesVenueIdRouteImport.update({
+    id: '/venues/$venueId',
+    path: '/venues/$venueId',
     getParentRoute: () => AuthenticatedAdminRoute,
   } as any)
 const AuthenticatedAdminPartnersIndexRoute =
@@ -123,10 +123,10 @@ export interface FileRoutesByFullPath {
   '/admin/products': typeof AuthenticatedAdminProductsRoute
   '/admin/reports': typeof AuthenticatedAdminReportsRoute
   '/admin/': typeof AuthenticatedAdminIndexRoute
-  '/admin/customers/$customerId': typeof AuthenticatedAdminCustomersCustomerIdRoute
+  '/admin/venues/$venueId': typeof AuthenticatedAdminVenuesVenueIdRoute
   '/admin/partners/$partnerId': typeof AuthenticatedAdminPartnersPartnerIdRoute
   '/api/public/v1/venues': typeof ApiPublicV1VenuesRouteWithChildren
-  '/admin/customers/': typeof AuthenticatedAdminCustomersIndexRoute
+  '/admin/venues/': typeof AuthenticatedAdminVenuesIndexRoute
   '/admin/partners/': typeof AuthenticatedAdminPartnersIndexRoute
   '/api/public/v1/venues/$slug': typeof ApiPublicV1VenuesSlugRoute
 }
@@ -139,10 +139,10 @@ export interface FileRoutesByTo {
   '/admin/products': typeof AuthenticatedAdminProductsRoute
   '/admin/reports': typeof AuthenticatedAdminReportsRoute
   '/admin': typeof AuthenticatedAdminIndexRoute
-  '/admin/customers/$customerId': typeof AuthenticatedAdminCustomersCustomerIdRoute
+  '/admin/venues/$venueId': typeof AuthenticatedAdminVenuesVenueIdRoute
   '/admin/partners/$partnerId': typeof AuthenticatedAdminPartnersPartnerIdRoute
   '/api/public/v1/venues': typeof ApiPublicV1VenuesRouteWithChildren
-  '/admin/customers': typeof AuthenticatedAdminCustomersIndexRoute
+  '/admin/venues': typeof AuthenticatedAdminVenuesIndexRoute
   '/admin/partners': typeof AuthenticatedAdminPartnersIndexRoute
   '/api/public/v1/venues/$slug': typeof ApiPublicV1VenuesSlugRoute
 }
@@ -158,10 +158,10 @@ export interface FileRoutesById {
   '/_authenticated/admin/products': typeof AuthenticatedAdminProductsRoute
   '/_authenticated/admin/reports': typeof AuthenticatedAdminReportsRoute
   '/_authenticated/admin/': typeof AuthenticatedAdminIndexRoute
-  '/_authenticated/admin/customers/$customerId': typeof AuthenticatedAdminCustomersCustomerIdRoute
+  '/_authenticated/admin/venues/$venueId': typeof AuthenticatedAdminVenuesVenueIdRoute
   '/_authenticated/admin/partners/$partnerId': typeof AuthenticatedAdminPartnersPartnerIdRoute
   '/api/public/v1/venues': typeof ApiPublicV1VenuesRouteWithChildren
-  '/_authenticated/admin/customers/': typeof AuthenticatedAdminCustomersIndexRoute
+  '/_authenticated/admin/venues/': typeof AuthenticatedAdminVenuesIndexRoute
   '/_authenticated/admin/partners/': typeof AuthenticatedAdminPartnersIndexRoute
   '/api/public/v1/venues/$slug': typeof ApiPublicV1VenuesSlugRoute
 }
@@ -177,10 +177,10 @@ export interface FileRouteTypes {
     | '/admin/products'
     | '/admin/reports'
     | '/admin/'
-    | '/admin/customers/$customerId'
+    | '/admin/venues/$venueId'
     | '/admin/partners/$partnerId'
     | '/api/public/v1/venues'
-    | '/admin/customers/'
+    | '/admin/venues/'
     | '/admin/partners/'
     | '/api/public/v1/venues/$slug'
   fileRoutesByTo: FileRoutesByTo
@@ -193,10 +193,10 @@ export interface FileRouteTypes {
     | '/admin/products'
     | '/admin/reports'
     | '/admin'
-    | '/admin/customers/$customerId'
+    | '/admin/venues/$venueId'
     | '/admin/partners/$partnerId'
     | '/api/public/v1/venues'
-    | '/admin/customers'
+    | '/admin/venues'
     | '/admin/partners'
     | '/api/public/v1/venues/$slug'
   id:
@@ -211,10 +211,10 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/products'
     | '/_authenticated/admin/reports'
     | '/_authenticated/admin/'
-    | '/_authenticated/admin/customers/$customerId'
+    | '/_authenticated/admin/venues/$venueId'
     | '/_authenticated/admin/partners/$partnerId'
     | '/api/public/v1/venues'
-    | '/_authenticated/admin/customers/'
+    | '/_authenticated/admin/venues/'
     | '/_authenticated/admin/partners/'
     | '/api/public/v1/venues/$slug'
   fileRoutesById: FileRoutesById
@@ -298,18 +298,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminReportsRouteImport
       parentRoute: typeof AuthenticatedAdminRoute
     }
-    '/_authenticated/admin/customers/': {
-      id: '/_authenticated/admin/customers/'
-      path: '/customers'
-      fullPath: '/admin/customers/'
-      preLoaderRoute: typeof AuthenticatedAdminCustomersIndexRouteImport
+    '/_authenticated/admin/venues/': {
+      id: '/_authenticated/admin/venues/'
+      path: '/venues'
+      fullPath: '/admin/venues/'
+      preLoaderRoute: typeof AuthenticatedAdminVenuesIndexRouteImport
       parentRoute: typeof AuthenticatedAdminRoute
     }
-    '/_authenticated/admin/customers/$customerId': {
-      id: '/_authenticated/admin/customers/$customerId'
-      path: '/customers/$customerId'
-      fullPath: '/admin/customers/$customerId'
-      preLoaderRoute: typeof AuthenticatedAdminCustomersCustomerIdRouteImport
+    '/_authenticated/admin/venues/$venueId': {
+      id: '/_authenticated/admin/venues/$venueId'
+      path: '/venues/$venueId'
+      fullPath: '/admin/venues/$venueId'
+      preLoaderRoute: typeof AuthenticatedAdminVenuesVenueIdRouteImport
       parentRoute: typeof AuthenticatedAdminRoute
     }
     '/_authenticated/admin/partners/': {
@@ -348,9 +348,9 @@ interface AuthenticatedAdminRouteChildren {
   AuthenticatedAdminProductsRoute: typeof AuthenticatedAdminProductsRoute
   AuthenticatedAdminReportsRoute: typeof AuthenticatedAdminReportsRoute
   AuthenticatedAdminIndexRoute: typeof AuthenticatedAdminIndexRoute
-  AuthenticatedAdminCustomersCustomerIdRoute: typeof AuthenticatedAdminCustomersCustomerIdRoute
+  AuthenticatedAdminVenuesVenueIdRoute: typeof AuthenticatedAdminVenuesVenueIdRoute
   AuthenticatedAdminPartnersPartnerIdRoute: typeof AuthenticatedAdminPartnersPartnerIdRoute
-  AuthenticatedAdminCustomersIndexRoute: typeof AuthenticatedAdminCustomersIndexRoute
+  AuthenticatedAdminVenuesIndexRoute: typeof AuthenticatedAdminVenuesIndexRoute
   AuthenticatedAdminPartnersIndexRoute: typeof AuthenticatedAdminPartnersIndexRoute
 }
 
@@ -359,11 +359,11 @@ const AuthenticatedAdminRouteChildren: AuthenticatedAdminRouteChildren = {
   AuthenticatedAdminProductsRoute: AuthenticatedAdminProductsRoute,
   AuthenticatedAdminReportsRoute: AuthenticatedAdminReportsRoute,
   AuthenticatedAdminIndexRoute: AuthenticatedAdminIndexRoute,
-  AuthenticatedAdminCustomersCustomerIdRoute:
-    AuthenticatedAdminCustomersCustomerIdRoute,
+  AuthenticatedAdminVenuesVenueIdRoute:
+    AuthenticatedAdminVenuesVenueIdRoute,
   AuthenticatedAdminPartnersPartnerIdRoute:
     AuthenticatedAdminPartnersPartnerIdRoute,
-  AuthenticatedAdminCustomersIndexRoute: AuthenticatedAdminCustomersIndexRoute,
+  AuthenticatedAdminVenuesIndexRoute: AuthenticatedAdminVenuesIndexRoute,
   AuthenticatedAdminPartnersIndexRoute: AuthenticatedAdminPartnersIndexRoute,
 }
 

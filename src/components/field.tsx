@@ -65,21 +65,28 @@ export function NumberStepper({
   onChange,
   step = 10,
   autoFocus,
+  label,
+  compact,
 }: {
   value: number | "";
   onChange: (value: number | "") => void;
   step?: number;
   autoFocus?: boolean;
+  label?: string;
+  compact?: boolean;
 }) {
   const numeric = value === "" ? 0 : value;
   const smallStep = 1;
-  return (
-    <div className="flex items-center gap-2">
+  const btn = compact
+    ? "flex h-12 flex-1 min-w-8 items-center justify-center rounded-xl border-2 border-border bg-card text-sm font-bold transition-colors hover:border-primary/60 active:scale-95"
+    : "flex h-14 flex-1 min-w-10 items-center justify-center rounded-2xl border-2 border-border bg-card text-base font-bold transition-colors hover:border-primary/60 active:scale-95";
+  const controls = (
+    <div className={cn("flex items-center", compact ? "gap-1.5" : "gap-2")}>
       <button
         type="button"
         aria-label={`minus ${step}`}
         onClick={() => onChange(Math.max(0, numeric - step))}
-        className="flex h-14 flex-1 min-w-10 items-center justify-center rounded-2xl border-2 border-border bg-card text-base font-bold transition-colors hover:border-primary/60 active:scale-95"
+        className={btn}
       >
         -{step}
       </button>
@@ -87,7 +94,7 @@ export function NumberStepper({
         type="button"
         aria-label="minus one"
         onClick={() => onChange(Math.max(0, numeric - smallStep))}
-        className="flex h-14 flex-1 min-w-10 items-center justify-center rounded-2xl border-2 border-border bg-card text-base font-bold transition-colors hover:border-primary/60 active:scale-95"
+        className={btn}
       >
         -1
       </button>
@@ -101,13 +108,16 @@ export function NumberStepper({
           const raw = event.target.value;
           onChange(raw === "" ? "" : Math.max(0, Number.parseInt(raw, 10) || 0));
         }}
-        className="h-16 min-w-0 flex-[1.5] rounded-2xl border-2 border-border bg-card text-center text-2xl font-bold tabular-nums outline-none focus:border-primary"
+        className={cn(
+          "min-w-0 flex-[1.5] border-2 border-border bg-card text-center font-bold tabular-nums outline-none focus:border-primary",
+          compact ? "h-12 rounded-xl text-xl" : "h-16 rounded-2xl text-2xl",
+        )}
       />
       <button
         type="button"
         aria-label="plus one"
         onClick={() => onChange(numeric + smallStep)}
-        className="flex h-14 flex-1 min-w-10 items-center justify-center rounded-2xl border-2 border-border bg-card text-base font-bold transition-colors hover:border-primary/60 active:scale-95"
+        className={btn}
       >
         +1
       </button>
@@ -115,10 +125,17 @@ export function NumberStepper({
         type="button"
         aria-label={`plus ${step}`}
         onClick={() => onChange(numeric + step)}
-        className="flex h-14 flex-1 min-w-10 items-center justify-center rounded-2xl border-2 border-border bg-card text-base font-bold transition-colors hover:border-primary/60 active:scale-95"
+        className={btn}
       >
         +{step}
       </button>
+    </div>
+  );
+  if (!label) return controls;
+  return (
+    <div>
+      <p className="mb-2 text-sm font-medium">{label}</p>
+      {controls}
     </div>
   );
 }
