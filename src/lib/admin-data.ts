@@ -9,6 +9,7 @@ export type CustomerRow = {
   city: string | null;
   active: boolean;
   partnerId: string | null;
+  partnerName: string | null;
   publicVisible: boolean;
   createdAt: string;
   lastReportAt: string | null;
@@ -123,6 +124,7 @@ export function useAdminOverview() {
           city: customer.city,
           active: customer.active,
           partnerId: customer.partner_id,
+          partnerName: partners.find((partner) => partner.id === customer.partner_id)?.name ?? null,
           publicVisible: customer.public_visible,
           createdAt: customer.created_at,
           lastReportAt: latest?.created_at ?? null,

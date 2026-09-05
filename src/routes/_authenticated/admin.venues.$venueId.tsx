@@ -11,6 +11,7 @@ import { errorMessage } from "@/lib/utils";
 import { resetCustomerPassword } from "@/lib/admin.functions";
 import { PrimaryButton, TextAreaField, TextField } from "@/components/field";
 import { FlavorBreakdown } from "@/components/flavor-lines";
+import { VenuePartnerCard } from "@/components/partner-venue-link";
 import type { StoredFlavorLine } from "@/lib/flavors";
 
 export const Route = createFileRoute("/_authenticated/admin/venues/$venueId")({
@@ -73,7 +74,7 @@ function CustomerDetail() {
           .eq("venue_id", venueId)
           .order("sort_order"),
         supabase.from("products").select("*").eq("active", true).order("sort_order"),
-        supabase.from("partners").select("id, name, kind").eq("active", true).order("name"),
+        supabase.from("partners").select("id, name, kind, active").order("name"),
       ]);
       return {
         customer: customer.data,
@@ -87,6 +88,8 @@ function CustomerDetail() {
     },
   });
 
+  const linkedPartner =
+    data?.partners.find((partner) => partner.id === data.customer?.partner_id) ?? null;
   const latest = data?.reports[0] ?? null;
   const weekStart = (() => {
     const now = new Date();
@@ -115,6 +118,7 @@ function CustomerDetail() {
         </Link>
         <h1 className="mt-3 text-3xl font-semibold">{data?.customer?.name ?? "—"}</h1>
         <p className="mt-1 text-sm text-muted-foreground">
+          {linkedPartner?.name ?? t("unassigned_partner")} ·{" "}
           {data?.customer?.city || data?.customer?.location || "—"} ·{" "}
           {data?.customer?.active ? t("active") : t("inactive")}
           {data?.customer?.public_visible ? ` · ${t("public_yes")}` : ""}
@@ -139,29 +143,38 @@ function CustomerDetail() {
         )}
       </div>
 
-      {tab === "overview" ? (
-        <div className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-3">
-          <Info label={t("est_stock")} value={`${estimated} ${t("pcs")}`} />
-          <Info label={t("stock")} value={`${latest?.remaining_stock ?? 0} ${t("pcs")}`} />
-          <Info label={t("sales_this_week")} value={`${soldThisWeek} ${t("pcs")}`} />
-          <Info
-            label={t("latest_feedback")}
-            value={latest?.guest_feedback_rating ? t(latest.guest_feedback_rating) : t("none")}
-            detail={latest?.guest_feedback_text ?? undefined}
+      {tab === "overview" && data?.customer ? (
+        <div className="mt-5 space-y-4">
+          <VenuePartnerCard
+            venueId={venueId}
+            venueName={data.customer.name}
+            partnerId={data.customer.partner_id}
+            partners={data.partners}
+            onChanged={() => queryClient.invalidateQueries()}
           />
-          <Info
-            label={t("latest_prep_issue")}
-            value={latest?.preparation_issue ? t("yes") : t("none")}
-            detail={latest?.preparation_issue_text ?? undefined}
-          />
-          <Info
-            label={t("requested_next")}
-            value={`${latest?.next_required_quantity ?? 0} ${t("pcs")}`}
-          />
-          <Info
-            label={t("last_report")}
-            value={latest ? formatDate(latest.created_at, lang) : t("never")}
-          />
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+            <Info label={t("est_stock")} value={`${estimated} ${t("pcs")}`} />
+            <Info label={t("stock")} value={`${latest?.remaining_stock ?? 0} ${t("pcs")}`} />
+            <Info label={t("sales_this_week")} value={`${soldThisWeek} ${t("pcs")}`} />
+            <Info
+              label={t("latest_feedback")}
+              value={latest?.guest_feedback_rating ? t(latest.guest_feedback_rating) : t("none")}
+              detail={latest?.guest_feedback_text ?? undefined}
+            />
+            <Info
+              label={t("latest_prep_issue")}
+              value={latest?.preparation_issue ? t("yes") : t("none")}
+              detail={latest?.preparation_issue_text ?? undefined}
+            />
+            <Info
+              label={t("requested_next")}
+              value={`${latest?.next_required_quantity ?? 0} ${t("pcs")}`}
+            />
+            <Info
+              label={t("last_report")}
+              value={latest ? formatDate(latest.created_at, lang) : t("never")}
+            />
+          </div>
         </div>
       ) : null}
 
@@ -233,11 +246,19 @@ function CustomerDetail() {
       ) : null}
 
       {tab === "profile" && data?.customer ? (
-        <ProfileTab
-          customer={data.customer}
-          partners={data.partners}
-          onSaved={() => queryClient.invalidateQueries()}
-        />
+        <div className="mt-5 space-y-4">
+          <VenuePartnerCard
+            venueId={venueId}
+            venueName={data.customer.name}
+            partnerId={data.customer.partner_id}
+            partners={data.partners}
+            onChanged={() => queryClient.invalidateQueries()}
+          />
+          <ProfileTab
+            customer={data.customer}
+            onSaved={() => queryClient.invalidateQueries()}
+          />
+        </div>
       ) : null}
 
       {tab === "menu" && data?.customer ? (
@@ -435,11 +456,9 @@ type VenueProfile = {
 
 function ProfileTab({
   customer,
-  partners,
   onSaved,
 }: {
   customer: VenueProfile;
-  partners: { id: string; name: string; kind: string }[];
   onSaved: () => void;
 }) {
   const { t } = useI18n();
@@ -449,7 +468,6 @@ function ProfileTab({
     address: customer.address ?? "",
     location: customer.location ?? "",
     slug: customer.slug ?? "",
-    partnerId: customer.partner_id ?? "",
     contact: customer.contact_name ?? "",
     email: customer.email ?? "",
     phone: customer.phone ?? "",
@@ -472,7 +490,6 @@ function ProfileTab({
       address: customer.address ?? "",
       location: customer.location ?? "",
       slug: customer.slug ?? "",
-      partnerId: customer.partner_id ?? "",
       contact: customer.contact_name ?? "",
       email: customer.email ?? "",
       phone: customer.phone ?? "",
@@ -502,7 +519,6 @@ function ProfileTab({
         address: form.address.trim() || null,
         location: form.location.trim() || form.city.trim() || null,
         slug: form.slug.trim() || null,
-        partner_id: form.partnerId || null,
         contact_name: form.contact.trim() || null,
         email: form.email.trim() || null,
         phone: form.phone.trim() || null,
@@ -527,7 +543,7 @@ function ProfileTab({
   }
 
   return (
-    <div className="surface-card mt-5 space-y-4 p-5">
+    <div className="surface-card space-y-4 p-5">
       <TextField
         label={t("customer_name")}
         value={form.name}
@@ -540,21 +556,6 @@ function ProfileTab({
         onChange={(value) => patch("address", value)}
       />
       <TextField label={t("slug")} value={form.slug} onChange={(value) => patch("slug", value)} />
-      <label className="block">
-        <span className="eyebrow mb-2 block">{t("partner")}</span>
-        <select
-          value={form.partnerId}
-          onChange={(event) => patch("partnerId", event.target.value)}
-          className="h-13 w-full rounded-2xl border-2 border-border bg-card px-4 text-base outline-none focus:border-primary"
-        >
-          <option value="">—</option>
-          {partners.map((partner) => (
-            <option key={partner.id} value={partner.id}>
-              {partner.name}
-            </option>
-          ))}
-        </select>
-      </label>
       <TextField
         label={t("contact_name")}
         value={form.contact}

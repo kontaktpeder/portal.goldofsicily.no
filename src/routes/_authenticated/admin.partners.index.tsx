@@ -29,7 +29,15 @@ function AdminPartners() {
   const [contact, setContact] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
+  const [venueIds, setVenueIds] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
+  const unassigned = data?.unassigned ?? [];
+
+  function toggleVenue(id: string) {
+    setVenueIds((current) =>
+      current.includes(id) ? current.filter((item) => item !== id) : [...current, id],
+    );
+  }
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -38,25 +46,42 @@ function AdminPartners() {
       return;
     }
     setBusy(true);
-    const { error } = await supabase.from("partners").insert({
-      name: name.trim(),
-      kind,
-      contact_name: contact.trim() || null,
-      email: email.trim() || null,
-      phone: phone.trim() || null,
-      active: true,
-    });
-    setBusy(false);
-    if (error) {
+    const { data: created, error } = await supabase
+      .from("partners")
+      .insert({
+        name: name.trim(),
+        kind,
+        contact_name: contact.trim() || null,
+        email: email.trim() || null,
+        phone: phone.trim() || null,
+        active: true,
+      })
+      .select("id")
+      .single();
+    if (error || !created) {
+      setBusy(false);
       toast.error(errorMessage(error, t("create_customer_failed")));
       return;
     }
+    if (venueIds.length > 0) {
+      const { error: linkError } = await supabase
+        .from("venues")
+        .update({ partner_id: created.id })
+        .in("id", venueIds);
+      if (linkError) {
+        setBusy(false);
+        toast.error(linkError.message);
+        return;
+      }
+    }
+    setBusy(false);
     toast.success(`${name.trim()} ${t("create_customer_created")}`);
     setOpen(false);
     setName("");
     setContact("");
     setEmail("");
     setPhone("");
+    setVenueIds([]);
     await queryClient.invalidateQueries({ queryKey: ["admin-overview"] });
   }
 
@@ -104,6 +129,28 @@ function AdminPartners() {
           <TextField label={t("contact_name")} value={contact} onChange={setContact} />
           <TextField label={t("email")} value={email} onChange={setEmail} />
           <TextField label={t("phone")} value={phone} onChange={setPhone} />
+          {unassigned.length > 0 ? (
+            <div>
+              <span className="eyebrow mb-2 block">{t("attach_venues_hint")}</span>
+              <div className="space-y-2">
+                {unassigned.map((venue) => (
+                  <button
+                    key={venue.id}
+                    type="button"
+                    onClick={() => toggleVenue(venue.id)}
+                    className={`flex w-full items-center justify-between rounded-2xl border-2 px-4 py-3 text-left text-sm font-semibold ${
+                      venueIds.includes(venue.id)
+                        ? "border-primary bg-primary/5 text-foreground"
+                        : "border-border text-muted-foreground"
+                    }`}
+                  >
+                    <span>{venue.name}</span>
+                    <span className="text-xs font-normal">{venue.city || venue.location || ""}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
           <PrimaryButton type="submit" disabled={busy}>
             {busy ? "…" : t("create")}
           </PrimaryButton>

@@ -237,6 +237,46 @@ const dict = {
   new_venues: { no: "Nye serveringssteder", en: "New venues" },
   venues_under: { no: "serveringssteder", en: "venues" },
   slug: { no: "Offentlig adresse (slug)", en: "Public slug" },
+  linked_venues: { no: "Knyttede serveringssteder", en: "Linked venues" },
+  no_linked_venues: { no: "Ingen serveringssteder knyttet ennå.", en: "No venues linked yet." },
+  link_existing_venue: { no: "Knytt eksisterende serveringssted", en: "Link an existing venue" },
+  link_existing_venue_hint: {
+    no: "Velg et serveringssted og knytt det til denne partneren. Et sted kan flyttes fra en annen partner.",
+    en: "Choose a venue and link it to this partner. A venue can be moved from another partner.",
+  },
+  no_venues_to_link: {
+    no: "Alle serveringssteder er allerede knyttet hit.",
+    en: "All venues are already linked here.",
+  },
+  choose_venue: { no: "Velg serveringssted", en: "Choose a venue" },
+  choose_partner: { no: "Velg partner", en: "Choose a partner" },
+  link_venue: { no: "Knytt serveringssted", en: "Link venue" },
+  link_partner: { no: "Knytt til partner", en: "Link to partner" },
+  unlink_venue: { no: "Fjern knytning", en: "Unlink" },
+  unlink_partner: { no: "Fjern partner", en: "Remove partner" },
+  new_venue_under_partner: {
+    no: "Nytt serveringssted under denne partneren",
+    en: "New venue under this partner",
+  },
+  link_saved: { no: "Knytning lagret", en: "Link saved" },
+  link_removed: { no: "Knytning fjernet", en: "Link removed" },
+  open_partner: { no: "Åpne partner", en: "Open partner" },
+  partner_link_intro: {
+    no: "Knytt dette serveringsstedet til en Gold Supply eller Gold Partner.",
+    en: "Link this venue to a Gold Supply or Gold Partner.",
+  },
+  make_gold_partner: { no: "Opprett som Gold Partner", en: "Create as Gold Partner" },
+  make_gold_partner_hint: {
+    no: "Lager en Gold Partner med samme navn og knytter dette serveringsstedet.",
+    en: "Creates a Gold Partner with the same name and links this venue.",
+  },
+  now_with: { no: "nå", en: "now" },
+  currently_unassigned: { no: "ikke knyttet", en: "unassigned" },
+  attach_venues_hint: {
+    no: "Knytt eksisterende serveringssteder (valgfritt)",
+    en: "Link existing venues (optional)",
+  },
+  creating_under_partner: { no: "Knyttes til", en: "Will be linked to" },
 } satisfies Record<string, Record<Lang, string>>;
 
 export type TranslationKey = keyof typeof dict;
