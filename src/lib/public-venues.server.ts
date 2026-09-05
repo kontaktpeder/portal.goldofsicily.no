@@ -1,5 +1,6 @@
 import type { Database } from "@/integrations/supabase/types";
 import { formatPriceNok } from "@/lib/slug";
+import { isPublicMenuUrl } from "@/lib/venue-menu-file";
 
 type Customer = Database["public"]["Tables"]["venues"]["Row"];
 type Product = Database["public"]["Tables"]["products"]["Row"];
@@ -93,13 +94,13 @@ export function mapPublicVenue(
     instagram: customer.instagram,
     servingMethod: customer.serving_method,
     menuIntro: customer.menu_intro,
-    hasMenu: menu.length > 0 || Boolean(customer.menu_material_url),
+    hasMenu: menu.length > 0 || isPublicMenuUrl(customer.menu_material_url),
     menu,
     profile,
     collaborationText: rich ? customer.collaboration_text ?? null : null,
     servingStory: rich ? customer.serving_story ?? null : null,
     videoUrl: rich ? customer.video_url ?? null : null,
-    menuMaterialUrl: customer.menu_material_url ?? null,
+    menuMaterialUrl: isPublicMenuUrl(customer.menu_material_url) ? customer.menu_material_url : null,
     galleryUrls: rich ? customer.gallery_urls ?? [] : [],
   };
 }

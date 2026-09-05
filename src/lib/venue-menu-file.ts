@@ -41,6 +41,10 @@ export function menuFileObjectPath(venueId: string, fileName: string, now = Date
   return `${venueId}/${now}-${sanitizeMenuFileName(fileName)}`;
 }
 
+export function isPublicMenuUrl(url: string | null | undefined): url is string {
+  return Boolean(url && /^https?:\/\//i.test(url.trim()));
+}
+
 export function menuFileDisplayName(path: string | null | undefined, fallback = "meny"): string {
   if (!path) return fallback;
   const raw = path.split("/").pop() ?? fallback;
