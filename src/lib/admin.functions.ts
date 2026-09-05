@@ -119,6 +119,7 @@ export const createCustomerAccount = createServerFn({ method: "POST" })
         city,
         partner_id: partnerId,
         public_visible: data.publicVisible,
+        public_profile: data.directPartner ? "partner" : "listing",
         active: data.active,
         default_language: data.language,
       })

@@ -15,6 +15,8 @@ export type PublicMenuItem = {
   imageUrl: string | null;
 };
 
+export type PublicVenueProfile = "partner" | "listing";
+
 export type PublicVenue = {
   slug: string;
   name: string;
@@ -30,6 +32,12 @@ export type PublicVenue = {
   menuIntro: string | null;
   hasMenu: boolean;
   menu: PublicMenuItem[];
+  profile: PublicVenueProfile;
+  collaborationText: string | null;
+  servingStory: string | null;
+  videoUrl: string | null;
+  menuMaterialUrl: string | null;
+  galleryUrls: string[];
 };
 
 function toPublicMenuItem(
@@ -53,6 +61,10 @@ function toPublicMenuItem(
   };
 }
 
+function readProfile(venue: Customer): PublicVenueProfile {
+  return venue.public_profile === "partner" ? "partner" : "listing";
+}
+
 export function mapPublicVenue(
   customer: Customer,
   menuItems: MenuItem[],
@@ -65,6 +77,8 @@ export function mapPublicVenue(
     .sort((a, b) => a.sort_order - b.sort_order)
     .map((item) => toPublicMenuItem(item, productsById.get(item.product_id), lang))
     .filter((item): item is PublicMenuItem => Boolean(item));
+  const profile = readProfile(customer);
+  const rich = profile === "partner";
 
   return {
     slug: customer.slug,
@@ -81,6 +95,12 @@ export function mapPublicVenue(
     menuIntro: customer.menu_intro,
     hasMenu: menu.length > 0,
     menu,
+    profile,
+    collaborationText: rich ? customer.collaboration_text ?? null : null,
+    servingStory: rich ? customer.serving_story ?? null : null,
+    videoUrl: rich ? customer.video_url ?? null : null,
+    menuMaterialUrl: rich ? customer.menu_material_url ?? null : null,
+    galleryUrls: rich ? customer.gallery_urls ?? [] : [],
   };
 }
 

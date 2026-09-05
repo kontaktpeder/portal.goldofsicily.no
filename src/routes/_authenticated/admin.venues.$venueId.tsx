@@ -130,6 +130,9 @@ function CustomerDetail() {
           {data?.customer?.city || data?.customer?.location || "—"} ·{" "}
           {data?.customer?.active ? t("active") : t("inactive")}
           {data?.customer?.public_visible ? ` · ${t("public_yes")}` : ""}
+          {data?.customer?.public_profile === "partner"
+            ? ` · ${t("public_profile_partner")}`
+            : ""}
         </p>
       </div>
 
@@ -466,6 +469,12 @@ type VenueProfile = {
   latitude: number | null;
   longitude: number | null;
   public_visible: boolean;
+  public_profile?: "partner" | "listing" | null;
+  collaboration_text?: string | null;
+  serving_story?: string | null;
+  video_url?: string | null;
+  menu_material_url?: string | null;
+  gallery_urls?: string[] | null;
 };
 
 function ProfileTab({
@@ -494,6 +503,12 @@ function ProfileTab({
     latitude: customer.latitude?.toString() ?? "",
     longitude: customer.longitude?.toString() ?? "",
     publicVisible: customer.public_visible,
+    publicProfile: customer.public_profile === "partner" ? "partner" : "listing",
+    collaborationText: customer.collaboration_text ?? "",
+    servingStory: customer.serving_story ?? "",
+    videoUrl: customer.video_url ?? "",
+    menuMaterialUrl: customer.menu_material_url ?? "",
+    galleryUrls: (customer.gallery_urls ?? []).join("\n"),
   });
   const [busy, setBusy] = useState(false);
 
@@ -516,6 +531,12 @@ function ProfileTab({
       latitude: customer.latitude?.toString() ?? "",
       longitude: customer.longitude?.toString() ?? "",
       publicVisible: customer.public_visible,
+      publicProfile: customer.public_profile === "partner" ? "partner" : "listing",
+      collaborationText: customer.collaboration_text ?? "",
+      servingStory: customer.serving_story ?? "",
+      videoUrl: customer.video_url ?? "",
+      menuMaterialUrl: customer.menu_material_url ?? "",
+      galleryUrls: (customer.gallery_urls ?? []).join("\n"),
     });
   }, [customer]);
 
@@ -545,6 +566,15 @@ function ProfileTab({
         latitude: form.latitude.trim() ? Number(form.latitude) : null,
         longitude: form.longitude.trim() ? Number(form.longitude) : null,
         public_visible: form.publicVisible,
+        public_profile: form.publicProfile === "partner" ? "partner" : "listing",
+        collaboration_text: form.collaborationText.trim() || null,
+        serving_story: form.servingStory.trim() || null,
+        video_url: form.videoUrl.trim() || null,
+        menu_material_url: form.menuMaterialUrl.trim() || null,
+        gallery_urls: form.galleryUrls
+          .split("\n")
+          .map((url) => url.trim())
+          .filter(Boolean),
       })
       .eq("id", customer.id);
     setBusy(false);
@@ -640,6 +670,61 @@ function ProfileTab({
         </span>
         {form.publicVisible ? t("public_yes") : t("public_no")}
       </button>
+      <div>
+        <span className="eyebrow mb-2 block">{t("public_profile")}</span>
+        <p className="mb-3 text-sm text-muted-foreground">{t("public_profile_hint")}</p>
+        <div className="flex flex-col gap-2 sm:flex-row">
+          {(["partner", "listing"] as const).map((option) => (
+            <button
+              key={option}
+              type="button"
+              onClick={() => patch("publicProfile", option)}
+              className={`rounded-2xl px-4 py-3 text-left text-sm font-semibold ${
+                form.publicProfile === option
+                  ? "bg-primary text-primary-foreground"
+                  : "border border-border text-muted-foreground"
+              }`}
+            >
+              {option === "partner" ? t("public_profile_partner") : t("public_profile_listing")}
+            </button>
+          ))}
+        </div>
+      </div>
+      {form.publicProfile === "partner" ? (
+        <>
+          <label className="block">
+            <span className="eyebrow mb-2 block">{t("collaboration_text")}</span>
+            <TextAreaField
+              value={form.collaborationText}
+              onChange={(value) => patch("collaborationText", value)}
+            />
+          </label>
+          <label className="block">
+            <span className="eyebrow mb-2 block">{t("serving_story")}</span>
+            <TextAreaField
+              value={form.servingStory}
+              onChange={(value) => patch("servingStory", value)}
+            />
+          </label>
+          <TextField
+            label={t("video_url")}
+            value={form.videoUrl}
+            onChange={(value) => patch("videoUrl", value)}
+          />
+          <TextField
+            label={t("menu_material_url")}
+            value={form.menuMaterialUrl}
+            onChange={(value) => patch("menuMaterialUrl", value)}
+          />
+          <label className="block">
+            <span className="eyebrow mb-2 block">{t("gallery_urls")}</span>
+            <TextAreaField
+              value={form.galleryUrls}
+              onChange={(value) => patch("galleryUrls", value)}
+            />
+          </label>
+        </>
+      ) : null}
       <PrimaryButton onClick={save} disabled={busy}>
         {t("save")}
       </PrimaryButton>
