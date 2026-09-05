@@ -42,7 +42,7 @@ function AdminLayout() {
         <nav className="mx-auto flex w-full max-w-5xl gap-1 overflow-x-auto px-4 pb-2">
           <NavTab to="/admin" label={t("dashboard")} exact />
           <NavTab to="/admin/partners" label={t("partners")} />
-          <NavTab to="/admin/customers" label={t("customers")} />
+          <NavTab to="/admin/venues" label={t("customers")} />
           <NavTab to="/admin/products" label={t("products")} />
           <NavTab to="/admin/reports" label={t("reports")} />
           <NavTab to="/admin/deliveries" label={t("deliveries")} />
@@ -60,7 +60,7 @@ function NavTab({
 }: {
   to:
     | "/admin"
-    | "/admin/customers"
+    | "/admin/venues"
     | "/admin/reports"
     | "/admin/deliveries"
     | "/admin/partners"

@@ -27,7 +27,7 @@ function AdminReports() {
       const { data: rows } = await supabase
         .from("shift_reports")
         .select(
-          "*, customers(name), shift_report_lines(product_id, sold, remaining_stock, next_required_quantity, products(name_no, name_en))",
+          "*, venues(name), shift_report_lines(product_id, sold, remaining_stock, next_required_quantity, products(name_no, name_en))",
         )
         .order("created_at", { ascending: false })
         .limit(200);
@@ -46,7 +46,7 @@ function AdminReports() {
             <article key={report.id} className="surface-card p-4">
               <div className="flex flex-wrap items-baseline justify-between gap-2">
                 <p className="font-semibold">
-                  {(report.customers as { name: string } | null)?.name ?? "—"}
+                  {(report.venues as { name: string } | null)?.name ?? "—"}
                 </p>
                 <p className="text-xs text-muted-foreground">
                   {formatDate(report.created_at, lang)}

@@ -34,7 +34,7 @@ function AdminDeliveries() {
     queryKey: ["customers-list"],
     queryFn: async () => {
       const { data } = await supabase
-        .from("customers")
+        .from("venues")
         .select("id, name")
         .eq("active", true)
         .order("name");
@@ -47,7 +47,7 @@ function AdminDeliveries() {
     queryFn: async () => {
       const { data } = await supabase
         .from("deliveries")
-        .select("*, customers(name)")
+        .select("*, venues(name)")
         .order("delivered_at", { ascending: false })
         .limit(200);
       return data ?? [];
@@ -57,12 +57,12 @@ function AdminDeliveries() {
   async function submit() {
     const qty = Number.parseInt(quantity, 10);
     if (!customerId || !Number.isFinite(qty) || qty <= 0) {
-      toast.error("Choose a customer and a valid quantity.");
+      toast.error("Choose a venue and a valid quantity.");
       return;
     }
     setBusy(true);
     const { error } = await supabase.from("deliveries").insert({
-      customer_id: customerId,
+      venue_id: customerId,
       quantity: qty,
       delivered_at: date,
       note: note.trim() || null,
@@ -128,7 +128,7 @@ function AdminDeliveries() {
             >
               <div>
                 <p className="font-semibold">
-                  {(delivery.customers as { name: string } | null)?.name ?? "—"}
+                  {(delivery.venues as { name: string } | null)?.name ?? "—"}
                 </p>
                 <p className="text-xs text-muted-foreground">
                   {formatDate(delivery.delivered_at, lang)}

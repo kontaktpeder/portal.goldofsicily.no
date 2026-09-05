@@ -23,7 +23,7 @@ async function saveProfile(
   row: {
     id: string;
     username: string;
-    customer_id?: string | null;
+    venue_id?: string | null;
     preferred_language?: string;
   },
 ) {
@@ -35,7 +35,7 @@ async function saveProfile(
 
   const patch = {
     username: row.username,
-    ...(row.customer_id !== undefined ? { customer_id: row.customer_id } : {}),
+    ...(row.venue_id !== undefined ? { venue_id: row.venue_id } : {}),
     ...(row.preferred_language !== undefined ? { preferred_language: row.preferred_language } : {}),
   };
 
@@ -112,7 +112,7 @@ export const createCustomerAccount = createServerFn({ method: "POST" })
 
     const city = data.city.trim() || data.location.trim() || null;
     const { data: customer, error: customerError } = await supabaseAdmin
-      .from("customers")
+      .from("venues")
       .insert({
         name: data.name,
         location: data.location || city,
@@ -135,6 +135,7 @@ export const createCustomerAccount = createServerFn({ method: "POST" })
         email_confirm: true,
         user_metadata: {
           username,
+          venue_id: customer.id,
           customer_id: customer.id,
           language: data.language,
         },
@@ -147,13 +148,13 @@ export const createCustomerAccount = createServerFn({ method: "POST" })
       await saveProfile(supabaseAdmin, {
         id: userId,
         username,
-        customer_id: customer.id,
+        venue_id: customer.id,
         preferred_language: data.language,
       });
 
       const { error: roleError } = await supabaseAdmin
         .from("user_roles")
-        .insert({ user_id: userId, role: "customer" });
+        .insert({ user_id: userId, role: "venue" });
       if (roleError && roleError.code !== "23505") {
         throw new Error(roleError.message);
       }
@@ -163,7 +164,7 @@ export const createCustomerAccount = createServerFn({ method: "POST" })
       if (userId) {
         await supabaseAdmin.auth.admin.deleteUser(userId);
       }
-      await supabaseAdmin.from("customers").delete().eq("id", customer.id);
+      await supabaseAdmin.from("venues").delete().eq("id", customer.id);
       throw error instanceof Error ? error : new Error("Could not create customer");
     }
   });

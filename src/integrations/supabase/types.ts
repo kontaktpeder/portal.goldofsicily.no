@@ -14,7 +14,7 @@ export type Database = {
   }
   public: {
     Tables: {
-      customers: {
+      venues: {
         Row: {
           active: boolean
           address: string | null
@@ -103,7 +103,7 @@ export type Database = {
       deliveries: {
         Row: {
           created_at: string
-          customer_id: string
+          venue_id: string
           delivered_at: string
           id: string
           note: string | null
@@ -111,7 +111,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
-          customer_id: string
+          venue_id: string
           delivered_at?: string
           id?: string
           note?: string | null
@@ -119,7 +119,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
-          customer_id?: string
+          venue_id?: string
           delivered_at?: string
           id?: string
           note?: string | null
@@ -128,9 +128,9 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "deliveries_customer_id_fkey"
-            columns: ["customer_id"]
+            columns: ["venue_id"]
             isOneToOne: false
-            referencedRelation: "customers"
+            referencedRelation: "venues"
             referencedColumns: ["id"]
           },
         ]
@@ -222,7 +222,7 @@ export type Database = {
       profiles: {
         Row: {
           created_at: string
-          customer_id: string | null
+          venue_id: string | null
           id: string
           preferred_language: string
           updated_at: string
@@ -230,7 +230,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
-          customer_id?: string | null
+          venue_id?: string | null
           id: string
           preferred_language?: string
           updated_at?: string
@@ -238,7 +238,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
-          customer_id?: string | null
+          venue_id?: string | null
           id?: string
           preferred_language?: string
           updated_at?: string
@@ -247,9 +247,9 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "profiles_customer_id_fkey"
-            columns: ["customer_id"]
+            columns: ["venue_id"]
             isOneToOne: false
-            referencedRelation: "customers"
+            referencedRelation: "venues"
             referencedColumns: ["id"]
           },
         ]
@@ -258,7 +258,7 @@ export type Database = {
         Row: {
           actual_quantity_received: number | null
           created_at: string
-          customer_id: string
+          venue_id: string
           delivery_correct: boolean | null
           delivery_id: string | null
           guest_feedback_rating:
@@ -278,7 +278,7 @@ export type Database = {
         Insert: {
           actual_quantity_received?: number | null
           created_at?: string
-          customer_id: string
+          venue_id: string
           delivery_correct?: boolean | null
           delivery_id?: string | null
           guest_feedback_rating?:
@@ -298,7 +298,7 @@ export type Database = {
         Update: {
           actual_quantity_received?: number | null
           created_at?: string
-          customer_id?: string
+          venue_id?: string
           delivery_correct?: boolean | null
           delivery_id?: string | null
           guest_feedback_rating?:
@@ -318,9 +318,9 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "shift_reports_customer_id_fkey"
-            columns: ["customer_id"]
+            columns: ["venue_id"]
             isOneToOne: false
-            referencedRelation: "customers"
+            referencedRelation: "venues"
             referencedColumns: ["id"]
           },
           {
@@ -381,7 +381,7 @@ export type Database = {
         Row: {
           available: boolean
           created_at: string
-          customer_id: string
+          venue_id: string
           description: string | null
           display_name: string | null
           id: string
@@ -394,7 +394,7 @@ export type Database = {
         Insert: {
           available?: boolean
           created_at?: string
-          customer_id: string
+          venue_id: string
           description?: string | null
           display_name?: string | null
           id?: string
@@ -407,7 +407,7 @@ export type Database = {
         Update: {
           available?: boolean
           created_at?: string
-          customer_id?: string
+          venue_id?: string
           description?: string | null
           display_name?: string | null
           id?: string
@@ -420,9 +420,9 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "venue_menu_items_customer_id_fkey"
-            columns: ["customer_id"]
+            columns: ["venue_id"]
             isOneToOne: false
-            referencedRelation: "customers"
+            referencedRelation: "venues"
             referencedColumns: ["id"]
           },
           {
@@ -461,6 +461,7 @@ export type Database = {
     }
     Functions: {
       current_customer_id: { Args: never; Returns: string }
+      current_venue_id: { Args: never; Returns: string }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -473,7 +474,7 @@ export type Database = {
       submit_shift_report: {
         Args: {
           p_actual_quantity_received?: number | null
-          p_customer_id: string
+          p_venue_id: string
           p_delivery_correct?: boolean | null
           p_delivery_id?: string | null
           p_guest_feedback_rating?:
@@ -488,7 +489,7 @@ export type Database = {
       }
     }
     Enums: {
-      app_role: "admin" | "customer"
+      app_role: "admin" | "venue"
       feedback_rating: "positive" | "mixed" | "negative"
       partner_kind: "distributor" | "direct"
     }
@@ -618,7 +619,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: ["admin", "customer"],
+      app_role: ["admin", "venue"],
       feedback_rating: ["positive", "mixed", "negative"],
       partner_kind: ["distributor", "direct"],
     },

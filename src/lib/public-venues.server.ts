@@ -1,7 +1,7 @@
 import type { Database } from "@/integrations/supabase/types";
 import { formatPriceNok } from "@/lib/slug";
 
-type Customer = Database["public"]["Tables"]["customers"]["Row"];
+type Customer = Database["public"]["Tables"]["venues"]["Row"];
 type Product = Database["public"]["Tables"]["products"]["Row"];
 type MenuItem = Database["public"]["Tables"]["venue_menu_items"]["Row"];
 
@@ -88,7 +88,7 @@ export async function loadPublicVenues(lang: "no" | "en" = "no") {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const [venuesRes, menuRes, productsRes] = await Promise.all([
     supabaseAdmin
-      .from("customers")
+      .from("venues")
       .select("*")
       .eq("active", true)
       .eq("public_visible", true)
@@ -105,9 +105,9 @@ export async function loadPublicVenues(lang: "no" | "en" = "no") {
   const productsById = new Map((productsRes.data ?? []).map((product) => [product.id, product]));
   const menuByVenue = new Map<string, typeof menuRes.data>();
   for (const item of menuRes.data ?? []) {
-    const list = menuByVenue.get(item.customer_id) ?? [];
+    const list = menuByVenue.get(item.venue_id) ?? [];
     list.push(item);
-    menuByVenue.set(item.customer_id, list);
+    menuByVenue.set(item.venue_id, list);
   }
 
   return (venuesRes.data ?? [])
@@ -118,7 +118,7 @@ export async function loadPublicVenues(lang: "no" | "en" = "no") {
 export async function loadPublicVenue(slug: string, lang: "no" | "en" = "no") {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const { data: venue, error } = await supabaseAdmin
-    .from("customers")
+    .from("venues")
     .select("*")
     .eq("slug", slug)
     .eq("active", true)
@@ -131,7 +131,7 @@ export async function loadPublicVenue(slug: string, lang: "no" | "en" = "no") {
     supabaseAdmin
       .from("venue_menu_items")
       .select("*")
-      .eq("customer_id", venue.id)
+      .eq("venue_id", venue.id)
       .eq("available", true)
       .order("sort_order"),
     supabaseAdmin.from("products").select("*").eq("active", true),

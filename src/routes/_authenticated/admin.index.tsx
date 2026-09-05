@@ -119,8 +119,8 @@ function VenueRow({ row, compact }: { row: CustomerRow; compact?: boolean }) {
   const { t, lang } = useI18n();
   return (
     <Link
-      to="/admin/customers/$customerId"
-      params={{ customerId: row.id }}
+      to="/admin/venues/$venueId"
+      params={{ venueId: row.id }}
       className={
         compact
           ? "flex items-center gap-3 rounded-xl bg-background/60 px-3 py-2"

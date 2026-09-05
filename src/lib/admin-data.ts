@@ -66,7 +66,7 @@ export function useAdminOverview() {
       const monthStart = startOfMonth();
       const recentCutoff = daysAgoIso(30);
       const [customersRes, reportsRes, deliveriesRes, partnersRes, linesRes] = await Promise.all([
-        supabase.from("customers").select("*").order("name"),
+        supabase.from("venues").select("*").order("name"),
         supabase
           .from("shift_reports")
           .select("*")
@@ -93,7 +93,7 @@ export function useAdminOverview() {
       const partners = partnersRes.data ?? [];
 
       const rows: CustomerRow[] = customers.map((customer) => {
-        const own = reports.filter((r) => r.customer_id === customer.id);
+        const own = reports.filter((r) => r.venue_id === customer.id);
         const latest = own[0] ?? null;
         const soldThisWeek = own
           .filter((r) => r.created_at >= weekStart)
@@ -101,10 +101,10 @@ export function useAdminOverview() {
 
         const deliveredSinceReport = latest
           ? deliveries
-              .filter((d) => d.customer_id === customer.id && d.created_at > latest.created_at)
+              .filter((d) => d.venue_id === customer.id && d.created_at > latest.created_at)
               .reduce((sum, d) => sum + d.quantity, 0)
           : deliveries
-              .filter((d) => d.customer_id === customer.id)
+              .filter((d) => d.venue_id === customer.id)
               .reduce((sum, d) => sum + d.quantity, 0);
 
         const currentStock = latest?.remaining_stock ?? 0;
@@ -142,7 +142,7 @@ export function useAdminOverview() {
         const venueIds = new Set(venues.map((venue) => venue.id));
         const distributedThisMonth = deliveries
           .filter(
-            (delivery) => venueIds.has(delivery.customer_id) && delivery.delivered_at >= monthStart,
+            (delivery) => venueIds.has(delivery.venue_id) && delivery.delivered_at >= monthStart,
           )
           .reduce((sum, delivery) => sum + delivery.quantity, 0);
         return {

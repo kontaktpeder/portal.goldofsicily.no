@@ -84,7 +84,7 @@ function ReportPage() {
       const { data } = await supabase
         .from("deliveries")
         .select("id, quantity, delivered_at")
-        .eq("customer_id", customerId!)
+        .eq("venue_id", customerId!)
         .order("delivered_at", { ascending: false })
         .order("created_at", { ascending: false })
         .limit(1)
@@ -110,7 +110,7 @@ function ReportPage() {
         supabase
           .from("venue_menu_items")
           .select("product_id, available, sort_order")
-          .eq("customer_id", customerId!)
+          .eq("venue_id", customerId!)
           .eq("available", true)
           .order("sort_order"),
       ]);
@@ -139,7 +139,7 @@ function ReportPage() {
     setError(null);
 
     const shared = {
-      customer_id: customerId,
+      venue_id: customerId,
       submitted_by: info.session.user.id,
       delivery_id: delivery?.id ?? null,
       delivery_correct: deliveryCorrect,
@@ -153,7 +153,7 @@ function ReportPage() {
 
     const { error: insertError } = useFlavors
       ? await supabase.rpc("submit_shift_report", {
-          p_customer_id: customerId,
+          p_venue_id: customerId,
           p_delivery_id: delivery?.id ?? null,
           p_delivery_correct: deliveryCorrect,
           p_actual_quantity_received:

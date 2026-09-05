@@ -91,7 +91,12 @@ function AdminPartners() {
                       : "border border-border text-muted-foreground"
                   }`}
                 >
-                  {option === "distributor" ? t("kind_distributor") : t("kind_direct")}
+                  <span className="block">
+                    {option === "distributor" ? t("kind_distributor") : t("kind_direct")}
+                  </span>
+                  <span className={`mt-1 block text-xs font-normal ${kind === option ? "text-primary-foreground/80" : "text-muted-foreground"}`}>
+                    {option === "distributor" ? t("kind_distributor_hint") : t("kind_direct_hint")}
+                  </span>
                 </button>
               ))}
             </div>
