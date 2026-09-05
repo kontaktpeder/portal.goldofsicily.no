@@ -10,6 +10,7 @@ import { formatDate } from "@/lib/sign-out";
 import { errorMessage } from "@/lib/utils";
 import { resetCustomerPassword } from "@/lib/admin.functions";
 import { PrimaryButton, TextAreaField, TextField } from "@/components/field";
+import { MenuFileUpload } from "@/components/menu-file-upload";
 import { DeliveryFlavorBreakdown, FlavorBreakdown } from "@/components/flavor-lines";
 import { VenuePartnerCard } from "@/components/partner-venue-link";
 import type { StoredDeliveryLine, StoredFlavorLine } from "@/lib/flavors";
@@ -283,6 +284,8 @@ function CustomerDetail() {
           customerId={venueId}
           menu={data.menu}
           products={data.products}
+          menuMaterialPath={data.customer.menu_material_path ?? null}
+          menuMaterialUrl={data.customer.menu_material_url ?? null}
           onSaved={() => queryClient.invalidateQueries()}
         />
       ) : null}
@@ -473,6 +476,7 @@ type VenueProfile = {
   collaboration_text?: string | null;
   serving_story?: string | null;
   video_url?: string | null;
+  menu_material_path?: string | null;
   menu_material_url?: string | null;
   gallery_urls?: string[] | null;
 };
@@ -507,7 +511,6 @@ function ProfileTab({
     collaborationText: customer.collaboration_text ?? "",
     servingStory: customer.serving_story ?? "",
     videoUrl: customer.video_url ?? "",
-    menuMaterialUrl: customer.menu_material_url ?? "",
     galleryUrls: (customer.gallery_urls ?? []).join("\n"),
   });
   const [busy, setBusy] = useState(false);
@@ -535,7 +538,6 @@ function ProfileTab({
       collaborationText: customer.collaboration_text ?? "",
       servingStory: customer.serving_story ?? "",
       videoUrl: customer.video_url ?? "",
-      menuMaterialUrl: customer.menu_material_url ?? "",
       galleryUrls: (customer.gallery_urls ?? []).join("\n"),
     });
   }, [customer]);
@@ -570,7 +572,6 @@ function ProfileTab({
         collaboration_text: form.collaborationText.trim() || null,
         serving_story: form.servingStory.trim() || null,
         video_url: form.videoUrl.trim() || null,
-        menu_material_url: form.menuMaterialUrl.trim() || null,
         gallery_urls: form.galleryUrls
           .split("\n")
           .map((url) => url.trim())
@@ -711,11 +712,7 @@ function ProfileTab({
             value={form.videoUrl}
             onChange={(value) => patch("videoUrl", value)}
           />
-          <TextField
-            label={t("menu_material_url")}
-            value={form.menuMaterialUrl}
-            onChange={(value) => patch("menuMaterialUrl", value)}
-          />
+          <p className="text-sm text-muted-foreground">{t("menu_file_profile_hint")}</p>
           <label className="block">
             <span className="eyebrow mb-2 block">{t("gallery_urls")}</span>
             <TextAreaField
@@ -746,11 +743,15 @@ function MenuTab({
   customerId,
   menu,
   products,
+  menuMaterialPath,
+  menuMaterialUrl,
   onSaved,
 }: {
   customerId: string;
   menu: MenuRow[];
   products: { id: string; name_no: string }[];
+  menuMaterialPath: string | null;
+  menuMaterialUrl: string | null;
   onSaved: () => void;
 }) {
   const { t } = useI18n();
@@ -788,6 +789,12 @@ function MenuTab({
 
   return (
     <div className="mt-5 space-y-4">
+      <MenuFileUpload
+        venueId={customerId}
+        path={menuMaterialPath}
+        url={menuMaterialUrl}
+        onChanged={onSaved}
+      />
       {menu.length === 0 ? (
         <p className="text-sm text-muted-foreground">{t("history_empty")}</p>
       ) : null}

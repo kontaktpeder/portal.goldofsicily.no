@@ -93,13 +93,13 @@ export function mapPublicVenue(
     instagram: customer.instagram,
     servingMethod: customer.serving_method,
     menuIntro: customer.menu_intro,
-    hasMenu: menu.length > 0,
+    hasMenu: menu.length > 0 || Boolean(customer.menu_material_url),
     menu,
     profile,
     collaborationText: rich ? customer.collaboration_text ?? null : null,
     servingStory: rich ? customer.serving_story ?? null : null,
     videoUrl: rich ? customer.video_url ?? null : null,
-    menuMaterialUrl: rich ? customer.menu_material_url ?? null : null,
+    menuMaterialUrl: customer.menu_material_url ?? null,
     galleryUrls: rich ? customer.gallery_urls ?? [] : [],
   };
 }

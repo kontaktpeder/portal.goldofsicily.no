@@ -39,6 +39,7 @@ export type Database = {
           collaboration_text: string | null
           serving_story: string | null
           video_url: string | null
+          menu_material_path: string | null
           menu_material_url: string | null
           gallery_urls: string[]
           serving_method: string | null
@@ -70,6 +71,7 @@ export type Database = {
           collaboration_text?: string | null
           serving_story?: string | null
           video_url?: string | null
+          menu_material_path?: string | null
           menu_material_url?: string | null
           gallery_urls?: string[]
           serving_method?: string | null
@@ -101,6 +103,7 @@ export type Database = {
           collaboration_text?: string | null
           serving_story?: string | null
           video_url?: string | null
+          menu_material_path?: string | null
           menu_material_url?: string | null
           gallery_urls?: string[]
           serving_method?: string | null
