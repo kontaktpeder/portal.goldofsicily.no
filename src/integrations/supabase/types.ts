@@ -34,7 +34,13 @@ export type Database = {
           name: string
           partner_id: string | null
           phone: string | null
+          public_profile: "partner" | "listing"
           public_visible: boolean
+          collaboration_text: string | null
+          serving_story: string | null
+          video_url: string | null
+          menu_material_url: string | null
+          gallery_urls: string[]
           serving_method: string | null
           slug: string | null
           updated_at: string
@@ -59,7 +65,13 @@ export type Database = {
           name: string
           partner_id?: string | null
           phone?: string | null
+          public_profile?: "partner" | "listing"
           public_visible?: boolean
+          collaboration_text?: string | null
+          serving_story?: string | null
+          video_url?: string | null
+          menu_material_url?: string | null
+          gallery_urls?: string[]
           serving_method?: string | null
           slug?: string | null
           updated_at?: string
@@ -84,7 +96,13 @@ export type Database = {
           name?: string
           partner_id?: string | null
           phone?: string | null
+          public_profile?: "partner" | "listing"
           public_visible?: boolean
+          collaboration_text?: string | null
+          serving_story?: string | null
+          video_url?: string | null
+          menu_material_url?: string | null
+          gallery_urls?: string[]
           serving_method?: string | null
           slug?: string | null
           updated_at?: string
