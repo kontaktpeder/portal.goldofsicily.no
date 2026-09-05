@@ -3,7 +3,8 @@
 -- og kobler customer.partner_id dit — samme modell som «Opprett som handelspartner og serveringssted».
 --
 -- Customer id: 74289937-90e7-41fd-bf1b-3f0bce80ef1a
--- Kjør i Lovable Cloud → SQL / Supabase SQL Editor. Trygg å kjøre flere ganger.
+-- Kjør i Lovable Cloud → SQL / Supabase SQL Editor, FØR 05_rename_customers_to_venues.sql.
+-- Trygg å kjøre flere ganger.
 
 DO $$
 DECLARE
