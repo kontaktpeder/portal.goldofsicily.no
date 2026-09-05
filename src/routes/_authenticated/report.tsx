@@ -14,13 +14,14 @@ import {
   QuestionCard,
   TextAreaField,
 } from "@/components/field";
-import { FlavorReportEditor, FlavorTotals } from "@/components/flavor-lines";
+import { DeliveryFlavorBreakdown, FlavorReportEditor, FlavorTotals } from "@/components/flavor-lines";
 import {
   initialFlavorLines,
   linesPayload,
   sumLines,
   type CatalogProduct,
   type ReportFlavorLine,
+  type StoredDeliveryLine,
 } from "@/lib/flavors";
 
 export const Route = createFileRoute("/_authenticated/report")({
@@ -81,6 +82,17 @@ function ReportPage() {
     queryKey: ["latest-delivery", customerId],
     enabled: Boolean(customerId),
     queryFn: async () => {
+      const withLines = await supabase
+        .from("deliveries")
+        .select(
+          "id, quantity, delivered_at, delivery_lines(product_id, quantity, products(name_no, name_en))",
+        )
+        .eq("venue_id", customerId!)
+        .order("delivered_at", { ascending: false })
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (!withLines.error) return withLines.data;
       const { data } = await supabase
         .from("deliveries")
         .select("id, quantity, delivered_at")
@@ -277,6 +289,14 @@ function ReportPage() {
               >
                 {delivery ? (
                   <>
+                    <DeliveryFlavorBreakdown
+                      lines={
+                        "delivery_lines" in delivery
+                          ? (delivery.delivery_lines as StoredDeliveryLine[])
+                          : null
+                      }
+                      className="mb-4"
+                    />
                     <BigChoice<boolean>
                       options={[
                         { value: true, label: t("yes") },

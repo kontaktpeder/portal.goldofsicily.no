@@ -10,9 +10,9 @@ import { formatDate } from "@/lib/sign-out";
 import { errorMessage } from "@/lib/utils";
 import { resetCustomerPassword } from "@/lib/admin.functions";
 import { PrimaryButton, TextAreaField, TextField } from "@/components/field";
-import { FlavorBreakdown } from "@/components/flavor-lines";
+import { DeliveryFlavorBreakdown, FlavorBreakdown } from "@/components/flavor-lines";
 import { VenuePartnerCard } from "@/components/partner-venue-link";
-import type { StoredFlavorLine } from "@/lib/flavors";
+import type { StoredDeliveryLine, StoredFlavorLine } from "@/lib/flavors";
 
 export const Route = createFileRoute("/_authenticated/admin/venues/$venueId")({
   head: () => ({
@@ -43,7 +43,7 @@ function CustomerDetail() {
   const { data } = useQuery({
     queryKey: ["venue-detail", venueId],
     queryFn: async () => {
-      const [customer, reports, deliveries, profile, menu, products, partners] = await Promise.all([
+      const [customer, reports, deliveriesRes, profile, menu, products, partners] = await Promise.all([
         supabase
           .from("venues")
           .select("*, partners(id, name)")
@@ -59,7 +59,7 @@ function CustomerDetail() {
           .limit(100),
         supabase
           .from("deliveries")
-          .select("*")
+          .select("*, delivery_lines(product_id, quantity, products(name_no, name_en))")
           .eq("venue_id", venueId)
           .order("delivered_at", { ascending: false })
           .limit(100),
@@ -76,6 +76,14 @@ function CustomerDetail() {
         supabase.from("products").select("*").eq("active", true).order("sort_order"),
         supabase.from("partners").select("id, name, kind, active").order("name"),
       ]);
+      const deliveries = deliveriesRes.error
+        ? await supabase
+            .from("deliveries")
+            .select("*")
+            .eq("venue_id", venueId)
+            .order("delivered_at", { ascending: false })
+            .limit(100)
+        : deliveriesRes;
       return {
         customer: customer.data,
         reports: reports.data ?? [],
@@ -226,19 +234,25 @@ function CustomerDetail() {
             <p className="text-sm text-muted-foreground">{t("history_empty")}</p>
           ) : (
             data?.deliveries.map((delivery) => (
-              <article
-                key={delivery.id}
-                className="surface-card flex items-center justify-between p-4"
-              >
-                <div>
-                  <p className="font-medium">{formatDate(delivery.delivered_at, lang)}</p>
-                  {delivery.note ? (
-                    <p className="text-xs text-muted-foreground">{delivery.note}</p>
-                  ) : null}
+              <article key={delivery.id} className="surface-card p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="font-medium">{formatDate(delivery.delivered_at, lang)}</p>
+                    {delivery.note ? (
+                      <p className="text-xs text-muted-foreground">{delivery.note}</p>
+                    ) : null}
+                  </div>
+                  <p className="text-lg font-semibold tabular-nums">
+                    {delivery.quantity} <span className="text-xs font-normal">{t("pcs")}</span>
+                  </p>
                 </div>
-                <p className="text-lg font-semibold tabular-nums">
-                  {delivery.quantity} <span className="text-xs font-normal">{t("pcs")}</span>
-                </p>
+                <DeliveryFlavorBreakdown
+                  lines={
+                    "delivery_lines" in delivery
+                      ? (delivery.delivery_lines as StoredDeliveryLine[])
+                      : null
+                  }
+                />
               </article>
             ))
           )}

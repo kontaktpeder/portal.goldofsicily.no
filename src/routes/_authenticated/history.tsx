@@ -6,8 +6,8 @@ import { useSessionInfo } from "@/hooks/use-session";
 import { useI18n } from "@/lib/i18n";
 import { formatDate } from "@/lib/sign-out";
 import { Wordmark } from "@/components/brand";
-import { FlavorBreakdown } from "@/components/flavor-lines";
-import type { StoredFlavorLine } from "@/lib/flavors";
+import { DeliveryFlavorBreakdown, FlavorBreakdown } from "@/components/flavor-lines";
+import type { StoredDeliveryLine, StoredFlavorLine } from "@/lib/flavors";
 
 export const Route = createFileRoute("/_authenticated/history")({
   head: () => ({
@@ -30,7 +30,7 @@ function HistoryPage() {
     queryKey: ["history", customerId],
     enabled: Boolean(customerId),
     queryFn: async () => {
-      const [reports, deliveries] = await Promise.all([
+      const [reports, deliveriesRes] = await Promise.all([
         supabase
           .from("shift_reports")
           .select(
@@ -41,11 +41,22 @@ function HistoryPage() {
           .limit(50),
         supabase
           .from("deliveries")
-          .select("id, quantity, delivered_at, note")
+          .select(
+            "id, quantity, delivered_at, note, delivery_lines(product_id, quantity, products(name_no, name_en))",
+          )
           .eq("venue_id", customerId!)
           .order("delivered_at", { ascending: false })
           .limit(50),
       ]);
+      const deliveries =
+        deliveriesRes.error
+          ? await supabase
+              .from("deliveries")
+              .select("id, quantity, delivered_at, note")
+              .eq("venue_id", customerId!)
+              .order("delivered_at", { ascending: false })
+              .limit(50)
+          : deliveriesRes;
       return { reports: reports.data ?? [], deliveries: deliveries.data ?? [] };
     },
   });
@@ -104,19 +115,25 @@ function HistoryPage() {
             <p className="text-sm text-muted-foreground">{t("history_empty")}</p>
           ) : (
             data?.deliveries.map((delivery) => (
-              <article
-                key={delivery.id}
-                className="surface-card flex items-center justify-between p-4"
-              >
-                <div>
-                  <p className="font-medium">{formatDate(delivery.delivered_at, lang)}</p>
-                  {delivery.note ? (
-                    <p className="mt-1 text-xs text-muted-foreground">{delivery.note}</p>
-                  ) : null}
+              <article key={delivery.id} className="surface-card p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="font-medium">{formatDate(delivery.delivered_at, lang)}</p>
+                    {delivery.note ? (
+                      <p className="mt-1 text-xs text-muted-foreground">{delivery.note}</p>
+                    ) : null}
+                  </div>
+                  <p className="text-lg font-semibold tabular-nums">
+                    {delivery.quantity} <span className="text-xs font-normal">{t("pcs")}</span>
+                  </p>
                 </div>
-                <p className="text-lg font-semibold tabular-nums">
-                  {delivery.quantity} <span className="text-xs font-normal">{t("pcs")}</span>
-                </p>
+                <DeliveryFlavorBreakdown
+                  lines={
+                    "delivery_lines" in delivery
+                      ? (delivery.delivery_lines as StoredDeliveryLine[])
+                      : null
+                  }
+                />
               </article>
             ))
           )}

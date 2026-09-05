@@ -210,11 +210,34 @@ const dict = {
   new_product: { no: "Ny smak", en: "New flavor" },
   no_products: { no: "Ingen smaker ennå.", en: "No flavors yet." },
   products_intro: {
-    no: "Smakene som vises i skiftrapporten og på serveringsstedets meny. De rapporterer antall av hver.",
-    en: "Flavors shown in the shift report and on the venue menu. Staff report counts for each.",
+    no: "Hver smak må ha navn på både norsk og engelsk. De vises i skiftrapporten, på leveringer og på menyen.",
+    en: "Every flavor needs a name in both Norwegian and English. They appear in shift reports, deliveries and menus.",
   },
   product_name_no: { no: "Navn (norsk)", en: "Name (Norwegian)" },
   product_name_en: { no: "Navn (engelsk)", en: "Name (English)" },
+  product_both_names: {
+    no: "Skriv inn smaksnavn på både norsk og engelsk.",
+    en: "Enter the flavor name in both Norwegian and English.",
+  },
+  product_desc_no: { no: "Beskrivelse (norsk)", en: "Description (Norwegian)" },
+  product_desc_en: { no: "Beskrivelse (engelsk)", en: "Description (English)" },
+  edit_product: { no: "Rediger smak", en: "Edit flavor" },
+  delivery_qty_per_flavor: {
+    no: "Antall per smak",
+    en: "Quantity per flavor",
+  },
+  delivery_qty_hint: {
+    no: "Sett antall for hver smak. Totalen summeres automatisk.",
+    en: "Set a quantity for each flavor. The total is summed automatically.",
+  },
+  delivery_missing: {
+    no: "Velg serveringssted og sett antall for minst én smak.",
+    en: "Choose a venue and set a quantity for at least one flavor.",
+  },
+  delivery_no_products: {
+    no: "Ingen aktive smaker. Registrer smaker med norsk og engelsk navn først.",
+    en: "No active flavors. Register flavors with Norwegian and English names first.",
+  },
   sku: { no: "SKU", en: "SKU" },
   description: { no: "Beskrivelse", en: "Description" },
   price_guest: { no: "Pris til gjest (kr)", en: "Guest price (NOK)" },
