@@ -1,12 +1,13 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { ArrowLeft, ChevronRight } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useI18n } from "@/lib/i18n";
-import { statusToken, useAdminOverview } from "@/lib/admin-data";
+import { useAdminOverview } from "@/lib/admin-data";
 import { PrimaryButton, TextAreaField, TextField } from "@/components/field";
+import { PartnerVenuesPanel } from "@/components/partner-venue-link";
 
 export const Route = createFileRoute("/_authenticated/admin/partners/$partnerId")({
   head: () => ({
@@ -154,31 +155,19 @@ function PartnerDetail() {
         </PrimaryButton>
       </div>
 
-      <h2 className="eyebrow mt-10">{t("customers")}</h2>
-      <div className="mt-3 space-y-3">
-        {(partnerCard?.venues ?? []).length === 0 ? (
-          <p className="text-sm text-muted-foreground">{t("no_customers")}</p>
-        ) : (
-          partnerCard?.venues.map((row) => (
-            <Link
-              key={row.id}
-              to="/admin/venues/$venueId"
-              params={{ venueId: row.id }}
-              className="surface-card flex items-center gap-4 p-4"
-            >
-              <span className={`size-3 shrink-0 rounded-full ${statusToken(row.status)}`} />
-              <div className="min-w-0 flex-1">
-                <p className="truncate font-semibold">{row.name}</p>
-                <p className="text-xs text-muted-foreground">
-                  {row.city || row.location || "—"} · {t("sold")}: {row.soldThisWeek} · {t("stock")}
-                  : {row.estimatedStock}
-                </p>
-              </div>
-              <ChevronRight className="size-4 text-muted-foreground" />
-            </Link>
-          ))
-        )}
-      </div>
+      <PartnerVenuesPanel
+        partnerId={partnerId}
+        venues={(overview.data?.rows ?? []).map((row) => ({
+          id: row.id,
+          name: row.name,
+          partnerId: row.partnerId,
+          partnerName: row.partnerName,
+          city: row.city,
+          location: row.location,
+          detail: `${row.city || row.location || "—"} · ${t("sold")}: ${row.soldThisWeek} · ${t("stock")}: ${row.estimatedStock}`,
+        }))}
+        onChanged={() => queryClient.invalidateQueries()}
+      />
     </main>
   );
 }

@@ -1,7 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ChevronRight, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -11,8 +11,16 @@ import { createCustomerAccount } from "@/lib/admin.functions";
 import { isValidUsername, parseLoginIdentifier } from "@/lib/username";
 import { errorMessage } from "@/lib/utils";
 import { PrimaryButton, TextField } from "@/components/field";
+import { partnerOptionLabel } from "@/components/partner-venue-link";
 
 export const Route = createFileRoute("/_authenticated/admin/venues/")({
+  validateSearch: (search: Record<string, unknown>): { partnerId?: string } => {
+    const partnerId = search["partnerId"];
+    if (typeof partnerId === "string" && partnerId.length > 0) {
+      return { partnerId };
+    }
+    return {};
+  },
   head: () => ({
     meta: [
       { title: "Serveringssteder — Gold of Sicily admin" },
@@ -26,16 +34,17 @@ export const Route = createFileRoute("/_authenticated/admin/venues/")({
 
 function AdminCustomers() {
   const { t } = useI18n();
+  const { partnerId: preselectedPartnerId } = Route.useSearch();
   const { data, error: loadError } = useAdminOverview();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const create = useServerFn(createCustomerAccount);
 
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(Boolean(preselectedPartnerId));
   const [name, setName] = useState("");
   const [location, setLocation] = useState("");
   const [city, setCity] = useState("");
-  const [partnerId, setPartnerId] = useState("");
+  const [partnerId, setPartnerId] = useState(preselectedPartnerId ?? "");
   const [directPartner, setDirectPartner] = useState(false);
   const [publicVisible, setPublicVisible] = useState(false);
   const [username, setUsername] = useState("");
@@ -49,12 +58,20 @@ function AdminCustomers() {
     queryFn: async () => {
       const { data } = await supabase
         .from("partners")
-        .select("id, name, kind")
-        .eq("active", true)
+        .select("id, name, kind, active")
         .order("name");
       return data ?? [];
     },
   });
+
+  useEffect(() => {
+    if (!preselectedPartnerId) return;
+    setOpen(true);
+    setPartnerId(preselectedPartnerId);
+    setDirectPartner(false);
+  }, [preselectedPartnerId]);
+
+  const preselectedPartner = partners?.find((partner) => partner.id === partnerId);
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -139,16 +156,21 @@ function AdminCustomers() {
           <TextField label={t("location")} value={location} onChange={setLocation} />
           <label className="block">
             <span className="eyebrow mb-2 block">{t("partner")}</span>
+            {preselectedPartner && preselectedPartnerId === partnerId ? (
+              <p className="mb-2 text-sm text-muted-foreground">
+                {t("creating_under_partner")}: <strong>{preselectedPartner.name}</strong>
+              </p>
+            ) : null}
             <select
               value={partnerId}
               onChange={(event) => setPartnerId(event.target.value)}
               disabled={directPartner}
               className="h-13 w-full rounded-2xl border-2 border-border bg-card px-4 text-base outline-none focus:border-primary disabled:opacity-50"
             >
-              <option value="">—</option>
+              <option value="">{t("unassigned_partner")}</option>
               {partners?.map((partner) => (
                 <option key={partner.id} value={partner.id}>
-                  {partner.name}
+                  {partnerOptionLabel(partner, t)}
                 </option>
               ))}
             </select>
@@ -242,7 +264,8 @@ function AdminCustomers() {
               <div className="min-w-0 flex-1">
                 <p className="truncate font-semibold">{row.name}</p>
                 <p className="text-xs text-muted-foreground">
-                  {row.location ?? row.city ?? "—"} · {row.active ? t("active") : t("inactive")}
+                  {row.partnerName ?? t("unassigned_partner")} · {row.location ?? row.city ?? "—"} ·{" "}
+                  {row.active ? t("active") : t("inactive")}
                   {row.publicVisible ? ` · ${t("public_yes")}` : ""}
                 </p>
               </div>

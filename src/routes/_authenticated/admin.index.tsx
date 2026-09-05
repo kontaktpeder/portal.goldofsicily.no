@@ -138,6 +138,8 @@ function VenueRow({ row, compact }: { row: CustomerRow; compact?: boolean }) {
           ) : null}
         </p>
         <p className="mt-0.5 text-xs text-muted-foreground">
+          {row.partnerName ?? t("unassigned_partner")}
+          {" · "}
           {t("last_report")}: {row.lastReportAt ? formatDate(row.lastReportAt, lang) : t("never")}
         </p>
         {compact ? null : (
