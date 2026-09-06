@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useI18n } from "@/lib/i18n";
 import { parseGuestPriceOre } from "@/lib/slug";
+import { isUniqueMenuItemConflict, nextAvailableProductId } from "@/lib/venue-menu-item";
 import { formatDate } from "@/lib/sign-out";
 import { errorMessage } from "@/lib/utils";
 import { resetCustomerPassword } from "@/lib/admin.functions";
@@ -764,20 +765,56 @@ function MenuTab({
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    if (!productId && availableProducts[0]) setProductId(availableProducts[0].id);
-  }, [availableProducts, productId]);
+    setProductId((current) =>
+      nextAvailableProductId(
+        products,
+        menu.map((item) => item.product_id),
+        current,
+      ),
+    );
+  }, [menu, products]);
 
   async function addItem() {
     if (!productId) return;
     setBusy(true);
-    const { error } = await supabase.from("venue_menu_items").insert({
-      venue_id: customerId,
-      product_id: productId,
+    const payload = {
       display_name: displayName.trim() || null,
       price_ore: parseGuestPriceOre(price),
       available: true,
-      sort_order: menu.length * 10,
-    });
+    };
+    const existing = menu.find((item) => item.product_id === productId);
+    let error = existing
+      ? (
+          await supabase.from("venue_menu_items").update(payload).eq("id", existing.id)
+        ).error
+      : (
+          await supabase.from("venue_menu_items").insert({
+            venue_id: customerId,
+            product_id: productId,
+            ...payload,
+            sort_order: menu.length * 10,
+          })
+        ).error;
+
+    if (!existing && isUniqueMenuItemConflict(error)) {
+      const updated = await supabase
+        .from("venue_menu_items")
+        .update(payload)
+        .eq("venue_id", customerId)
+        .eq("product_id", productId);
+      error = updated.error;
+      setBusy(false);
+      if (error) {
+        toast.error(error.message);
+        return;
+      }
+      toast.success(t("menu_item_updated"));
+      setDisplayName("");
+      setPrice("");
+      onSaved();
+      return;
+    }
+
     setBusy(false);
     if (error) {
       toast.error(error.message);

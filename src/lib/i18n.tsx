@@ -294,6 +294,10 @@ const dict = {
   longitude: { no: "Lengdegrad", en: "Longitude" },
   menu_intro: { no: "Menytekst", en: "Menu intro" },
   add_to_menu: { no: "Legg på menyen", en: "Add to menu" },
+  menu_item_updated: {
+    no: "Smaken var allerede på menyen. Vi oppdaterte den.",
+    en: "That flavor was already on the menu. We updated it.",
+  },
   available: { no: "Tilgjengelig", en: "Available" },
   unavailable: { no: "Ikke tilgjengelig", en: "Unavailable" },
   remove: { no: "Fjern", en: "Remove" },
