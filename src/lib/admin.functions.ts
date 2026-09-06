@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { parseLoginIdentifier, normalizeUsername, usernameToEmail } from "@/lib/username";
+import { notifyPublicSiteIndex } from "@/lib/public-site-notify";
 
 const createSchema = z.object({
   name: z.string().trim().min(1),
@@ -123,7 +124,7 @@ export const createCustomerAccount = createServerFn({ method: "POST" })
         active: data.active,
         default_language: data.language,
       })
-      .select("id")
+      .select("id, slug, public_visible, active")
       .single();
     if (customerError || !customer)
       throw new Error(customerError?.message ?? "Could not create customer");
@@ -158,6 +159,14 @@ export const createCustomerAccount = createServerFn({ method: "POST" })
         .insert({ user_id: userId, role: "venue" });
       if (roleError && roleError.code !== "23505") {
         throw new Error(roleError.message);
+      }
+
+      if (customer.slug && customer.public_visible && customer.active) {
+        try {
+          await notifyPublicSiteIndex({ slugs: [customer.slug], published: true });
+        } catch {
+          // IndexNow is best-effort; never roll back the new venue.
+        }
       }
 
       return { customerId: customer.id, userId };
@@ -223,6 +232,22 @@ export const bootstrapFirstAdmin = createServerFn({ method: "POST" })
       .insert({ user_id: created.user.id, role: "admin" });
     if (roleError) throw new Error(roleError.message);
     return { ok: true };
+  });
+
+export const notifyVenueIndex = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((data: unknown) =>
+    z
+      .object({
+        slugs: z.array(z.string()).optional().default([]),
+        previousSlugs: z.array(z.string()).optional().default([]),
+        published: z.boolean().optional().default(true),
+      })
+      .parse(data),
+  )
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context.supabase as never);
+    return notifyPublicSiteIndex(data);
   });
 
 export const adminExists = createServerFn({ method: "GET" }).handler(async () => {
