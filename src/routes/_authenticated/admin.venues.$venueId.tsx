@@ -6,6 +6,7 @@ import { AlertTriangle, ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useI18n } from "@/lib/i18n";
+import { parseGuestPriceOre } from "@/lib/slug";
 import { formatDate } from "@/lib/sign-out";
 import { errorMessage } from "@/lib/utils";
 import { resetCustomerPassword } from "@/lib/admin.functions";
@@ -759,7 +760,7 @@ function MenuTab({
   const availableProducts = products.filter((product) => !used.has(product.id));
   const [productId, setProductId] = useState("");
   const [displayName, setDisplayName] = useState("");
-  const [price, setPrice] = useState("79");
+  const [price, setPrice] = useState("");
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -769,12 +770,11 @@ function MenuTab({
   async function addItem() {
     if (!productId) return;
     setBusy(true);
-    const priceNok = Number(price.replace(",", "."));
     const { error } = await supabase.from("venue_menu_items").insert({
       venue_id: customerId,
       product_id: productId,
       display_name: displayName.trim() || null,
-      price_ore: Number.isFinite(priceNok) ? Math.round(priceNok * 100) : null,
+      price_ore: parseGuestPriceOre(price),
       available: true,
       sort_order: menu.length * 10,
     });
@@ -784,6 +784,7 @@ function MenuTab({
       return;
     }
     setDisplayName("");
+    setPrice("");
     onSaved();
   }
 
@@ -820,7 +821,13 @@ function MenuTab({
             </select>
           </label>
           <TextField label={t("dish_name")} value={displayName} onChange={setDisplayName} />
-          <TextField label={t("price_guest")} value={price} onChange={setPrice} />
+          <TextField
+            label={t("price_guest")}
+            value={price}
+            onChange={setPrice}
+            placeholder={t("price_guest_placeholder")}
+          />
+          <p className="text-sm text-muted-foreground">{t("price_guest_hint")}</p>
           <PrimaryButton onClick={addItem} disabled={busy || !productId}>
             {t("add_to_menu")}
           </PrimaryButton>
@@ -841,12 +848,11 @@ function MenuItemCard({ item, onSaved }: { item: MenuRow; onSaved: () => void })
   }, [item]);
 
   async function save() {
-    const nok = Number(price.replace(",", "."));
     const { error } = await supabase
       .from("venue_menu_items")
       .update({
         display_name: displayName.trim() || null,
-        price_ore: price.trim() && Number.isFinite(nok) ? Math.round(nok * 100) : null,
+        price_ore: parseGuestPriceOre(price),
       })
       .eq("id", item.id);
     if (error) toast.error(error.message);
@@ -884,7 +890,13 @@ function MenuItemCard({ item, onSaved }: { item: MenuRow; onSaved: () => void })
         </button>
       </div>
       <TextField label={t("dish_name")} value={displayName} onChange={setDisplayName} />
-      <TextField label={t("price_guest")} value={price} onChange={setPrice} />
+      <TextField
+        label={t("price_guest")}
+        value={price}
+        onChange={setPrice}
+        placeholder={t("price_guest_placeholder")}
+      />
+      <p className="text-sm text-muted-foreground">{t("price_guest_hint")}</p>
       <div className="flex gap-3">
         <PrimaryButton onClick={save}>{t("save")}</PrimaryButton>
       </div>

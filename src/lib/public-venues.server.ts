@@ -55,8 +55,9 @@ function toPublicMenuItem(
       item.description?.trim() ||
       (lang === "en" ? product.description_en : product.description_no) ||
       null,
-    priceNok: item.price_ore == null ? null : item.price_ore / 100,
-    priceLabel: item.price_ore == null ? null : `${formatPriceNok(item.price_ore)} kr`,
+    priceNok: item.price_ore == null || item.price_ore === 0 ? null : item.price_ore / 100,
+    priceLabel:
+      item.price_ore == null || item.price_ore === 0 ? null : `${formatPriceNok(item.price_ore)} kr`,
     available: item.available,
     imageUrl: item.image_url || product.image_url,
   };

@@ -279,7 +279,12 @@ const dict = {
   },
   sku: { no: "SKU", en: "SKU" },
   description: { no: "Beskrivelse", en: "Description" },
-  price_guest: { no: "Pris til gjest (kr)", en: "Guest price (NOK)" },
+  price_guest: { no: "Pris til gjest (kr, valgfritt)", en: "Guest price (NOK, optional)" },
+  price_guest_placeholder: { no: "Valgfritt", en: "Optional" },
+  price_guest_hint: {
+    no: "La feltet stå tomt hvis prisen ikke skal vises på nettsiden.",
+    en: "Leave empty if the price should not appear on the website.",
+  },
   serving_method: { no: "Serveringsmetode", en: "Serving method" },
   website: { no: "Nettside", en: "Website" },
   instagram: { no: "Instagram", en: "Instagram" },

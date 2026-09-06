@@ -16,3 +16,11 @@ export function formatPriceNok(priceOre: number | null | undefined) {
   const nok = priceOre / 100;
   return Number.isInteger(nok) ? `${nok}` : nok.toFixed(2).replace(".", ",");
 }
+
+export function parseGuestPriceOre(raw: string): number | null {
+  const trimmed = raw.trim().replace(",", ".");
+  if (!trimmed) return null;
+  const nok = Number(trimmed);
+  if (!Number.isFinite(nok)) return null;
+  return Math.round(nok * 100);
+}
