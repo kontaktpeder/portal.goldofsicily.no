@@ -9,14 +9,14 @@ export function Wordmark({
   size?: "sm" | "md" | "lg";
   className?: string;
 }) {
-  const height = size === "lg" ? 68 : size === "md" ? 52 : 40;
+  const height = size === "lg" ? 84 : size === "md" ? 56 : 40;
   return (
     <img
       src={logo}
       alt="Gold of Sicily"
       width={1380}
       height={454}
-      className={cn("w-auto object-contain object-left", className)}
+      className={cn("w-auto max-w-full shrink-0 object-contain object-left", className)}
       style={{ height }}
     />
   );

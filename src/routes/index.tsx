@@ -91,10 +91,10 @@ function LoginPage() {
   return (
     <main className="flex min-h-screen flex-col px-6 pt-10 pb-12 sm:justify-center">
       <div className="mx-auto w-full max-w-sm">
-        <div className="flex items-center justify-between">
-          <Wordmark size="lg" />
+        <div className="flex justify-end">
           <LanguageToggle />
         </div>
+        <Wordmark size="lg" className="mt-6 w-[min(100%,20rem)]" />
 
         <div className="mt-14 text-center">
           <p className="eyebrow">{t("login_sub")}</p>
