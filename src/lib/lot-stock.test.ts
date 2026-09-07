@@ -4,6 +4,7 @@ import {
   allocateFifo,
   canAllocate,
   deliveryLineRequiresLot,
+  isOpenLot,
   lotsWithFormReservation,
   newestCoveringLot,
   needsLotSplit,
@@ -94,4 +95,10 @@ test("toStockLots subtracts venue deliveries from produced qty", () => {
   ]);
   assert.equal(lot?.deliveredQty, 15);
   assert.equal(lot?.remaining, 25);
+});
+
+test("packed lots stay open for stock until closed or recalled", () => {
+  assert.equal(isOpenLot("packed"), true);
+  assert.equal(isOpenLot("produced"), true);
+  assert.equal(isOpenLot("closed"), false);
 });

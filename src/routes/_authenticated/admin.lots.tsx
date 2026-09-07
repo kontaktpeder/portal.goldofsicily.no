@@ -17,6 +17,7 @@ import {
   todayOsloDate,
 } from "@/lib/gold-lot";
 import { isGoldLotSchemaError, isOpenLot, lotRemaining, toStockLots } from "@/lib/lot-stock";
+import { ensureProductVersionForProduct } from "@/lib/lot-snapshot";
 import { formatDate } from "@/lib/sign-out";
 import { cn, errorMessage } from "@/lib/utils";
 
@@ -83,7 +84,6 @@ function AdminLots() {
   const [productId, setProductId] = useState(productFromSearch ?? "");
   const [productionDate, setProductionDate] = useState(todayOsloDate);
   const [producedQty, setProducedQty] = useState("0");
-  const [cartonCount, setCartonCount] = useState("0");
   const [producedBy, setProducedBy] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -168,6 +168,12 @@ function AdminLots() {
       return;
     }
     setBusy(true);
+    const version = await ensureProductVersionForProduct(productId);
+    if (!version.ok) {
+      setBusy(false);
+      toast.error(version.schemaMissing ? t("packing_schema_missing") : version.message);
+      return;
+    }
     let lotCode = previewCode;
     const rpc = await supabase.rpc("next_gold_lot_code", {
       p_production_date: productionDate,
@@ -181,7 +187,8 @@ function AdminLots() {
         production_date: productionDate,
         product_id: productId,
         produced_qty: Number.parseInt(producedQty, 10) || 0,
-        carton_count: Number.parseInt(cartonCount, 10) || 0,
+        approved_qty: Number.parseInt(producedQty, 10) || 0,
+        product_version_id: version.id,
         produced_by: producedBy.trim() || null,
         status: "produced",
       })
@@ -194,7 +201,6 @@ function AdminLots() {
     }
     toast.success(`${lotCode} ${t("lot_created").toLowerCase()}`);
     setProducedQty("0");
-    setCartonCount("0");
     setProducedBy("");
     await queryClient.invalidateQueries({ queryKey: ["gold-lots"] });
     await queryClient.invalidateQueries({ queryKey: ["gold-lots-open"] });
@@ -268,12 +274,6 @@ function AdminLots() {
                 type="number"
                 value={producedQty}
                 onChange={setProducedQty}
-              />
-              <TextField
-                label={t("carton_count")}
-                type="number"
-                value={cartonCount}
-                onChange={setCartonCount}
               />
               <TextField label={t("produced_by")} value={producedBy} onChange={setProducedBy} />
               <PrimaryButton onClick={submit} disabled={busy || blocked}>

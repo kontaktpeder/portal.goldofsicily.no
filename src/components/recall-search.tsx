@@ -10,6 +10,7 @@ import { formatDate } from "@/lib/sign-out";
 
 const STATUS_KEYS: Record<string, TranslationKey> = {
   produced: "lot_status_produced",
+  packed: "lot_status_packed",
   handed_over: "lot_status_handed_over",
   closed: "lot_status_closed",
   recalled: "lot_status_recalled",

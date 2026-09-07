@@ -3,7 +3,7 @@
 export const GOLD_LOT_PATTERN = /^L-(\d{8})-([A-Z])-(\d{2,})$/;
 export const GOLD_LOT_SHORT_PATTERN = /^L-(\d{6})-([A-Z])-(\d{2,})$/;
 
-export type GoldLotStatus = "produced" | "handed_over" | "closed" | "recalled";
+export type GoldLotStatus = "produced" | "packed" | "handed_over" | "closed" | "recalled";
 export type HandoverOwnership = "gold" | "villa";
 
 export type ParsedGoldLot = {

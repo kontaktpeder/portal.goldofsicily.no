@@ -207,6 +207,7 @@ export type Database = {
       }
       gold_lots: {
         Row: {
+          approved_qty: number | null
           carton_count: number
           created_at: string
           deviation_notes: string | null
@@ -215,11 +216,13 @@ export type Database = {
           produced_by: string | null
           produced_qty: number
           product_id: string
+          product_version_id: string | null
           production_date: string
           status: Database["public"]["Enums"]["gold_lot_status"]
           updated_at: string
         }
         Insert: {
+          approved_qty?: number | null
           carton_count?: number
           created_at?: string
           deviation_notes?: string | null
@@ -228,11 +231,13 @@ export type Database = {
           produced_by?: string | null
           produced_qty: number
           product_id: string
+          product_version_id?: string | null
           production_date: string
           status?: Database["public"]["Enums"]["gold_lot_status"]
           updated_at?: string
         }
         Update: {
+          approved_qty?: number | null
           carton_count?: number
           created_at?: string
           deviation_notes?: string | null
@@ -241,6 +246,7 @@ export type Database = {
           produced_by?: string | null
           produced_qty?: number
           product_id?: string
+          product_version_id?: string | null
           production_date?: string
           status?: Database["public"]["Enums"]["gold_lot_status"]
           updated_at?: string
@@ -251,6 +257,13 @@ export type Database = {
             columns: ["product_id"]
             isOneToOne: false
             referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gold_lots_product_version_id_fkey"
+            columns: ["product_version_id"]
+            isOneToOne: false
+            referencedRelation: "product_versions"
             referencedColumns: ["id"]
           },
         ]
@@ -373,6 +386,83 @@ export type Database = {
           },
         ]
       }
+      gold_lot_cartons: {
+        Row: {
+          carton_code: string
+          carton_seq: number
+          created_at: string
+          gold_lot_id: string
+          id: string
+        }
+        Insert: {
+          carton_code: string
+          carton_seq: number
+          created_at?: string
+          gold_lot_id: string
+          id?: string
+        }
+        Update: {
+          carton_code?: string
+          carton_seq?: number
+          created_at?: string
+          gold_lot_id?: string
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gold_lot_cartons_gold_lot_id_fkey"
+            columns: ["gold_lot_id"]
+            isOneToOne: false
+            referencedRelation: "gold_lots"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      gold_lot_packages: {
+        Row: {
+          carton_id: string | null
+          created_at: string
+          gold_lot_id: string
+          id: string
+          package_code: string
+          package_seq: number
+          quantity: number
+        }
+        Insert: {
+          carton_id?: string | null
+          created_at?: string
+          gold_lot_id: string
+          id?: string
+          package_code: string
+          package_seq: number
+          quantity: number
+        }
+        Update: {
+          carton_id?: string | null
+          created_at?: string
+          gold_lot_id?: string
+          id?: string
+          package_code?: string
+          package_seq?: number
+          quantity?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gold_lot_packages_carton_id_fkey"
+            columns: ["carton_id"]
+            isOneToOne: false
+            referencedRelation: "gold_lot_cartons"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gold_lot_packages_gold_lot_id_fkey"
+            columns: ["gold_lot_id"]
+            isOneToOne: false
+            referencedRelation: "gold_lots"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ingredient_suppliers: {
         Row: {
           active: boolean
@@ -448,50 +538,169 @@ export type Database = {
         }
         Relationships: []
       }
+      product_versions: {
+        Row: {
+          allergens_no: string | null
+          created_at: string
+          do_not_refreeze_no: string
+          fingerprint: string
+          id: string
+          ingredients_no: string | null
+          legal_designation_no: string
+          name_en: string
+          name_no: string
+          nutrition_no: string | null
+          packages_per_carton: number | null
+          prep_no: string | null
+          producer_address: string | null
+          producer_name: string
+          product_id: string
+          shelf_life_days: number
+          sku: string
+          storage_no: string
+          unit_weight_g: number | null
+          units_per_package: number | null
+          version_number: number
+        }
+        Insert: {
+          allergens_no?: string | null
+          created_at?: string
+          do_not_refreeze_no: string
+          fingerprint: string
+          id?: string
+          ingredients_no?: string | null
+          legal_designation_no: string
+          name_en: string
+          name_no: string
+          nutrition_no?: string | null
+          packages_per_carton?: number | null
+          prep_no?: string | null
+          producer_address?: string | null
+          producer_name: string
+          product_id: string
+          shelf_life_days?: number
+          sku: string
+          storage_no: string
+          unit_weight_g?: number | null
+          units_per_package?: number | null
+          version_number: number
+        }
+        Update: {
+          allergens_no?: string | null
+          created_at?: string
+          do_not_refreeze_no?: string
+          fingerprint?: string
+          id?: string
+          ingredients_no?: string | null
+          legal_designation_no?: string
+          name_en?: string
+          name_no?: string
+          nutrition_no?: string | null
+          packages_per_carton?: number | null
+          prep_no?: string | null
+          producer_address?: string | null
+          producer_name?: string
+          product_id?: string
+          shelf_life_days?: number
+          sku?: string
+          storage_no?: string
+          unit_weight_g?: number | null
+          units_per_package?: number | null
+          version_number?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_versions_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       products: {
         Row: {
           active: boolean
+          allergens_no: string | null
           created_at: string
           description_en: string | null
           description_no: string | null
+          do_not_refreeze_no: string | null
           id: string
           image_url: string | null
+          ingredients_no: string | null
+          legal_designation_no: string | null
           lot_letter: string | null
           name_en: string
           name_no: string
+          nutrition_no: string | null
+          packages_per_carton: number | null
+          prep_no: string | null
+          producer_address: string | null
+          producer_name: string | null
+          shelf_life_days: number | null
           sku: string
           slug: string
           sort_order: number
+          storage_no: string | null
+          unit_weight_g: number | null
+          units_per_package: number | null
           updated_at: string
         }
         Insert: {
           active?: boolean
+          allergens_no?: string | null
           created_at?: string
           description_en?: string | null
           description_no?: string | null
+          do_not_refreeze_no?: string | null
           id?: string
           image_url?: string | null
+          ingredients_no?: string | null
+          legal_designation_no?: string | null
           lot_letter?: string | null
           name_en: string
           name_no: string
+          nutrition_no?: string | null
+          packages_per_carton?: number | null
+          prep_no?: string | null
+          producer_address?: string | null
+          producer_name?: string | null
+          shelf_life_days?: number | null
           sku: string
           slug: string
           sort_order?: number
+          storage_no?: string | null
+          unit_weight_g?: number | null
+          units_per_package?: number | null
           updated_at?: string
         }
         Update: {
           active?: boolean
+          allergens_no?: string | null
           created_at?: string
           description_en?: string | null
           description_no?: string | null
+          do_not_refreeze_no?: string | null
           id?: string
           image_url?: string | null
+          ingredients_no?: string | null
+          legal_designation_no?: string | null
           lot_letter?: string | null
           name_en?: string
           name_no?: string
+          nutrition_no?: string | null
+          packages_per_carton?: number | null
+          prep_no?: string | null
+          producer_address?: string | null
+          producer_name?: string | null
+          shelf_life_days?: number | null
           sku?: string
           slug?: string
           sort_order?: number
+          storage_no?: string | null
+          unit_weight_g?: number | null
+          units_per_package?: number | null
           updated_at?: string
         }
         Relationships: []
@@ -774,7 +983,7 @@ export type Database = {
     Enums: {
       app_role: "admin" | "ops" | "venue"
       feedback_rating: "positive" | "mixed" | "negative"
-      gold_lot_status: "produced" | "handed_over" | "closed" | "recalled"
+      gold_lot_status: "produced" | "packed" | "handed_over" | "closed" | "recalled"
       handover_ownership: "gold" | "villa"
       partner_kind: "distributor" | "direct"
     }
@@ -906,7 +1115,7 @@ export const Constants = {
     Enums: {
       app_role: ["admin", "ops", "venue"],
       feedback_rating: ["positive", "mixed", "negative"],
-      gold_lot_status: ["produced", "handed_over", "closed", "recalled"],
+      gold_lot_status: ["produced", "packed", "handed_over", "closed", "recalled"],
       handover_ownership: ["gold", "villa"],
       partner_kind: ["distributor", "direct"],
     },
