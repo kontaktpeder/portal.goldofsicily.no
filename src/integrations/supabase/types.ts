@@ -218,6 +218,9 @@ export type Database = {
           product_id: string
           product_version_id: string | null
           production_date: string
+          recall_reason: string | null
+          recalled_at: string | null
+          recalled_by: string | null
           status: Database["public"]["Enums"]["gold_lot_status"]
           updated_at: string
         }
@@ -233,6 +236,9 @@ export type Database = {
           product_id: string
           product_version_id?: string | null
           production_date: string
+          recall_reason?: string | null
+          recalled_at?: string | null
+          recalled_by?: string | null
           status?: Database["public"]["Enums"]["gold_lot_status"]
           updated_at?: string
         }
@@ -248,6 +254,9 @@ export type Database = {
           product_id?: string
           product_version_id?: string | null
           production_date?: string
+          recall_reason?: string | null
+          recalled_at?: string | null
+          recalled_by?: string | null
           status?: Database["public"]["Enums"]["gold_lot_status"]
           updated_at?: string
         }
@@ -264,6 +273,58 @@ export type Database = {
             columns: ["product_version_id"]
             isOneToOne: false
             referencedRelation: "product_versions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gold_lots_recalled_by_fkey"
+            columns: ["recalled_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      gold_lot_events: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          event_type: Database["public"]["Enums"]["gold_lot_event_type"]
+          gold_lot_id: string
+          id: string
+          metadata: Json
+          reason: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          event_type: Database["public"]["Enums"]["gold_lot_event_type"]
+          gold_lot_id: string
+          id?: string
+          metadata?: Json
+          reason?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          event_type?: Database["public"]["Enums"]["gold_lot_event_type"]
+          gold_lot_id?: string
+          id?: string
+          metadata?: Json
+          reason?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gold_lot_events_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gold_lot_events_gold_lot_id_fkey"
+            columns: ["gold_lot_id"]
+            isOneToOne: false
+            referencedRelation: "gold_lots"
             referencedColumns: ["id"]
           },
         ]
@@ -1031,6 +1092,7 @@ export type Database = {
     Enums: {
       app_role: "admin" | "ops" | "venue"
       feedback_rating: "positive" | "mixed" | "negative"
+      gold_lot_event_type: "created" | "packed" | "handover" | "closed" | "recalled"
       gold_lot_status: "produced" | "packed" | "handed_over" | "closed" | "recalled"
       handover_ownership: "gold" | "villa"
       partner_kind: "distributor" | "direct"
@@ -1163,6 +1225,7 @@ export const Constants = {
     Enums: {
       app_role: ["admin", "ops", "venue"],
       feedback_rating: ["positive", "mixed", "negative"],
+      gold_lot_event_type: ["created", "packed", "handover", "closed", "recalled"],
       gold_lot_status: ["produced", "packed", "handed_over", "closed", "recalled"],
       handover_ownership: ["gold", "villa"],
       partner_kind: ["distributor", "direct"],

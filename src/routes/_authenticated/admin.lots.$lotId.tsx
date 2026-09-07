@@ -37,6 +37,20 @@ import {
 } from "@/lib/product-version";
 import { formatDate } from "@/lib/sign-out";
 import { errorMessage } from "@/lib/utils";
+import {
+  affectedRecallRecipients,
+  canCloseLot,
+  canRecallLot,
+  canRecordHandover,
+  eventFromRow,
+  formatLotEventWhen,
+  handoverEventText,
+  isEventSchemaError,
+  statusAfterHandover,
+  statusAfterPacking,
+  type LotEvent,
+} from "@/lib/lot-events";
+import { currentLotActor, recordLotEvent } from "@/lib/lot-events-save";
 
 export const Route = createFileRoute("/_authenticated/admin/lots/$lotId")({
   head: () => ({
@@ -61,6 +75,9 @@ type LotDetail = {
   product_version_id: string | null;
   status: "produced" | "packed" | "handed_over" | "closed" | "recalled";
   deviation_notes: string | null;
+  recalled_at: string | null;
+  recalled_by: string | null;
+  recall_reason: string | null;
   products: { name_no: string; name_en: string } | null;
   gold_lot_ingredients:
     | {
@@ -136,6 +153,24 @@ const STATUS_KEYS: Record<LotDetail["status"], TranslationKey> = {
   closed: "lot_status_closed",
   recalled: "lot_status_recalled",
 };
+
+const EVENT_ACTION_KEYS: Record<Exclude<LotEvent["eventType"], "handover">, TranslationKey> = {
+  created: "lot_event_created",
+  packed: "lot_event_packed",
+  closed: "lot_event_closed",
+  recalled: "lot_event_recalled",
+};
+
+function venueNameFromDeliveryRow(row: {
+  deliveries:
+    | { delivered_at: string; venues: { name: string } | null }
+    | { delivered_at: string; venues: { name: string } | null }[]
+    | null;
+}): string {
+  const delivery = row.deliveries;
+  const record = Array.isArray(delivery) ? delivery[0] : delivery;
+  return record?.venues?.name ?? "";
+}
 
 function AdminLotDetail() {
   const { lotId } = Route.useParams();
@@ -230,11 +265,31 @@ function AdminLotDetail() {
     },
   });
 
+  const { data: history } = useQuery({
+    queryKey: ["gold-lot-events", lotId],
+    queryFn: async () => {
+      const { data, error: loadError } = await supabase
+        .from("gold_lot_events")
+        .select("id, gold_lot_id, event_type, created_at, created_by, reason, metadata")
+        .eq("gold_lot_id", lotId)
+        .order("created_at", { ascending: true });
+      if (loadError) {
+        if (isEventSchemaError(loadError)) return { schemaMissing: true, rows: [] as LotEvent[] };
+        throw loadError;
+      }
+      return {
+        schemaMissing: false,
+        rows: (data ?? []).map(eventFromRow).filter((row): row is LotEvent => row != null),
+      };
+    },
+  });
+
   async function refresh() {
     await queryClient.invalidateQueries({ queryKey: ["gold-lot", lotId] });
     await queryClient.invalidateQueries({ queryKey: ["gold-lots"] });
     await queryClient.invalidateQueries({ queryKey: ["gold-lot-deliveries", lotId] });
     await queryClient.invalidateQueries({ queryKey: ["gold-lot-packing", lotId] });
+    await queryClient.invalidateQueries({ queryKey: ["gold-lot-events", lotId] });
   }
 
   if (error) {
@@ -295,6 +350,19 @@ function AdminLotDetail() {
         <Metric label={t("carton_count")} value={String(cartonCount)} />
         <Metric label={t("lot_status")} value={t(STATUS_KEYS[lot.status] ?? "lot_status_produced")} />
       </div>
+      {lot.status === "closed" ? (
+        <p className="mt-3 text-sm text-muted-foreground">{t("lot_closed_note")}</p>
+      ) : null}
+      {lot.status === "recalled" ? (
+        <p className="mt-3 text-sm text-muted-foreground">
+          {t("lot_recalled_note")}
+          {lot.recall_reason ? ` · ${lot.recall_reason}` : ""}
+        </p>
+      ) : null}
+
+      <LotHistory history={history} />
+
+      <LotActions lot={lot} deliveries={deliveries ?? []} onSaved={refresh} />
 
       <LotMetaForm lot={lot} onSaved={refresh} />
 
@@ -325,7 +393,7 @@ function AdminLotDetail() {
         <IngredientForm lotId={lot.id} onSaved={refresh} />
       </section>
 
-      <section className="mt-10">
+      <section id="lot-handover" className="mt-10">
         <h2 className="text-2xl font-semibold">{t("handovers")}</h2>
         <p className="mt-1 max-w-2xl text-sm text-muted-foreground">{t("handovers_hint")}</p>
         {(lot.gold_lot_handovers ?? []).length === 0 ? (
@@ -349,7 +417,7 @@ function AdminLotDetail() {
             ))}
           </ul>
         )}
-        <HandoverForm lotId={lot.id} remaining={goldLeft} onSaved={refresh} />
+        <HandoverForm lotId={lot.id} remaining={goldLeft} status={lot.status} onSaved={refresh} />
       </section>
 
       <section className="mt-10">
@@ -379,6 +447,209 @@ function AdminLotDetail() {
         )}
       </section>
     </main>
+  );
+}
+
+function LotHistory({
+  history,
+}: {
+  history: { schemaMissing: boolean; rows: LotEvent[] } | undefined;
+}) {
+  const { t, lang } = useI18n();
+  return (
+    <section className="mt-10">
+      <h2 className="text-2xl font-semibold">{t("lot_history")}</h2>
+      {history?.schemaMissing ? (
+        <p className="mt-3 text-sm text-muted-foreground">{t("lot_events_schema_missing")}</p>
+      ) : !history || history.rows.length === 0 ? (
+        <p className="mt-3 text-sm text-muted-foreground">{t("lot_history_empty")}</p>
+      ) : (
+        <ul className="mt-4 space-y-2">
+          {history.rows.map((event) => {
+            const actor = event.metadata.actor_name?.trim();
+            const action =
+              event.eventType === "handover"
+                ? handoverEventText(event.metadata, lang)
+                : t(EVENT_ACTION_KEYS[event.eventType]);
+            return (
+              <li key={event.id} className="surface-card p-4">
+                <p className="text-sm text-muted-foreground">{formatLotEventWhen(event.createdAt, lang)}</p>
+                <p className="font-semibold">
+                  {action}
+                  {actor ? ` · ${actor}` : ""}
+                </p>
+                {event.reason ? <p className="mt-1 text-sm text-muted-foreground">{event.reason}</p> : null}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+function LotActions({
+  lot,
+  deliveries,
+  onSaved,
+}: {
+  lot: LotDetail;
+  deliveries: Array<{
+    deliveries:
+      | { delivered_at: string; venues: { name: string } | null }
+      | { delivered_at: string; venues: { name: string } | null }[]
+      | null;
+  }>;
+  onSaved: () => Promise<void>;
+}) {
+  const { t } = useI18n();
+  const [confirmClose, setConfirmClose] = useState(false);
+  const [recallOpen, setRecallOpen] = useState(false);
+  const [recallReason, setRecallReason] = useState("");
+  const [busy, setBusy] = useState(false);
+  const canHandover = canRecordHandover(lot.status);
+  const recipients = affectedRecallRecipients({
+    handovers: (lot.gold_lot_handovers ?? []).map((row) => ({ recipientCompany: row.recipient_company })),
+    venueDeliveries: deliveries.map((row) => ({ venueName: venueNameFromDeliveryRow(row) })),
+  });
+
+  async function closeLot() {
+    if (!canCloseLot(lot.status)) return;
+    setBusy(true);
+    const updated = await supabase.from("gold_lots").update({ status: "closed" }).eq("id", lot.id);
+    if (updated.error) {
+      setBusy(false);
+      toast.error(updated.error.message);
+      return;
+    }
+    const closedEvent = await recordLotEvent({ lotId: lot.id, eventType: "closed" });
+    setBusy(false);
+    setConfirmClose(false);
+    if (!closedEvent.ok) {
+      toast.error(closedEvent.schemaMissing ? t("lot_events_schema_missing") : closedEvent.message);
+    } else {
+      toast.success(t("lot_close_done"));
+    }
+    await onSaved();
+  }
+
+  async function recallLot() {
+    if (!canRecallLot(lot.status)) return;
+    const reason = recallReason.trim();
+    if (!reason) {
+      toast.error(t("lot_recall_reason_required"));
+      return;
+    }
+    setBusy(true);
+    const actor = await currentLotActor();
+    const updated = await supabase
+      .from("gold_lots")
+      .update({
+        status: "recalled",
+        recalled_at: new Date().toISOString(),
+        recalled_by: actor.userId,
+        recall_reason: reason,
+      })
+      .eq("id", lot.id);
+    if (updated.error) {
+      setBusy(false);
+      toast.error(
+        isEventSchemaError(updated.error) ? t("lot_events_schema_missing") : updated.error.message,
+      );
+      return;
+    }
+    const recalledEvent = await recordLotEvent({
+      lotId: lot.id,
+      eventType: "recalled",
+      reason,
+      metadata: { recipients },
+    });
+    setBusy(false);
+    setRecallOpen(false);
+    setRecallReason("");
+    if (!recalledEvent.ok) {
+      toast.error(recalledEvent.schemaMissing ? t("lot_events_schema_missing") : recalledEvent.message);
+    } else {
+      toast.success(t("lot_recall_done"));
+    }
+    await onSaved();
+  }
+
+  if (!canHandover && !canCloseLot(lot.status) && !canRecallLot(lot.status)) {
+    return null;
+  }
+
+  return (
+    <section className="mt-10">
+      <h2 className="text-2xl font-semibold">{t("lot_actions")}</h2>
+      <div className="surface-card mt-4 space-y-4 p-5">
+        {canHandover ? (
+          <PrimaryButton
+            onClick={() => document.getElementById("lot-handover")?.scrollIntoView({ behavior: "smooth" })}
+          >
+            {t("lot_goto_handover")}
+          </PrimaryButton>
+        ) : null}
+
+        {canCloseLot(lot.status) ? (
+          confirmClose ? (
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground">{t("lot_close_hint")}</p>
+              <PrimaryButton onClick={closeLot} disabled={busy}>
+                {busy ? "…" : t("lot_close_confirm")}
+              </PrimaryButton>
+              <button
+                type="button"
+                className="text-sm font-semibold text-muted-foreground"
+                onClick={() => setConfirmClose(false)}
+                disabled={busy}
+              >
+                {t("lot_close_cancel")}
+              </button>
+            </div>
+          ) : (
+            <PrimaryButton onClick={() => setConfirmClose(true)}>{t("lot_close")}</PrimaryButton>
+          )
+        ) : null}
+
+        {canRecallLot(lot.status) ? (
+          recallOpen ? (
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground">{t("lot_recall_hint")}</p>
+              <label className="block">
+                <span className="eyebrow mb-2 block">{t("lot_recall_reason")}</span>
+                <TextAreaField value={recallReason} onChange={setRecallReason} />
+              </label>
+              <div>
+                <p className="eyebrow">{t("lot_recall_recipients")}</p>
+                {recipients.length === 0 ? (
+                  <p className="mt-1 text-sm text-muted-foreground">{t("lot_recall_no_recipients")}</p>
+                ) : (
+                  <ul className="mt-1 list-disc pl-5 text-sm">
+                    {recipients.map((name) => (
+                      <li key={name}>{name}</li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+              <PrimaryButton onClick={recallLot} disabled={busy}>
+                {busy ? "…" : t("lot_recall_confirm")}
+              </PrimaryButton>
+              <button
+                type="button"
+                className="text-sm font-semibold text-muted-foreground"
+                onClick={() => setRecallOpen(false)}
+                disabled={busy}
+              >
+                {t("lot_recall_cancel")}
+              </button>
+            </div>
+          ) : (
+            <PrimaryButton onClick={() => setRecallOpen(true)}>{t("lot_recall_start")}</PrimaryButton>
+          )
+        ) : null}
+      </div>
+    </section>
   );
 }
 
@@ -530,20 +801,34 @@ function LotPackingSection({
       toast.error(packed.error.message);
       return;
     }
+    const nextStatus = statusAfterPacking(lot.status);
     const updated = await supabase
       .from("gold_lots")
       .update({
         approved_qty: approved,
         product_version_id: versionId,
-        status: "packed",
+        status: nextStatus,
       })
       .eq("id", lot.id);
-    setBusy(false);
     if (updated.error) {
+      setBusy(false);
       toast.error(updated.error.message);
       return;
     }
+    const packedEvent = await recordLotEvent({
+      lotId: lot.id,
+      eventType: "packed",
+      metadata: {
+        approved_qty: approved,
+        package_count: plan.packages.length,
+        carton_count: plan.cartons.length,
+      },
+    });
+    setBusy(false);
     toast.success(t("packing_done"));
+    if (!packedEvent.ok) {
+      toast.error(packedEvent.schemaMissing ? t("lot_events_schema_missing") : packedEvent.message);
+    }
     await onSaved();
   }
 
@@ -660,13 +945,11 @@ function LotMetaForm({ lot, onSaved }: { lot: LotDetail; onSaved: () => Promise<
   const existing = producersFromQuery(lot.gold_lot_producers);
   const shown = displayProducedBy(existing, lot.produced_by);
   const [producerIds, setProducerIds] = useState(existing.map((row) => row.userId));
-  const [status, setStatus] = useState(lot.status);
   const [notes, setNotes] = useState(lot.deviation_notes ?? "");
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     setProducerIds(producersFromQuery(lot.gold_lot_producers).map((row) => row.userId));
-    setStatus(lot.status);
     setNotes(lot.deviation_notes ?? "");
   }, [lot]);
 
@@ -699,7 +982,6 @@ function LotMetaForm({ lot, onSaved }: { lot: LotDetail; onSaved: () => Promise<
     const { error } = await supabase
       .from("gold_lots")
       .update({
-        status,
         deviation_notes: notes.trim() || null,
       })
       .eq("id", lot.id);
@@ -726,20 +1008,6 @@ function LotMetaForm({ lot, onSaved }: { lot: LotDetail; onSaved: () => Promise<
           legacy={shown.legacy}
         />
       )}
-      <label className="block">
-        <span className="eyebrow mb-2 block">{t("lot_status")}</span>
-        <select
-          value={status}
-          onChange={(event) => setStatus(event.target.value as LotDetail["status"])}
-          className="h-13 w-full rounded-2xl border-2 border-border bg-card px-4 text-base outline-none focus:border-primary"
-        >
-          <option value="produced">{t("lot_status_produced")}</option>
-          <option value="packed">{t("lot_status_packed")}</option>
-          <option value="handed_over">{t("lot_status_handed_over")}</option>
-          <option value="closed">{t("lot_status_closed")}</option>
-          <option value="recalled">{t("lot_status_recalled")}</option>
-        </select>
-      </label>
       <label className="block">
         <span className="eyebrow mb-2 block">{t("deviation_notes")}</span>
         <TextAreaField value={notes} onChange={setNotes} placeholder={t("none")} />
@@ -865,10 +1133,12 @@ function IngredientForm({ lotId, onSaved }: { lotId: string; onSaved: () => Prom
 function HandoverForm({
   lotId,
   remaining,
+  status,
   onSaved,
 }: {
   lotId: string;
   remaining: number;
+  status: LotDetail["status"];
   onSaved: () => Promise<void>;
 }) {
   const { t } = useI18n();
@@ -926,6 +1196,10 @@ function HandoverForm({
   }
 
   async function submit() {
+    if (!canRecordHandover(status)) {
+      toast.error(t("lot_handover_blocked"));
+      return;
+    }
     const qty = Number.parseInt(quantity, 10) || 0;
     const chosen = recipientOptions.find((option) => option.key === recipientKey);
     const recipientCompany = company.trim() || chosen?.company || "";
@@ -935,10 +1209,11 @@ function HandoverForm({
     }
     setBusy(true);
     const handedAt = handedOverAt ? new Date(handedOverAt).toISOString() : new Date().toISOString();
+    const cartonQty = Number.parseInt(cartons, 10) || 0;
     const { error } = await supabase.from("gold_lot_handovers").insert({
       gold_lot_id: lotId,
       quantity: qty,
-      cartons: Number.parseInt(cartons, 10) || 0,
+      cartons: cartonQty,
       handed_over_at: handedAt,
       recipient_company: recipientCompany,
       recipient_person: person.trim() || null,
@@ -952,16 +1227,38 @@ function HandoverForm({
       toast.error(error.message);
       return;
     }
-    if (remaining - qty <= 0) {
-      await supabase.from("gold_lots").update({ status: "handed_over" }).eq("id", lotId);
+    const nextRemaining = remaining - qty;
+    const nextStatus = statusAfterHandover(status, nextRemaining);
+    if (nextStatus !== status) {
+      const statusUpdate = await supabase.from("gold_lots").update({ status: nextStatus }).eq("id", lotId);
+      if (statusUpdate.error) {
+        setBusy(false);
+        toast.error(statusUpdate.error.message);
+        return;
+      }
     }
+    const handoverEvent = await recordLotEvent({
+      lotId,
+      eventType: "handover",
+      metadata: {
+        quantity: qty,
+        cartons: cartonQty,
+        recipient_company: recipientCompany,
+      },
+    });
     setBusy(false);
     toast.success(t("add_handover"));
+    if (!handoverEvent.ok) {
+      toast.error(handoverEvent.schemaMissing ? t("lot_events_schema_missing") : handoverEvent.message);
+    }
     await onSaved();
   }
 
+  const blocked = !canRecordHandover(status);
+
   return (
     <div className="surface-card mt-4 space-y-4 p-5">
+      {blocked ? <p className="text-sm text-muted-foreground">{t("lot_handover_blocked")}</p> : null}
       <TextField label={t("handover_qty")} type="number" value={quantity} onChange={setQuantity} />
       <TextField label={t("carton_count")} type="number" value={cartons} onChange={setCartons} />
       <TextField
@@ -999,7 +1296,7 @@ function HandoverForm({
           <option value="gold">{t("ownership_gold")}</option>
         </select>
       </label>
-      <PrimaryButton onClick={submit} disabled={busy}>
+      <PrimaryButton onClick={submit} disabled={busy || blocked}>
         {busy ? "…" : t("add_handover")}
       </PrimaryButton>
     </div>

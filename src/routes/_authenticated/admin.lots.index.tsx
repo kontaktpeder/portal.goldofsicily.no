@@ -29,6 +29,7 @@ import {
   snapshotProducerName,
 } from "@/lib/lot-producers";
 import { replaceLotProducers } from "@/lib/lot-producers-save";
+import { recordLotEvent } from "@/lib/lot-events-save";
 import { listProductionStaff } from "@/lib/admin.functions";
 import { formatDate } from "@/lib/sign-out";
 import { cn, errorMessage } from "@/lib/utils";
@@ -246,6 +247,7 @@ function AdminLots() {
       return;
     }
     const linked = await replaceLotProducers(created.id, producers);
+    const createdEvent = await recordLotEvent({ lotId: created.id, eventType: "created" });
     setBusy(false);
     if (linked.error) {
       toast.error(
@@ -254,6 +256,9 @@ function AdminLots() {
       return;
     }
     toast.success(`${lotCode} ${t("lot_created").toLowerCase()}`);
+    if (!createdEvent.ok) {
+      toast.error(createdEvent.schemaMissing ? t("lot_events_schema_missing") : createdEvent.message);
+    }
     setProducedQty("0");
     setProducerIds([]);
     await queryClient.invalidateQueries({ queryKey: ["gold-lots"] });
