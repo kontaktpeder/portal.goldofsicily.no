@@ -86,3 +86,13 @@ test("production staff lookup is separate from staff admin listing", () => {
   assert.match(lookup, /full_name/);
   assert.match(lookup, /employee_number/);
 });
+
+test("staff page imports login identifier helpers before using them", () => {
+  const page = readFileSync(
+    new URL("../routes/_authenticated/admin.staff.tsx", import.meta.url),
+    "utf8",
+  );
+  assert.match(page, /import \{ isValidUsername, parseLoginIdentifier \} from "@\/lib\/username"/);
+  assert.match(page, /parseLoginIdentifier\(username\)/);
+  assert.match(page, /isValidUsername\(username\)/);
+});

@@ -21,6 +21,7 @@ import {
   type StaffRole,
 } from "@/lib/staff";
 import { isProducerSchemaError } from "@/lib/lot-producers";
+import { isValidUsername, parseLoginIdentifier } from "@/lib/username";
 import { errorMessage } from "@/lib/utils";
 import { PrimaryButton, TextField } from "@/components/field";
 
