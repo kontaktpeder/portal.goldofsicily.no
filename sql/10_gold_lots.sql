@@ -6,7 +6,7 @@ CREATE TYPE public.gold_lot_status AS ENUM ('produced', 'handed_over', 'closed',
 CREATE TYPE public.handover_ownership AS ENUM ('gold', 'villa');
 
 ALTER TABLE public.products
-  ADD COLUMN IF NOT EXISTS lot_letter CHAR(1);
+  ADD COLUMN IF NOT EXISTS lot_letter TEXT;
 
 UPDATE public.products SET lot_letter = 'N' WHERE slug = 'nduja' AND lot_letter IS NULL;
 UPDATE public.products SET lot_letter = 'T' WHERE slug = 'truffle' AND lot_letter IS NULL;
