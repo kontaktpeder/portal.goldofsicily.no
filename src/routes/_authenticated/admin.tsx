@@ -44,6 +44,8 @@ function AdminLayout() {
           <NavTab to="/admin/partners" label={t("partners")} />
           <NavTab to="/admin/venues" label={t("customers")} />
           <NavTab to="/admin/products" label={t("products")} />
+          <NavTab to="/admin/lots" label={t("lots")} />
+          <NavTab to="/admin/recall" label={t("recall")} />
           <NavTab to="/admin/reports" label={t("reports")} />
           <NavTab to="/admin/deliveries" label={t("deliveries")} />
         </nav>
@@ -64,7 +66,9 @@ function NavTab({
     | "/admin/reports"
     | "/admin/deliveries"
     | "/admin/partners"
-    | "/admin/products";
+    | "/admin/products"
+    | "/admin/lots"
+    | "/admin/recall";
   label: string;
   exact?: boolean;
 }) {

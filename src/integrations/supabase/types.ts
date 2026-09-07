@@ -160,6 +160,7 @@ export type Database = {
         Row: {
           created_at: string
           delivery_id: string
+          gold_lot_id: string | null
           id: string
           product_id: string
           quantity: number
@@ -167,6 +168,7 @@ export type Database = {
         Insert: {
           created_at?: string
           delivery_id: string
+          gold_lot_id?: string | null
           id?: string
           product_id: string
           quantity?: number
@@ -174,6 +176,7 @@ export type Database = {
         Update: {
           created_at?: string
           delivery_id?: string
+          gold_lot_id?: string | null
           id?: string
           product_id?: string
           quantity?: number
@@ -187,6 +190,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "delivery_lines_gold_lot_id_fkey"
+            columns: ["gold_lot_id"]
+            isOneToOne: false
+            referencedRelation: "gold_lots"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "delivery_lines_product_id_fkey"
             columns: ["product_id"]
             isOneToOne: false
@@ -194,6 +204,210 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      gold_lots: {
+        Row: {
+          carton_count: number
+          created_at: string
+          deviation_notes: string | null
+          id: string
+          lot_code: string
+          produced_by: string | null
+          produced_qty: number
+          product_id: string
+          production_date: string
+          status: Database["public"]["Enums"]["gold_lot_status"]
+          updated_at: string
+        }
+        Insert: {
+          carton_count?: number
+          created_at?: string
+          deviation_notes?: string | null
+          id?: string
+          lot_code: string
+          produced_by?: string | null
+          produced_qty: number
+          product_id: string
+          production_date: string
+          status?: Database["public"]["Enums"]["gold_lot_status"]
+          updated_at?: string
+        }
+        Update: {
+          carton_count?: number
+          created_at?: string
+          deviation_notes?: string | null
+          id?: string
+          lot_code?: string
+          produced_by?: string | null
+          produced_qty?: number
+          product_id?: string
+          production_date?: string
+          status?: Database["public"]["Enums"]["gold_lot_status"]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gold_lots_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      gold_lot_handovers: {
+        Row: {
+          cartons: number
+          created_at: string
+          gold_lot_id: string
+          handed_over_at: string
+          id: string
+          ownership_after_handover: Database["public"]["Enums"]["handover_ownership"]
+          quantity: number
+          recipient_company: string
+          recipient_partner_id: string | null
+          recipient_person: string | null
+          recipient_venue_id: string | null
+          storage_location: string | null
+        }
+        Insert: {
+          cartons?: number
+          created_at?: string
+          gold_lot_id: string
+          handed_over_at?: string
+          id?: string
+          ownership_after_handover?: Database["public"]["Enums"]["handover_ownership"]
+          quantity: number
+          recipient_company: string
+          recipient_partner_id?: string | null
+          recipient_person?: string | null
+          recipient_venue_id?: string | null
+          storage_location?: string | null
+        }
+        Update: {
+          cartons?: number
+          created_at?: string
+          gold_lot_id?: string
+          handed_over_at?: string
+          id?: string
+          ownership_after_handover?: Database["public"]["Enums"]["handover_ownership"]
+          quantity?: number
+          recipient_company?: string
+          recipient_partner_id?: string | null
+          recipient_person?: string | null
+          recipient_venue_id?: string | null
+          storage_location?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gold_lot_handovers_gold_lot_id_fkey"
+            columns: ["gold_lot_id"]
+            isOneToOne: false
+            referencedRelation: "gold_lots"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gold_lot_handovers_recipient_partner_id_fkey"
+            columns: ["recipient_partner_id"]
+            isOneToOne: false
+            referencedRelation: "partners"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gold_lot_handovers_recipient_venue_id_fkey"
+            columns: ["recipient_venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      gold_lot_ingredients: {
+        Row: {
+          best_before: string | null
+          created_at: string
+          gold_lot_id: string
+          id: string
+          ingredient_name: string
+          quantity: number | null
+          quantity_unit: string
+          supplier_id: string
+          supplier_lot_code: string | null
+        }
+        Insert: {
+          best_before?: string | null
+          created_at?: string
+          gold_lot_id: string
+          id?: string
+          ingredient_name: string
+          quantity?: number | null
+          quantity_unit?: string
+          supplier_id: string
+          supplier_lot_code?: string | null
+        }
+        Update: {
+          best_before?: string | null
+          created_at?: string
+          gold_lot_id?: string
+          id?: string
+          ingredient_name?: string
+          quantity?: number | null
+          quantity_unit?: string
+          supplier_id?: string
+          supplier_lot_code?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gold_lot_ingredients_gold_lot_id_fkey"
+            columns: ["gold_lot_id"]
+            isOneToOne: false
+            referencedRelation: "gold_lots"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gold_lot_ingredients_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "ingredient_suppliers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ingredient_suppliers: {
+        Row: {
+          active: boolean
+          contact_name: string | null
+          created_at: string
+          email: string | null
+          id: string
+          name: string
+          notes: string | null
+          phone: string | null
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          contact_name?: string | null
+          created_at?: string
+          email?: string | null
+          id?: string
+          name: string
+          notes?: string | null
+          phone?: string | null
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          contact_name?: string | null
+          created_at?: string
+          email?: string | null
+          id?: string
+          name?: string
+          notes?: string | null
+          phone?: string | null
+          updated_at?: string
+        }
+        Relationships: []
       }
       partners: {
         Row: {
@@ -242,6 +456,7 @@ export type Database = {
           description_no: string | null
           id: string
           image_url: string | null
+          lot_letter: string | null
           name_en: string
           name_no: string
           sku: string
@@ -256,6 +471,7 @@ export type Database = {
           description_no?: string | null
           id?: string
           image_url?: string | null
+          lot_letter?: string | null
           name_en: string
           name_no: string
           sku: string
@@ -270,6 +486,7 @@ export type Database = {
           description_no?: string | null
           id?: string
           image_url?: string | null
+          lot_letter?: string | null
           name_en?: string
           name_no?: string
           sku?: string
@@ -530,6 +747,10 @@ export type Database = {
         Returns: boolean
       }
       is_admin: { Args: never; Returns: boolean }
+      next_gold_lot_code: {
+        Args: { p_lot_letter: string; p_production_date: string }
+        Returns: string
+      }
       slugify_name: { Args: { input: string }; Returns: string }
       submit_shift_report: {
         Args: {
@@ -551,6 +772,8 @@ export type Database = {
     Enums: {
       app_role: "admin" | "venue"
       feedback_rating: "positive" | "mixed" | "negative"
+      gold_lot_status: "produced" | "handed_over" | "closed" | "recalled"
+      handover_ownership: "gold" | "villa"
       partner_kind: "distributor" | "direct"
     }
     CompositeTypes: {
@@ -681,6 +904,8 @@ export const Constants = {
     Enums: {
       app_role: ["admin", "venue"],
       feedback_rating: ["positive", "mixed", "negative"],
+      gold_lot_status: ["produced", "handed_over", "closed", "recalled"],
+      handover_ownership: ["gold", "villa"],
       partner_kind: ["distributor", "direct"],
     },
   },

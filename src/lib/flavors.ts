@@ -7,6 +7,7 @@ export type CatalogProduct = {
   name_no: string;
   name_en: string;
   slug: string;
+  lot_letter?: string | null;
 };
 
 export type ReportFlavorLine = {
@@ -31,12 +32,15 @@ export type DeliveryFlavorQty = {
   nameNo: string;
   nameEn: string;
   quantity: FlavorQty;
+  goldLotId: string;
 };
 
 export type StoredDeliveryLine = {
   product_id: string;
   quantity: number;
+  gold_lot_id?: string | null;
   products: { name_no: string; name_en: string } | null;
+  gold_lots?: { lot_code: string } | null;
 };
 
 export function qty(value: FlavorQty) {
@@ -102,6 +106,7 @@ export function initialDeliveryQtys(products: CatalogProduct[]): DeliveryFlavorQ
     nameNo: product.name_no,
     nameEn: product.name_en,
     quantity: 0,
+    goldLotId: "",
   }));
 }
 
@@ -116,5 +121,6 @@ export function deliveryLinesPayload(deliveryId: string, lines: DeliveryFlavorQt
       delivery_id: deliveryId,
       product_id: line.productId,
       quantity: qty(line.quantity),
+      gold_lot_id: line.goldLotId || null,
     }));
 }

@@ -162,9 +162,11 @@ export function FlavorBreakdown({
 
 export function DeliveryFlavorEditor({
   lines,
+  lots,
   onChange,
 }: {
   lines: DeliveryFlavorQty[];
+  lots: Array<{ id: string; lot_code: string; product_id: string }>;
   onChange: (lines: DeliveryFlavorQty[]) => void;
 }) {
   const { t, lang } = useI18n();
@@ -173,23 +175,54 @@ export function DeliveryFlavorEditor({
   }
   return (
     <div className="space-y-3">
-      {lines.map((line) => (
-        <article key={line.productId} className="rounded-2xl border border-border bg-background/60 p-4">
-          <NumberStepper
-            compact
-            step={10}
-            label={lang === "en" ? line.nameEn : line.nameNo}
-            value={line.quantity}
-            onChange={(quantity) =>
-              onChange(
-                lines.map((item) =>
-                  item.productId === line.productId ? { ...item, quantity } : item,
-                ),
-              )
-            }
-          />
-        </article>
-      ))}
+      {lines.map((line) => {
+        const available = lots.filter((lot) => lot.product_id === line.productId);
+        return (
+          <article key={line.productId} className="rounded-2xl border border-border bg-background/60 p-4">
+            <NumberStepper
+              compact
+              step={10}
+              label={lang === "en" ? line.nameEn : line.nameNo}
+              value={line.quantity}
+              onChange={(quantity) =>
+                onChange(
+                  lines.map((item) =>
+                    item.productId === line.productId ? { ...item, quantity } : item,
+                  ),
+                )
+              }
+            />
+            <label className="mt-3 block">
+              <span className="eyebrow mb-2 block">{t("delivery_lot")}</span>
+              <select
+                value={line.goldLotId}
+                onChange={(event) =>
+                  onChange(
+                    lines.map((item) =>
+                      item.productId === line.productId
+                        ? { ...item, goldLotId: event.target.value }
+                        : item,
+                    ),
+                  )
+                }
+                className="h-12 w-full rounded-2xl border-2 border-border bg-card px-4 text-sm outline-none focus:border-primary"
+              >
+                <option value="">{t("delivery_lot_none")}</option>
+                {available.map((lot) => (
+                  <option key={lot.id} value={lot.id}>
+                    {lot.lot_code}
+                  </option>
+                ))}
+              </select>
+              {available.length === 0 ? (
+                <p className="mt-1 text-xs text-muted-foreground">{t("no_open_lots")}</p>
+              ) : (
+                <p className="mt-1 text-xs text-muted-foreground">{t("delivery_lot_hint")}</p>
+              )}
+            </label>
+          </article>
+        );
+      })}
     </div>
   );
 }
@@ -216,6 +249,7 @@ export function DeliveryFlavorBreakdown({
           </span>
           <span className="tabular-nums text-muted-foreground">
             {line.quantity} {t("pcs")}
+            {line.gold_lots?.lot_code ? ` · ${line.gold_lots.lot_code}` : ""}
           </span>
         </li>
       ))}

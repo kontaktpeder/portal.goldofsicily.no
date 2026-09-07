@@ -25,6 +25,7 @@ type ProductRow = {
   description_no: string | null;
   description_en: string | null;
   image_url: string | null;
+  lot_letter: string | null;
   active: boolean;
   sort_order: number;
 };
@@ -113,6 +114,7 @@ function AdminProducts() {
                   <p className="text-xs text-muted-foreground">
                     {product.name_en}
                     {product.sku ? ` · ${product.sku}` : ""}
+                    {product.lot_letter ? ` · L-${product.lot_letter}` : ""}
                   </p>
                 </button>
                 <button
@@ -149,6 +151,7 @@ function ProductForm({
   const [descriptionNo, setDescriptionNo] = useState(existing?.description_no ?? "");
   const [descriptionEn, setDescriptionEn] = useState(existing?.description_en ?? "");
   const [imageUrl, setImageUrl] = useState(existing?.image_url ?? "");
+  const [lotLetter, setLotLetter] = useState(existing?.lot_letter ?? "");
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -158,6 +161,7 @@ function ProductForm({
     setDescriptionNo(existing?.description_no ?? "");
     setDescriptionEn(existing?.description_en ?? "");
     setImageUrl(existing?.image_url ?? "");
+    setLotLetter(existing?.lot_letter ?? "");
   }, [existing]);
 
   async function submit(event: React.FormEvent) {
@@ -176,6 +180,7 @@ function ProductForm({
       description_no: descriptionNo.trim() || null,
       description_en: descriptionEn.trim() || null,
       image_url: imageUrl.trim() || null,
+      lot_letter: lotLetter.trim().toUpperCase().slice(0, 1) || null,
     };
     const { error } = existing
       ? await supabase.from("products").update(payload).eq("id", existing.id)
@@ -199,6 +204,13 @@ function ProductForm({
       <TextField label={t("product_name_no")} value={nameNo} onChange={setNameNo} />
       <TextField label={t("product_name_en")} value={nameEn} onChange={setNameEn} />
       <TextField label={t("sku")} value={sku} onChange={setSku} placeholder="GOS-NDUJA" />
+      <TextField
+        label={t("lot_letter")}
+        value={lotLetter}
+        onChange={(value) => setLotLetter(value.toUpperCase().replace(/[^A-Z]/g, "").slice(0, 1))}
+        placeholder="T"
+      />
+      <p className="-mt-2 text-xs text-muted-foreground">{t("lot_letter_hint")}</p>
       <label className="block">
         <span className="eyebrow mb-2 block">{t("product_desc_no")}</span>
         <TextAreaField value={descriptionNo} onChange={setDescriptionNo} />

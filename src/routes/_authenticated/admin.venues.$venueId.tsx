@@ -62,7 +62,7 @@ function CustomerDetail() {
           .limit(100),
         supabase
           .from("deliveries")
-          .select("*, delivery_lines(product_id, quantity, products(name_no, name_en))")
+          .select("*, delivery_lines(product_id, quantity, gold_lot_id, products(name_no, name_en), gold_lots(lot_code))")
           .eq("venue_id", venueId)
           .order("delivered_at", { ascending: false })
           .limit(100),

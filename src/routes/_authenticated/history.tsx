@@ -42,7 +42,7 @@ function HistoryPage() {
         supabase
           .from("deliveries")
           .select(
-            "id, quantity, delivered_at, note, delivery_lines(product_id, quantity, products(name_no, name_en))",
+            "id, quantity, delivered_at, note, delivery_lines(product_id, quantity, gold_lot_id, products(name_no, name_en), gold_lots(lot_code))",
           )
           .eq("venue_id", customerId!)
           .order("delivered_at", { ascending: false })

@@ -76,10 +76,25 @@ function AdminDeliveries() {
           nameNo: product.name_no,
           nameEn: product.name_en,
           quantity: existing?.quantity ?? 0,
+          goldLotId: existing?.goldLotId ?? "",
         };
       });
     });
   }, [products]);
+
+  const { data: lots } = useQuery({
+    queryKey: ["gold-lots-open"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("gold_lots")
+        .select("id, lot_code, product_id")
+        .neq("status", "recalled")
+        .order("lot_code", { ascending: false })
+        .limit(200);
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
 
   const total = useMemo(() => sumDeliveryQty(flavorQtys), [flavorQtys]);
 
@@ -89,7 +104,7 @@ function AdminDeliveries() {
       const { data, error } = await supabase
         .from("deliveries")
         .select(
-          "*, venues(name), delivery_lines(product_id, quantity, products(name_no, name_en))",
+          "*, venues(name), delivery_lines(product_id, quantity, gold_lot_id, products(name_no, name_en), gold_lots(lot_code))",
         )
         .order("delivered_at", { ascending: false })
         .limit(200);
@@ -180,7 +195,11 @@ function AdminDeliveries() {
             {(products ?? []).length === 0 ? (
               <p className="text-sm text-muted-foreground">{t("delivery_no_products")}</p>
             ) : (
-              <DeliveryFlavorEditor lines={flavorQtys} onChange={setFlavorQtys} />
+              <DeliveryFlavorEditor
+                lines={flavorQtys}
+                lots={lots ?? []}
+                onChange={setFlavorQtys}
+              />
             )}
             <p className="mt-4 text-lg font-semibold tabular-nums">
               {t("total")}: {total}{" "}
