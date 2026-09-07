@@ -200,7 +200,7 @@ async function countAdmins(supabaseAdmin: AdminClient) {
   return count ?? 0;
 }
 
-export const listStaffAccounts = createServerFn({ method: "GET" })
+export const listStaffAccounts = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     await assertAdmin(context.supabase as never);
