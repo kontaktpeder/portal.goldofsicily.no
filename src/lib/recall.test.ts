@@ -114,7 +114,7 @@ test("recall lives under LOT and delivery lines keep Gold-LOT as the master ID",
     new URL("../routes/_authenticated/admin.deliveries.tsx", import.meta.url),
     "utf8",
   );
-  const lots = readFileSync(new URL("../routes/_authenticated/admin.lots.tsx", import.meta.url), "utf8");
+  const lots = readFileSync(new URL("../routes/_authenticated/admin.lots.index.tsx", import.meta.url), "utf8");
   const flavorLines = readFileSync(new URL("../components/flavor-lines.tsx", import.meta.url), "utf8");
   const sql = readFileSync(new URL("../../sql/11_delivery_lot_required.sql", import.meta.url), "utf8");
   assert.match(recallPage, /tab: "recall"/);
@@ -125,4 +125,23 @@ test("recall lives under LOT and delivery lines keep Gold-LOT as the master ID",
   assert.match(lots, /formatGoldLotCode/);
   assert.doesNotMatch(flavorLines, /delivery_lot_none/);
   assert.match(sql, /quantity = 0 OR gold_lot_id IS NOT NULL/);
+});
+
+test("LOT detail is a sibling of the list so clicking an active LOT opens the page", () => {
+  const list = readFileSync(
+    new URL("../routes/_authenticated/admin.lots.index.tsx", import.meta.url),
+    "utf8",
+  );
+  const detail = readFileSync(
+    new URL("../routes/_authenticated/admin.lots.$lotId.tsx", import.meta.url),
+    "utf8",
+  );
+  const tree = readFileSync(new URL("../routeTree.gen.ts", import.meta.url), "utf8");
+  assert.match(list, /createFileRoute\("\/_authenticated\/admin\/lots\/"\)/);
+  assert.match(detail, /createFileRoute\("\/_authenticated\/admin\/lots\/\$lotId"\)/);
+  assert.match(list, /to="\/admin\/lots\/\$lotId"/);
+  assert.doesNotMatch(list, /<Outlet/);
+  assert.match(tree, /id: '\/lots\/\$lotId'/);
+  assert.match(tree, /getParentRoute: \(\) => AuthenticatedAdminRoute/);
+  assert.doesNotMatch(tree, /AuthenticatedAdminLotsRouteWithChildren/);
 });

@@ -53,7 +53,7 @@ function parseLotSearch(search: Record<string, unknown>): LotSearch {
   return { tab };
 }
 
-export const Route = createFileRoute("/_authenticated/admin/lots")({
+export const Route = createFileRoute("/_authenticated/admin/lots/")({
   validateSearch: parseLotSearch,
   head: () => ({
     meta: [
