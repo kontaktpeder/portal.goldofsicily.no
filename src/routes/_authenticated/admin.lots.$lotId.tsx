@@ -2,8 +2,11 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState, useEffect } from "react";
 import { toast } from "sonner";
+import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { PrimaryButton, TextAreaField, TextField } from "@/components/field";
+import { ProducerPicker } from "@/components/producer-picker";
+import { listProductionStaff } from "@/lib/admin.functions";
 import { useI18n, type TranslationKey } from "@/lib/i18n";
 import { nowOsloDateTimeLocal, remainingAtGold, sumQuantities } from "@/lib/gold-lot";
 import {
@@ -12,6 +15,13 @@ import {
   packageLabelsDocument,
 } from "@/lib/labels";
 import { ensureProductVersionForProduct } from "@/lib/lot-snapshot";
+import {
+  displayProducedBy,
+  isProducerSchemaError,
+  producersFromQuery,
+  selectedProductionStaff,
+} from "@/lib/lot-producers";
+import { replaceLotProducers } from "@/lib/lot-producers-save";
 import { lotRemaining } from "@/lib/lot-stock";
 import {
   cartonInsertRows,
@@ -75,6 +85,13 @@ type LotDetail = {
         ownership_after_handover: "gold" | "villa";
       }[]
     | null;
+  gold_lot_producers:
+    | {
+        user_id: string;
+        full_name_snapshot: string;
+        employee_number_snapshot: string | null;
+      }[]
+    | null;
 };
 
 type ProductVersionRow = {
@@ -131,10 +148,21 @@ function AdminLotDetail() {
       const { data, error: loadError } = await supabase
         .from("gold_lots")
         .select(
-          "*, products(name_no, name_en), gold_lot_ingredients(*, ingredient_suppliers(name)), gold_lot_handovers(*)",
+          "*, products(name_no, name_en), gold_lot_ingredients(*, ingredient_suppliers(name)), gold_lot_handovers(*), gold_lot_producers(user_id, full_name_snapshot, employee_number_snapshot)",
         )
         .eq("id", lotId)
         .single();
+      if (loadError && isProducerSchemaError(loadError)) {
+        const fallback = await supabase
+          .from("gold_lots")
+          .select(
+            "*, products(name_no, name_en), gold_lot_ingredients(*, ingredient_suppliers(name)), gold_lot_handovers(*)",
+          )
+          .eq("id", lotId)
+          .single();
+        if (fallback.error) throw fallback.error;
+        return { ...(fallback.data as LotDetail), gold_lot_producers: [] };
+      }
       if (loadError) throw loadError;
       return data as LotDetail;
     },
@@ -227,6 +255,7 @@ function AdminLotDetail() {
   const cartonCount =
     packing && packing.cartons.length > 0 ? derivedCartonCount(packing.cartons.map((row) => ({ seq: row.carton_seq }))) : lot.carton_count;
   const productName = lang === "en" ? (lot.products?.name_en ?? "") : (lot.products?.name_no ?? "");
+  const produced = displayProducedBy(producersFromQuery(lot.gold_lot_producers), lot.produced_by);
 
   return (
     <main className="mx-auto w-full max-w-5xl px-5 pb-16">
@@ -239,9 +268,25 @@ function AdminLotDetail() {
       <p className="mt-1 text-lg">{productName}</p>
       <p className="text-sm text-muted-foreground">
         {t("production_date")}: {formatDate(lot.production_date, lang)}
-        {lot.produced_by ? ` · ${lot.produced_by}` : ""}
         {packing?.version ? ` · ${t("product_version")} v${packing.version.version_number}` : ""}
       </p>
+      <div className="mt-4">
+        <p className="eyebrow">{t("produced_by")}</p>
+        {produced.names.length > 0 ? (
+          <ul className="mt-1 text-base">
+            {produced.names.map((name) => (
+              <li key={name}>{name}</li>
+            ))}
+          </ul>
+        ) : produced.legacy ? (
+          <p className="mt-1 text-sm">
+            {produced.legacy}
+            <span className="ml-2 text-muted-foreground">({t("produced_by_legacy")})</span>
+          </p>
+        ) : (
+          <p className="mt-1 text-sm text-muted-foreground">—</p>
+        )}
+      </div>
       <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Metric label={t("produced_qty")} value={`${lot.produced_qty} ${t("pcs")}`} />
         <Metric label={t("lot_used")} value={`${used} ${t("pcs")}`} />
@@ -611,23 +656,49 @@ function LotPackingSection({
 
 function LotMetaForm({ lot, onSaved }: { lot: LotDetail; onSaved: () => Promise<void> }) {
   const { t } = useI18n();
-  const [producedBy, setProducedBy] = useState(lot.produced_by ?? "");
+  const listStaff = useServerFn(listProductionStaff);
+  const existing = producersFromQuery(lot.gold_lot_producers);
+  const shown = displayProducedBy(existing, lot.produced_by);
+  const [producerIds, setProducerIds] = useState(existing.map((row) => row.userId));
   const [status, setStatus] = useState(lot.status);
   const [notes, setNotes] = useState(lot.deviation_notes ?? "");
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    setProducedBy(lot.produced_by ?? "");
+    setProducerIds(producersFromQuery(lot.gold_lot_producers).map((row) => row.userId));
     setStatus(lot.status);
     setNotes(lot.deviation_notes ?? "");
-  }, [lot.produced_by, lot.status, lot.deviation_notes]);
+  }, [lot]);
+
+  const { data: productionStaff, error: staffError } = useQuery({
+    queryKey: ["production-staff"],
+    queryFn: () => listStaff(),
+  });
 
   async function save() {
+    const producers = selectedProductionStaff(productionStaff?.staff ?? [], producerIds);
+    if (existing.length > 0 && producers.length < 1) {
+      toast.error(t("produced_by_required"));
+      return;
+    }
+    if (existing.length === 0 && !shown.legacy && producers.length < 1) {
+      toast.error(t("produced_by_required"));
+      return;
+    }
     setBusy(true);
+    if (producers.length > 0) {
+      const linked = await replaceLotProducers(lot.id, producers);
+      if (linked.error) {
+        setBusy(false);
+        toast.error(
+          isProducerSchemaError(linked.error) ? t("producer_schema_missing") : linked.error.message,
+        );
+        return;
+      }
+    }
     const { error } = await supabase
       .from("gold_lots")
       .update({
-        produced_by: producedBy.trim() || null,
         status,
         deviation_notes: notes.trim() || null,
       })
@@ -643,7 +714,18 @@ function LotMetaForm({ lot, onSaved }: { lot: LotDetail; onSaved: () => Promise<
 
   return (
     <div className="surface-card mt-6 space-y-4 p-5">
-      <TextField label={t("produced_by")} value={producedBy} onChange={setProducedBy} />
+      {staffError ? (
+        <p className="text-sm text-muted-foreground">
+          {isProducerSchemaError(staffError) ? t("producer_schema_missing") : staffError.message}
+        </p>
+      ) : (
+        <ProducerPicker
+          staff={productionStaff?.staff ?? []}
+          selectedIds={producerIds}
+          onChange={setProducerIds}
+          legacy={shown.legacy}
+        />
+      )}
       <label className="block">
         <span className="eyebrow mb-2 block">{t("lot_status")}</span>
         <select

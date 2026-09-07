@@ -6,7 +6,7 @@ import { PrimaryButton, TextField } from "@/components/field";
 import { useI18n, type TranslationKey } from "@/lib/i18n";
 import { classifyRecallQuery } from "@/lib/gold-lot";
 import { buildRecallSearchResult, contactTargets, type RecallLotInput } from "@/lib/recall";
-import { formatDate } from "@/lib/sign-out";
+import { displayProducedBy, producersFromQuery } from "@/lib/lot-producers";
 
 const STATUS_KEYS: Record<string, TranslationKey> = {
   produced: "lot_status_produced",
@@ -77,8 +77,26 @@ export function RecallSearch({ compact = false }: { compact?: boolean }) {
               <p className="text-lg">{name}</p>
               <p className="text-sm text-muted-foreground">
                 {t("production_date")}: {formatDate(lot.productionDate, lang)}
-                {lot.producedBy ? ` · ${lot.producedBy}` : ""}
               </p>
+              <div className="mt-3">
+                <p className="eyebrow">{t("produced_by")}</p>
+                {lot.producerNames.length > 0 ? (
+                  <ul className="mt-1 text-sm">
+                    {lot.producerNames.map((name) => (
+                      <li key={name}>{name}</li>
+                    ))}
+                  </ul>
+                ) : lot.legacyProducedBy ? (
+                  <p className="mt-1 text-sm">
+                    {lot.legacyProducedBy}
+                    <span className="ml-2 text-muted-foreground">({t("produced_by_legacy")})</span>
+                  </p>
+                ) : lot.producedBy ? (
+                  <p className="mt-1 text-sm">{lot.producedBy}</p>
+                ) : (
+                  <p className="mt-1 text-sm text-muted-foreground">—</p>
+                )}
+              </div>
               <p className="text-sm tabular-nums">
                 {t("produced_qty")}: {lot.producedQty} {t("pcs")} · {lot.cartonCount}{" "}
                 {t("carton_count").toLowerCase()}
@@ -193,7 +211,7 @@ async function fetchRecallLots(
     const { data, error } = await supabase
       .from("gold_lots")
       .select(
-        "id, lot_code, production_date, produced_qty, carton_count, produced_by, status, deviation_notes, products(name_no, name_en), gold_lot_ingredients(ingredient_name, supplier_lot_code, quantity, quantity_unit, best_before, ingredient_suppliers(name)), gold_lot_handovers(quantity, cartons, handed_over_at, recipient_company, recipient_person, storage_location, ownership_after_handover)",
+        "id, lot_code, production_date, produced_qty, carton_count, produced_by, status, deviation_notes, products(name_no, name_en), gold_lot_ingredients(ingredient_name, supplier_lot_code, quantity, quantity_unit, best_before, ingredient_suppliers(name)), gold_lot_handovers(quantity, cartons, handed_over_at, recipient_company, recipient_person, storage_location, ownership_after_handover), gold_lot_producers(user_id, full_name_snapshot, employee_number_snapshot)",
       )
       .ilike("lot_code", `${normalized}%`)
       .order("lot_code", { ascending: false })
@@ -213,7 +231,7 @@ async function fetchRecallLots(
   const { data, error } = await supabase
     .from("gold_lots")
     .select(
-      "id, lot_code, production_date, produced_qty, carton_count, produced_by, status, deviation_notes, products(name_no, name_en), gold_lot_ingredients(ingredient_name, supplier_lot_code, quantity, quantity_unit, best_before, ingredient_suppliers(name)), gold_lot_handovers(quantity, cartons, handed_over_at, recipient_company, recipient_person, storage_location, ownership_after_handover)",
+        "id, lot_code, production_date, produced_qty, carton_count, produced_by, status, deviation_notes, products(name_no, name_en), gold_lot_ingredients(ingredient_name, supplier_lot_code, quantity, quantity_unit, best_before, ingredient_suppliers(name)), gold_lot_handovers(quantity, cartons, handed_over_at, recipient_company, recipient_person, storage_location, ownership_after_handover), gold_lot_producers(user_id, full_name_snapshot, employee_number_snapshot)",
     )
     .in("id", lotIds)
     .order("lot_code", { ascending: false });
@@ -230,6 +248,13 @@ type LotQueryRow = {
   produced_by: string | null;
   status: string;
   deviation_notes: string | null;
+  gold_lot_producers:
+    | {
+        user_id: string;
+        full_name_snapshot: string;
+        employee_number_snapshot: string | null;
+      }[]
+    | null;
   products: { name_no: string; name_en: string } | { name_no: string; name_en: string }[] | null;
   gold_lot_ingredients:
     | {
@@ -279,6 +304,7 @@ async function hydrateLots(rows: LotQueryRow[]): Promise<RecallLotInput[]> {
 
   return rows.map((row) => {
     const product = Array.isArray(row.products) ? row.products[0] : row.products;
+    const shown = displayProducedBy(producersFromQuery(row.gold_lot_producers), row.produced_by);
     return {
       id: row.id,
       lotCode: row.lot_code,
@@ -287,7 +313,9 @@ async function hydrateLots(rows: LotQueryRow[]): Promise<RecallLotInput[]> {
       productionDate: row.production_date,
       producedQty: row.produced_qty,
       cartonCount: row.carton_count,
-      producedBy: row.produced_by,
+      producedBy: shown.names.length > 0 ? shown.names.join(", ") : row.produced_by,
+      producerNames: shown.names,
+      legacyProducedBy: shown.legacy,
       status: row.status,
       deviationNotes: row.deviation_notes,
       ingredients: (row.gold_lot_ingredients ?? []).map((ingredient) => {

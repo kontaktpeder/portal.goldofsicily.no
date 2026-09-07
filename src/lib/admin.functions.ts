@@ -31,6 +31,8 @@ async function saveProfile(
     username: string;
     venue_id?: string | null;
     preferred_language?: string;
+    full_name?: string | null;
+    employee_number?: string | null;
   },
 ) {
   const { data: existing } = await supabaseAdmin
@@ -43,6 +45,8 @@ async function saveProfile(
     username: row.username,
     ...(row.venue_id !== undefined ? { venue_id: row.venue_id } : {}),
     ...(row.preferred_language !== undefined ? { preferred_language: row.preferred_language } : {}),
+    ...(row.full_name !== undefined ? { full_name: row.full_name } : {}),
+    ...(row.employee_number !== undefined ? { employee_number: row.employee_number } : {}),
   };
 
   if (existing) {
@@ -71,6 +75,18 @@ async function assertAdmin(supabase: {
   const { data, error } = await supabase.rpc("is_admin");
   if (error) {
     throw new Error(`Could not verify admin access: ${error.message}`);
+  }
+  if (data !== true) {
+    throw new Error("Not authorized");
+  }
+}
+
+async function assertOperations(supabase: {
+  rpc: (fn: "can_manage_operations") => Promise<{ data: unknown; error: { message: string } | null }>;
+}) {
+  const { data, error } = await supabase.rpc("can_manage_operations");
+  if (error) {
+    throw new Error(`Could not verify operations access: ${error.message}`);
   }
   if (data !== true) {
     throw new Error("Not authorized");
@@ -223,7 +239,7 @@ export const listStaffAccounts = createServerFn({ method: "POST" })
 
     const { data: profiles, error: profileError } = await supabaseAdmin
       .from("profiles")
-      .select("id, username, preferred_language, created_at")
+      .select("id, username, full_name, employee_number, preferred_language, created_at")
       .in("id", ids);
     if (profileError) throw new Error(profileError.message);
 
@@ -234,6 +250,8 @@ export const listStaffAccounts = createServerFn({ method: "POST" })
         return {
           id: profile.id,
           username: profile.username,
+          fullName: profile.full_name ?? "",
+          employeeNumber: profile.employee_number,
           role: role.role,
           preferredLanguage: profile.preferred_language === "en" ? ("en" as const) : ("no" as const),
           createdAt: profile.created_at,
@@ -242,7 +260,7 @@ export const listStaffAccounts = createServerFn({ method: "POST" })
       .filter((row): row is NonNullable<typeof row> => row !== null)
       .sort((a, b) => {
         if (a.role !== b.role) return a.role === "admin" ? -1 : 1;
-        return a.username.localeCompare(b.username);
+        return (a.fullName || a.username).localeCompare(b.fullName || b.username);
       });
 
     return { staff };
@@ -270,6 +288,15 @@ export const createStaffAccount = createServerFn({ method: "POST" })
       .maybeSingle();
     if (taken) throw new Error("Username is already taken");
 
+    if (data.employeeNumber) {
+      const { data: numberTaken } = await supabaseAdmin
+        .from("profiles")
+        .select("id")
+        .eq("employee_number", data.employeeNumber)
+        .maybeSingle();
+      if (numberTaken) throw new Error("Employee number is already taken");
+    }
+
     const { data: created, error: userError } = await supabaseAdmin.auth.admin.createUser({
       email,
       password: data.password,
@@ -287,6 +314,8 @@ export const createStaffAccount = createServerFn({ method: "POST" })
         username,
         venue_id: null,
         preferred_language: data.language,
+        full_name: data.fullName,
+        employee_number: data.employeeNumber,
       });
 
       const { error: roleError } = await supabaseAdmin
@@ -301,6 +330,88 @@ export const createStaffAccount = createServerFn({ method: "POST" })
       await supabaseAdmin.auth.admin.deleteUser(userId);
       throw error instanceof Error ? error : new Error("Could not create staff account");
     }
+  });
+
+/** Read-only Gold production staff for LOT packing. Not a staff-admin listing. */
+export const listProductionStaff = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    await assertOperations(context.supabase as never);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: roleRows, error: roleError } = await supabaseAdmin
+      .from("user_roles")
+      .select("user_id, role");
+    if (roleError) throw new Error(roleError.message);
+
+    const ids = [
+      ...new Set(
+        (roleRows ?? [])
+          .filter((row) => row.role === "admin" || row.role === "ops")
+          .map((row) => row.user_id),
+      ),
+    ];
+    if (ids.length === 0) return { staff: [] as const };
+
+    const { data: profiles, error: profileError } = await supabaseAdmin
+      .from("profiles")
+      .select("id, username, full_name, employee_number")
+      .in("id", ids);
+    if (profileError) throw new Error(profileError.message);
+
+    const staff = (profiles ?? [])
+      .map((profile) => ({
+        id: profile.id,
+        fullName: profile.full_name ?? "",
+        username: profile.username,
+        employeeNumber: profile.employee_number,
+      }))
+      .sort((a, b) => (a.fullName || a.username).localeCompare(b.fullName || b.username));
+
+    return { staff };
+  });
+
+export const updateStaffProfile = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((data: unknown) =>
+    z
+      .object({
+        userId: z.string().uuid(),
+        fullName: z.string().trim().min(1),
+        employeeNumber: z
+          .union([z.string(), z.null(), z.undefined()])
+          .optional()
+          .transform((value) => {
+            const text = (value ?? "").trim();
+            return text.length > 0 ? text : null;
+          }),
+      })
+      .parse(data),
+  )
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context.supabase as never);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: profile, error: loadError } = await supabaseAdmin
+      .from("profiles")
+      .select("id, username")
+      .eq("id", data.userId)
+      .single();
+    if (loadError || !profile) throw new Error(loadError?.message ?? "Not a staff account");
+    if (data.employeeNumber) {
+      const { data: numberTaken } = await supabaseAdmin
+        .from("profiles")
+        .select("id")
+        .eq("employee_number", data.employeeNumber)
+        .neq("id", data.userId)
+        .maybeSingle();
+      if (numberTaken) throw new Error("Employee number is already taken");
+    }
+    await saveProfile(supabaseAdmin, {
+      id: profile.id,
+      username: profile.username,
+      full_name: data.fullName,
+      employee_number: data.employeeNumber,
+    });
+    return { ok: true as const };
   });
 
 export const updateStaffRole = createServerFn({ method: "POST" })

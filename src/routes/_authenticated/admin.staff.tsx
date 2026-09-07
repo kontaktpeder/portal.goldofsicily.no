@@ -10,6 +10,7 @@ import {
   createStaffAccount,
   listStaffAccounts,
   resetCustomerPassword,
+  updateStaffProfile,
   updateStaffRole,
 } from "@/lib/admin.functions";
 import {
@@ -19,7 +20,7 @@ import {
   VENUE_INCLUDE_KEYS,
   type StaffRole,
 } from "@/lib/staff";
-import { isValidUsername, parseLoginIdentifier } from "@/lib/username";
+import { isProducerSchemaError } from "@/lib/lot-producers";
 import { errorMessage } from "@/lib/utils";
 import { PrimaryButton, TextField } from "@/components/field";
 
@@ -45,7 +46,9 @@ function AdminStaff() {
   const createStaff = useServerFn(createStaffAccount);
 
   const [open, setOpen] = useState(false);
+  const [fullName, setFullName] = useState("");
   const [username, setUsername] = useState("");
+  const [employeeNumber, setEmployeeNumber] = useState("");
   const [password, setPassword] = useState("");
   const [role, setRole] = useState<StaffRole>("ops");
   const [busy, setBusy] = useState(false);
@@ -65,6 +68,10 @@ function AdminStaff() {
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
+    if (!fullName.trim()) {
+      toast.error(t("staff_name_missing"));
+      return;
+    }
     if (!username.trim() || password.length < 6) {
       toast.error(t("staff_missing"));
       return;
@@ -75,10 +82,21 @@ function AdminStaff() {
     }
     setBusy(true);
     try {
-      const created = await createStaff({ data: { username, password, role, language: "no" } });
+      const created = await createStaff({
+        data: {
+          fullName,
+          username,
+          password,
+          role,
+          language: "no",
+          employeeNumber,
+        },
+      });
       toast.success(`${created.username} ${t("staff_created")}`);
       setOpen(false);
+      setFullName("");
       setUsername("");
+      setEmployeeNumber("");
       setPassword("");
       setRole("ops");
       await queryClient.invalidateQueries({ queryKey: ["staff-accounts"] });
@@ -89,6 +107,8 @@ function AdminStaff() {
         toast.error(t("staff_schema_missing"));
       } else if (lower.includes("already") || lower.includes("opptatt") || lower.includes("taken")) {
         toast.error(t("create_customer_username_taken"));
+      } else if (lower.includes("employee number") || lower.includes("ansattnummer")) {
+        toast.error(t("employee_number_taken"));
       } else if (
         lower.includes("weak") ||
         lower.includes("pwned") ||
@@ -127,6 +147,7 @@ function AdminStaff() {
       {open ? (
         <form className="surface-card mt-5 space-y-5 p-5" onSubmit={submit}>
           <p className="text-sm text-muted-foreground">{t("staff_no_email")}</p>
+          <TextField label={t("full_name")} value={fullName} onChange={setFullName} />
           <div>
             <TextField label={t("username")} value={username} onChange={setUsername} />
             {loginPreview && loginPreview !== username.trim().toLowerCase() ? (
@@ -134,6 +155,10 @@ function AdminStaff() {
                 {t("create_customer_login_as")}: <strong>{loginPreview}</strong>
               </p>
             ) : null}
+          </div>
+          <div>
+            <TextField label={t("employee_number")} value={employeeNumber} onChange={setEmployeeNumber} />
+            <p className="mt-2 text-xs text-muted-foreground">{t("employee_number_hint")}</p>
           </div>
           <TextField
             label={t("password")}
@@ -180,7 +205,11 @@ function AdminStaff() {
 
       <div className="mt-6 space-y-3">
         {loadError ? (
-          <p className="text-sm text-destructive">{errorMessage(loadError, t("staff_failed"))}</p>
+          <p className="text-sm text-destructive">
+            {isProducerSchemaError(loadError)
+              ? t("producer_schema_missing")
+              : errorMessage(loadError, t("staff_failed"))}
+          </p>
         ) : (data?.staff ?? []).length === 0 ? (
           <p className="text-sm text-muted-foreground">{t("no_staff")}</p>
         ) : (
@@ -241,6 +270,8 @@ function StaffRow({
   person: {
     id: string;
     username: string;
+    fullName: string;
+    employeeNumber: string | null;
     role: StaffRole;
     preferredLanguage: "no" | "en";
   };
@@ -251,9 +282,41 @@ function StaffRow({
   const { t } = useI18n();
   const resetPassword = useServerFn(resetCustomerPassword);
   const changeRole = useServerFn(updateStaffRole);
+  const saveProfile = useServerFn(updateStaffProfile);
+  const [fullName, setFullName] = useState(person.fullName);
+  const [employeeNumber, setEmployeeNumber] = useState(person.employeeNumber ?? "");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const lastOwner = person.role === "admin" && adminCount <= 1;
+
+  useEffect(() => {
+    setFullName(person.fullName);
+    setEmployeeNumber(person.employeeNumber ?? "");
+  }, [person.fullName, person.employeeNumber]);
+
+  async function saveName() {
+    if (!fullName.trim()) {
+      toast.error(t("staff_name_missing"));
+      return;
+    }
+    setBusy(true);
+    try {
+      await saveProfile({
+        data: { userId: person.id, fullName, employeeNumber },
+      });
+      toast.success(t("staff_updated"));
+      onChanged();
+    } catch (error) {
+      const message = errorMessage(error, t("staff_failed"));
+      if (message.toLowerCase().includes("employee number") || message.toLowerCase().includes("duplicate")) {
+        toast.error(t("employee_number_taken"));
+      } else {
+        toast.error(message);
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function savePassword() {
     if (password.length < 6) {
@@ -299,13 +362,24 @@ function StaffRow({
     <section className="surface-card space-y-4 p-5">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <div>
-          <p className="text-lg font-semibold">{person.username}</p>
+          <p className="text-lg font-semibold">{person.fullName || person.username}</p>
           <p className="text-xs text-muted-foreground">
-            {person.role === "admin" ? t("role_owner") : t("role_ops")}
+            {person.username}
+            {person.employeeNumber ? ` · ${person.employeeNumber}` : ""}
+            {` · ${person.role === "admin" ? t("role_owner") : t("role_ops")}`}
             {isYou ? ` · ${t("this_is_you")}` : ""}
           </p>
         </div>
       </div>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <TextField label={t("full_name")} value={fullName} onChange={setFullName} />
+        <div>
+          <TextField label={t("employee_number")} value={employeeNumber} onChange={setEmployeeNumber} />
+        </div>
+      </div>
+      <PrimaryButton onClick={() => void saveName()} disabled={busy}>
+        {t("save")}
+      </PrimaryButton>
       <div className="grid gap-2 sm:grid-cols-2">
         <button
           type="button"

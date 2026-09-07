@@ -3,11 +3,13 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { Plus } from "lucide-react";
 import { toast } from "sonner";
+import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { PrimaryButton, TextField } from "@/components/field";
 import { LotPrerequisitesBanner } from "@/components/lot-prerequisites";
 import { useLotPrerequisites } from "@/hooks/use-lot-prerequisites";
 import { RecallSearch } from "@/components/recall-search";
+import { ProducerPicker } from "@/components/producer-picker";
 import { useI18n } from "@/lib/i18n";
 import {
   formatGoldLotCode,
@@ -18,6 +20,16 @@ import {
 } from "@/lib/gold-lot";
 import { isGoldLotSchemaError, isOpenLot, lotRemaining, toStockLots } from "@/lib/lot-stock";
 import { ensureProductVersionForProduct } from "@/lib/lot-snapshot";
+import {
+  displayProducedBy,
+  formatProducedByCompat,
+  isProducerSchemaError,
+  producersFromQuery,
+  selectedProductionStaff,
+  snapshotProducerName,
+} from "@/lib/lot-producers";
+import { replaceLotProducers } from "@/lib/lot-producers-save";
+import { listProductionStaff } from "@/lib/admin.functions";
 import { formatDate } from "@/lib/sign-out";
 import { cn, errorMessage } from "@/lib/utils";
 
@@ -74,17 +86,25 @@ type LotRow = {
   products: { name_no: string; name_en: string } | null;
   gold_lot_handovers: { quantity: number }[] | null;
   delivery_lines: { quantity: number }[] | null;
+  gold_lot_producers:
+    | {
+        user_id: string;
+        full_name_snapshot: string;
+        employee_number_snapshot: string | null;
+      }[]
+    | null;
 };
 
 function AdminLots() {
   const { t, lang } = useI18n();
   const { tab, product: productFromSearch } = Route.useSearch();
   const queryClient = useQueryClient();
+  const listStaff = useServerFn(listProductionStaff);
   const prereq = useLotPrerequisites();
   const [productId, setProductId] = useState(productFromSearch ?? "");
   const [productionDate, setProductionDate] = useState(todayOsloDate);
   const [producedQty, setProducedQty] = useState("0");
-  const [producedBy, setProducedBy] = useState("");
+  const [producerIds, setProducerIds] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -105,19 +125,40 @@ function AdminLots() {
     },
   });
 
+  const { data: productionStaff, error: staffError } = useQuery({
+    queryKey: ["production-staff"],
+    enabled: !prereq.schemaMissing,
+    queryFn: () => listStaff(),
+  });
+
   const { data: lots } = useQuery({
     queryKey: ["gold-lots"],
     enabled: !prereq.schemaMissing,
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("gold_lots")
-        .select(
-          "id, lot_code, production_date, produced_qty, carton_count, produced_by, status, product_id, products(name_no, name_en), gold_lot_handovers(quantity), delivery_lines(quantity)",
-        )
-        .order("lot_code", { ascending: false })
-        .limit(300);
+      const withProducers =
+        "id, lot_code, production_date, produced_qty, carton_count, produced_by, status, product_id, products(name_no, name_en), gold_lot_handovers(quantity), delivery_lines(quantity), gold_lot_producers(user_id, full_name_snapshot, employee_number_snapshot)";
+      const { data, error } = await supabase.from("gold_lots").select(withProducers).order("lot_code", {
+        ascending: false,
+      }).limit(300);
       if (error) {
         if (isGoldLotSchemaError(error)) return [] as LotRow[];
+        if (isProducerSchemaError(error)) {
+          const fallback = await supabase
+            .from("gold_lots")
+            .select(
+              "id, lot_code, production_date, produced_qty, carton_count, produced_by, status, product_id, products(name_no, name_en), gold_lot_handovers(quantity), delivery_lines(quantity)",
+            )
+            .order("lot_code", { ascending: false })
+            .limit(300);
+          if (fallback.error) {
+            if (isGoldLotSchemaError(fallback.error)) return [] as LotRow[];
+            throw fallback.error;
+          }
+          return ((fallback.data ?? []) as LotRow[]).map((row) => ({
+            ...row,
+            gold_lot_producers: row.gold_lot_producers ?? [],
+          }));
+        }
         throw error;
       }
       return (data ?? []) as LotRow[];
@@ -167,6 +208,11 @@ function AdminLots() {
       toast.error(t("lot_letter_missing"));
       return;
     }
+    const producers = selectedProductionStaff(productionStaff?.staff ?? [], producerIds);
+    if (producers.length < 1) {
+      toast.error(t("produced_by_required"));
+      return;
+    }
     setBusy(true);
     const version = await ensureProductVersionForProduct(productId);
     if (!version.ok) {
@@ -189,19 +235,27 @@ function AdminLots() {
         produced_qty: Number.parseInt(producedQty, 10) || 0,
         approved_qty: Number.parseInt(producedQty, 10) || 0,
         product_version_id: version.id,
-        produced_by: producedBy.trim() || null,
+        produced_by: formatProducedByCompat(producers.map(snapshotProducerName)),
         status: "produced",
       })
       .select("id")
       .single();
-    setBusy(false);
     if (error || !created) {
+      setBusy(false);
       toast.error(errorMessage(error, t("create_customer_failed")));
+      return;
+    }
+    const linked = await replaceLotProducers(created.id, producers);
+    setBusy(false);
+    if (linked.error) {
+      toast.error(
+        isProducerSchemaError(linked.error) ? t("producer_schema_missing") : linked.error.message,
+      );
       return;
     }
     toast.success(`${lotCode} ${t("lot_created").toLowerCase()}`);
     setProducedQty("0");
-    setProducedBy("");
+    setProducerIds([]);
     await queryClient.invalidateQueries({ queryKey: ["gold-lots"] });
     await queryClient.invalidateQueries({ queryKey: ["gold-lots-open"] });
   }
@@ -275,7 +329,17 @@ function AdminLots() {
                 value={producedQty}
                 onChange={setProducedQty}
               />
-              <TextField label={t("produced_by")} value={producedBy} onChange={setProducedBy} />
+              {staffError ? (
+                <p className="text-sm text-muted-foreground">
+                  {isProducerSchemaError(staffError) ? t("producer_schema_missing") : staffError.message}
+                </p>
+              ) : (
+                <ProducerPicker
+                  staff={productionStaff?.staff ?? []}
+                  selectedIds={producerIds}
+                  onChange={setProducerIds}
+                />
+              )}
               <PrimaryButton onClick={submit} disabled={busy || blocked}>
                 {busy ? "…" : t("save")}
               </PrimaryButton>
@@ -295,6 +359,11 @@ function AdminLots() {
                 const goldLeft = remainingAtGold(lot.produced_qty, handed);
                 const name =
                   lang === "en" ? (lot.products?.name_en ?? "") : (lot.products?.name_no ?? "");
+                const shown = displayProducedBy(
+                  producersFromQuery(lot.gold_lot_producers),
+                  lot.produced_by,
+                );
+                const producedLabel = shown.names.length > 0 ? shown.names.join(", ") : shown.legacy;
                 return (
                   <Link
                     key={lot.id}
@@ -308,7 +377,7 @@ function AdminLots() {
                         <p className="mt-1 text-sm">{name}</p>
                         <p className="text-xs text-muted-foreground">
                           {formatDate(lot.production_date, lang)}
-                          {lot.produced_by ? ` · ${lot.produced_by}` : ""}
+                          {producedLabel ? ` · ${producedLabel}` : ""}
                         </p>
                       </div>
                       <div className="text-right text-xs text-muted-foreground">

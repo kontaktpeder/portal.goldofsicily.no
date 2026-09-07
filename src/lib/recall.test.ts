@@ -71,6 +71,22 @@ const ndujaLot = {
   venueDeliveries: [{ venueName: "Oslo Bar & Bowling", quantity: 50, deliveredAt: "2026-09-08" }],
 };
 
+test("recall prefers structured producer snapshots over legacy produced_by text", () => {
+  const result = buildRecallSearchResult("L-20260907-T-01", [
+    {
+      ...truffleLot,
+      producedBy: "Denis",
+      producerNames: ["Denis Rossi", "Peder Holm"],
+      legacyProducedBy: null,
+    },
+  ]);
+  assert.deepEqual(result.lots[0]?.producerNames, ["Denis Rossi", "Peder Holm"]);
+  assert.equal(result.lots[0]?.legacyProducedBy, null);
+  const legacy = buildRecallSearchResult("L-20260907-T-01", [truffleLot]);
+  assert.equal(legacy.lots[0]?.producedBy, "Denis");
+  assert.deepEqual(legacy.lots[0]?.producerNames, []);
+});
+
 test("Gold-LOT recall card keeps one-up ingredients and one-down recipients", () => {
   const result = buildRecallSearchResult("L-20260907-T-01", [truffleLot]);
   assert.equal(result.kind, "gold_lot");

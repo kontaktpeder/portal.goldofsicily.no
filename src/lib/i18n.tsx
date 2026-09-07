@@ -656,6 +656,37 @@ const dict = {
   shelf_life_days: { no: "Holdbarhet (dager)", en: "Shelf life (days)" },
   product_version: { no: "Produktversjon", en: "Product version" },
   remainder_bag: { no: "restpose", en: "remainder bag" },
+  full_name: { no: "Navn", en: "Name" },
+  employee_number: { no: "Ansattnr", en: "Employee no." },
+  employee_number_hint: {
+    no: "Valgfritt. Internt nummer, f.eks. GOS-004.",
+    en: "Optional. Internal number, e.g. GOS-004.",
+  },
+  staff_updated: { no: "Ansatt oppdatert", en: "Staff updated" },
+  staff_name_missing: {
+    no: "Skriv inn navn på den ansatte.",
+    en: "Enter the employee’s name.",
+  },
+  employee_number_taken: {
+    no: "Ansattnummeret er allerede i bruk.",
+    en: "That employee number is already in use.",
+  },
+  produced_by_required: {
+    no: "Huk av minst én som produserte dette LOT-et.",
+    en: "Select at least one person who produced this LOT.",
+  },
+  produced_by_legacy: {
+    no: "Tidligere fritekst, ikke koblet til en ansatt.",
+    en: "Legacy free text, not linked to a staff account.",
+  },
+  producer_schema_missing: {
+    no: "Produsenttabellen mangler. Kjør sql/14_lot_producers.sql i Lovable Cloud SQL Editor (etter sql/13_lot_packing.sql).",
+    en: "The producer table is missing. Run sql/14_lot_producers.sql in the Lovable Cloud SQL Editor (after sql/13_lot_packing.sql).",
+  },
+  no_production_staff: {
+    no: "Ingen Gold-ansatte å velge. Opprett dem under Ansatte først.",
+    en: "No Gold staff to choose. Create them under Staff first.",
+  },
 } satisfies Record<string, Record<Lang, string>>;
 
 export type TranslationKey = keyof typeof dict;

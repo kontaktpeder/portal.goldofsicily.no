@@ -35,6 +35,8 @@ export type RecallLotCard = {
   producedQty: number;
   cartonCount: number;
   producedBy: string | null;
+  producerNames: string[];
+  legacyProducedBy: string | null;
   status: string;
   deviationNotes: string | null;
   remainingQty: number;
@@ -59,6 +61,8 @@ export type RecallLotInput = {
   producedQty: number;
   cartonCount: number;
   producedBy: string | null;
+  producerNames?: string[];
+  legacyProducedBy?: string | null;
   status: string;
   deviationNotes: string | null;
   ingredients: Array<{
@@ -92,6 +96,8 @@ export function buildRecallLotCard(
     producedQty: input.producedQty,
     cartonCount: input.cartonCount,
     producedBy: input.producedBy,
+    producerNames: input.producerNames ?? [],
+    legacyProducedBy: input.legacyProducedBy ?? null,
     status: input.status,
     deviationNotes: input.deviationNotes,
     remainingQty: remainingAtGold(input.producedQty, handedOverQty),

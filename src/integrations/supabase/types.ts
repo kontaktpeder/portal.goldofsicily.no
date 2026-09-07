@@ -268,6 +268,48 @@ export type Database = {
           },
         ]
       }
+      gold_lot_producers: {
+        Row: {
+          created_at: string
+          employee_number_snapshot: string | null
+          full_name_snapshot: string
+          gold_lot_id: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          employee_number_snapshot?: string | null
+          full_name_snapshot: string
+          gold_lot_id: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          employee_number_snapshot?: string | null
+          full_name_snapshot?: string
+          gold_lot_id?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gold_lot_producers_gold_lot_id_fkey"
+            columns: ["gold_lot_id"]
+            isOneToOne: false
+            referencedRelation: "gold_lots"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gold_lot_producers_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       gold_lot_handovers: {
         Row: {
           cartons: number
@@ -709,6 +751,8 @@ export type Database = {
         Row: {
           created_at: string
           venue_id: string | null
+          employee_number: string | null
+          full_name: string | null
           id: string
           preferred_language: string
           updated_at: string
@@ -717,6 +761,8 @@ export type Database = {
         Insert: {
           created_at?: string
           venue_id?: string | null
+          employee_number?: string | null
+          full_name?: string | null
           id: string
           preferred_language?: string
           updated_at?: string
@@ -725,6 +771,8 @@ export type Database = {
         Update: {
           created_at?: string
           venue_id?: string | null
+          employee_number?: string | null
+          full_name?: string | null
           id?: string
           preferred_language?: string
           updated_at?: string

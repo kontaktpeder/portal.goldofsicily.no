@@ -5,10 +5,18 @@ export const STAFF_ROLES = ["admin", "ops"] as const;
 export type StaffRole = (typeof STAFF_ROLES)[number];
 
 export const staffCreateSchema = z.object({
+  fullName: z.string().trim().min(1),
   username: z.string().trim().min(3),
   password: z.string().min(6),
   role: z.enum(STAFF_ROLES),
   language: z.enum(["no", "en"]).default("no"),
+  employeeNumber: z
+    .union([z.string(), z.null(), z.undefined()])
+    .optional()
+    .transform((value) => {
+      const text = (value ?? "").trim();
+      return text.length > 0 ? text : null;
+    }),
 });
 
 export type StaffCreateInput = z.infer<typeof staffCreateSchema>;

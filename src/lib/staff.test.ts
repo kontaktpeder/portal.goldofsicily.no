@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import { canManageCommercial, canManageOperations } from "./access.ts";
 import {
@@ -15,12 +16,25 @@ import {
 } from "./staff.ts";
 
 test("staff create payload accepts eier and drift, not sted", () => {
-  assert.equal(staffCreateSchema.parse({ username: "denis", password: "secret1", role: "ops" }).role, "ops");
   assert.equal(
-    staffCreateSchema.parse({ username: "peder", password: "secret1", role: "admin" }).role,
+    staffCreateSchema.parse({
+      fullName: "Denis Rossi",
+      username: "denis",
+      password: "secret1",
+      role: "ops",
+      employeeNumber: "GOS-004",
+    }).employeeNumber,
+    "GOS-004",
+  );
+  assert.equal(
+    staffCreateSchema.parse({ fullName: "Peder Holm", username: "peder", password: "secret1", role: "admin" })
+      .role,
     "admin",
   );
   assert.throws(() => staffCreateSchema.parse({ username: "bar", password: "secret1", role: "venue" }));
+  assert.throws(() =>
+    staffCreateSchema.parse({ fullName: "   ", username: "denis", password: "secret1", role: "ops" }),
+  );
 });
 
 test("role cards list what each access level includes", () => {
@@ -60,4 +74,15 @@ test("staffRoleFromRoles prefers eier over drift", () => {
 test("missing ops enum is detected from postgres errors", () => {
   assert.equal(isStaffSchemaError('invalid input value for enum app_role: "ops"'), true);
   assert.equal(isStaffSchemaError("Username is already taken"), false);
+});
+
+test("production staff lookup is separate from staff admin listing", () => {
+  const src = readFileSync(new URL("./admin.functions.ts", import.meta.url), "utf8");
+  assert.match(src, /export const listProductionStaff/);
+  assert.match(src, /export const listStaffAccounts/);
+  const lookup = src.split("export const listProductionStaff")[1]?.split("export const")[0] ?? "";
+  assert.match(lookup, /assertOperations/);
+  assert.doesNotMatch(lookup, /preferred_language|role: role\.role|password/);
+  assert.match(lookup, /full_name/);
+  assert.match(lookup, /employee_number/);
 });
