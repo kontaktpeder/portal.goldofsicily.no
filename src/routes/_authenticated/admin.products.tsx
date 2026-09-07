@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Plus } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { useRequireCommercial } from "@/hooks/use-session";
 import { useI18n } from "@/lib/i18n";
 import { slugify } from "@/lib/slug";
 import { errorMessage } from "@/lib/utils";
@@ -32,6 +33,7 @@ type ProductRow = {
 
 function AdminProducts() {
   const { t } = useI18n();
+  const { allowed, isLoading: sessionLoading } = useRequireCommercial();
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -58,6 +60,10 @@ function AdminProducts() {
   }
 
   const editing = products?.find((product) => product.id === editingId) ?? null;
+
+  if (sessionLoading || !allowed) {
+    return <main className="min-h-screen" />;
+  }
 
   return (
     <main className="mx-auto w-full max-w-5xl px-5 pb-16">

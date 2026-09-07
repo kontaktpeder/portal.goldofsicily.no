@@ -527,6 +527,82 @@ const dict = {
   ops_available: { no: "Tilgjengelig", en: "Available" },
   ops_need_empty: { no: "Ingen neste behov registrert.", en: "No upcoming demand recorded." },
   ops_estimated: { no: "estimert", en: "estimated" },
+
+  staff: { no: "Ansatte", en: "Staff" },
+  staff_title: { no: "Ansatte", en: "Staff" },
+  staff_intro: {
+    no: "Opprett innlogging til Gold-ansatte. Ingen e-post sendes — du gir brukernavn og passord selv, og bytter passord her hvis de har glemt det.",
+    en: "Create logins for Gold employees. No email is sent — you give them the username and password, and reset the password here if they forget.",
+  },
+  staff_no_email: {
+    no: "Ingen e-post. Skriv ned brukernavn og passord og gi det til den ansatte.",
+    en: "No email. Write down the username and password and give it to the employee.",
+  },
+  new_staff: { no: "Ny ansatt", en: "New staff" },
+  no_staff: { no: "Ingen ansatte ennå.", en: "No staff yet." },
+  staff_created: { no: "Ansatt opprettet", en: "Staff account created" },
+  staff_missing: {
+    no: "Brukernavn (minst 3 tegn), passord (minst 6 tegn) og rolle er påkrevd.",
+    en: "Username (min 3), password (min 6) and a role are required.",
+  },
+  staff_failed: {
+    no: "Kunne ikke opprette den ansatte. Prøv igjen.",
+    en: "Could not create the staff account. Please try again.",
+  },
+  staff_schema_missing: {
+    no: "Drift-rollen mangler i databasen. Kjør sql/12_staff_roles.sql i Lovable Cloud SQL Editor.",
+    en: "The ops role is missing in the database. Run sql/12_staff_roles.sql in the Lovable Cloud SQL Editor.",
+  },
+  staff_choose_role: { no: "Tilgang", en: "Access" },
+  staff_role_updated: { no: "Tilgang oppdatert", en: "Access updated" },
+  staff_last_admin: {
+    no: "Du kan ikke fjerne tilgangen til den siste eieren.",
+    en: "You cannot remove access from the last owner.",
+  },
+  role_owner: { no: "Eier", en: "Owner" },
+  role_ops: { no: "Drift", en: "Ops" },
+  role_venue: { no: "Sted", en: "Venue" },
+  role_owner_inc_partners: {
+    no: "Nye partnere og serveringssteder",
+    en: "New partners and venues",
+  },
+  role_owner_inc_terms: {
+    no: "Avtaler, smaker og priser",
+    en: "Agreements, flavors and prices",
+  },
+  role_owner_inc_access: {
+    no: "Tilgang og styring",
+    en: "Access and overall control",
+  },
+  role_owner_inc_ops: {
+    no: "Alt Drift kan",
+    en: "Everything Ops can do",
+  },
+  role_ops_inc_lots: {
+    no: "Produksjon, råvarer og Gold-LOT",
+    en: "Production, ingredients and Gold LOT",
+  },
+  role_ops_inc_villa: {
+    no: "Overlevering til Villa",
+    en: "Handover to Villa",
+  },
+  role_ops_inc_delivery: {
+    no: "Leveringer, beholdning og tilbakekalling",
+    en: "Deliveries, stock and recall",
+  },
+  role_ops_inc_venues: {
+    no: "Ser steder og etterspørsel — oppretter ikke nye avtaler",
+    en: "Sees venues and demand — does not create new deals",
+  },
+  role_venue_inc_report: {
+    no: "Skiftrapport for sitt serveringssted",
+    en: "Shift report for their serving venue",
+  },
+  role_venue_hint: {
+    no: "Sted-brukere opprettes under Steder, ikke her.",
+    en: "Venue logins are created under Venues, not here.",
+  },
+  this_is_you: { no: "Deg", en: "You" },
 } satisfies Record<string, Record<Lang, string>>;
 
 export type TranslationKey = keyof typeof dict;

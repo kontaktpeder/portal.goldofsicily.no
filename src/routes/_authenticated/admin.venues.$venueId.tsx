@@ -11,6 +11,7 @@ import { isUniqueMenuItemConflict, nextAvailableProductId } from "@/lib/venue-me
 import { formatDate } from "@/lib/sign-out";
 import { errorMessage } from "@/lib/utils";
 import { resetCustomerPassword } from "@/lib/admin.functions";
+import { useSessionInfo } from "@/hooks/use-session";
 import { PrimaryButton, TextAreaField, TextField } from "@/components/field";
 import { MenuFileUpload } from "@/components/menu-file-upload";
 import { DeliveryFlavorBreakdown, FlavorBreakdown } from "@/components/flavor-lines";
@@ -40,6 +41,8 @@ type Tab = "overview" | "reports" | "deliveries" | "profile" | "menu" | "account
 function CustomerDetail() {
   const { venueId } = Route.useParams();
   const { t, lang } = useI18n();
+  const { data: session } = useSessionInfo();
+  const commercial = Boolean(session?.canManageCommercial);
   const queryClient = useQueryClient();
   const [tab, setTab] = useState<Tab>("overview");
 
@@ -140,8 +143,13 @@ function CustomerDetail() {
       </div>
 
       <div className="mt-6 flex gap-1 overflow-x-auto">
-        {(["overview", "reports", "deliveries", "profile", "menu", "account"] as Tab[]).map(
-          (option) => (
+        {(
+          (
+            commercial
+              ? ["overview", "reports", "deliveries", "profile", "menu", "account"]
+              : ["overview", "reports", "deliveries"]
+          ) as Tab[]
+        ).map((option) => (
             <button
               key={option}
               onClick={() => setTab(option)}
@@ -153,8 +161,7 @@ function CustomerDetail() {
             >
               {t(option)}
             </button>
-          ),
-        )}
+          ))}
       </div>
 
       {tab === "overview" && data?.customer ? (
@@ -266,7 +273,7 @@ function CustomerDetail() {
         </div>
       ) : null}
 
-      {tab === "profile" && data?.customer ? (
+      {commercial && tab === "profile" && data?.customer ? (
         <div className="mt-5 space-y-4">
           <VenuePartnerCard
             venueId={venueId}
@@ -282,7 +289,7 @@ function CustomerDetail() {
         </div>
       ) : null}
 
-      {tab === "menu" && data?.customer ? (
+      {commercial && tab === "menu" && data?.customer ? (
         <MenuTab
           customerId={venueId}
           menu={data.menu}
@@ -293,7 +300,7 @@ function CustomerDetail() {
         />
       ) : null}
 
-      {tab === "account" && data?.customer ? (
+      {commercial && tab === "account" && data?.customer ? (
         <AccountTab
           customer={data.customer}
           profile={data.profile ?? null}

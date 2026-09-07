@@ -747,6 +747,8 @@ export type Database = {
         Returns: boolean
       }
       is_admin: { Args: never; Returns: boolean }
+      can_manage_operations: { Args: never; Returns: boolean }
+      can_manage_commercial: { Args: never; Returns: boolean }
       next_gold_lot_code: {
         Args: { p_lot_letter: string; p_production_date: string }
         Returns: string
@@ -770,7 +772,7 @@ export type Database = {
       }
     }
     Enums: {
-      app_role: "admin" | "venue"
+      app_role: "admin" | "ops" | "venue"
       feedback_rating: "positive" | "mixed" | "negative"
       gold_lot_status: "produced" | "handed_over" | "closed" | "recalled"
       handover_ownership: "gold" | "villa"
@@ -902,7 +904,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: ["admin", "venue"],
+      app_role: ["admin", "ops", "venue"],
       feedback_rating: ["positive", "mixed", "negative"],
       gold_lot_status: ["produced", "handed_over", "closed", "recalled"],
       handover_ownership: ["gold", "villa"],

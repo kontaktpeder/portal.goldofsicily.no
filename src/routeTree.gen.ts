@@ -19,6 +19,7 @@ import { Route as AuthenticatedAdminIndexRouteImport } from './routes/_authentic
 import { Route as AuthenticatedAdminDeliveriesRouteImport } from './routes/_authenticated/admin.deliveries'
 import { Route as AuthenticatedAdminLotsRouteImport } from './routes/_authenticated/admin.lots'
 import { Route as AuthenticatedAdminProductsRouteImport } from './routes/_authenticated/admin.products'
+import { Route as AuthenticatedAdminStaffRouteImport } from './routes/_authenticated/admin.staff'
 import { Route as AuthenticatedAdminRecallRouteImport } from './routes/_authenticated/admin.recall'
 import { Route as AuthenticatedAdminReportsRouteImport } from './routes/_authenticated/admin.reports'
 import { Route as AuthenticatedAdminLotsLotIdRouteImport } from './routes/_authenticated/admin.lots.$lotId'
@@ -78,6 +79,12 @@ const AuthenticatedAdminProductsRoute =
   AuthenticatedAdminProductsRouteImport.update({
     id: '/products',
     path: '/products',
+    getParentRoute: () => AuthenticatedAdminRoute,
+  } as any)
+const AuthenticatedAdminStaffRoute =
+  AuthenticatedAdminStaffRouteImport.update({
+    id: '/staff',
+    path: '/staff',
     getParentRoute: () => AuthenticatedAdminRoute,
   } as any)
 const AuthenticatedAdminRecallRoute =
@@ -142,6 +149,7 @@ export interface FileRoutesByFullPath {
   '/admin/deliveries': typeof AuthenticatedAdminDeliveriesRoute
   '/admin/lots': typeof AuthenticatedAdminLotsRouteWithChildren
   '/admin/products': typeof AuthenticatedAdminProductsRoute
+  '/admin/staff': typeof AuthenticatedAdminStaffRoute
   '/admin/recall': typeof AuthenticatedAdminRecallRoute
   '/admin/reports': typeof AuthenticatedAdminReportsRoute
   '/admin/': typeof AuthenticatedAdminIndexRoute
@@ -161,6 +169,7 @@ export interface FileRoutesByTo {
   '/admin/deliveries': typeof AuthenticatedAdminDeliveriesRoute
   '/admin/lots': typeof AuthenticatedAdminLotsRouteWithChildren
   '/admin/products': typeof AuthenticatedAdminProductsRoute
+  '/admin/staff': typeof AuthenticatedAdminStaffRoute
   '/admin/recall': typeof AuthenticatedAdminRecallRoute
   '/admin/reports': typeof AuthenticatedAdminReportsRoute
   '/admin': typeof AuthenticatedAdminIndexRoute
@@ -183,6 +192,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/deliveries': typeof AuthenticatedAdminDeliveriesRoute
   '/_authenticated/admin/lots': typeof AuthenticatedAdminLotsRouteWithChildren
   '/_authenticated/admin/products': typeof AuthenticatedAdminProductsRoute
+  '/_authenticated/admin/staff': typeof AuthenticatedAdminStaffRoute
   '/_authenticated/admin/recall': typeof AuthenticatedAdminRecallRoute
   '/_authenticated/admin/reports': typeof AuthenticatedAdminReportsRoute
   '/_authenticated/admin/': typeof AuthenticatedAdminIndexRoute
@@ -205,6 +215,7 @@ export interface FileRouteTypes {
     | '/admin/deliveries'
     | '/admin/lots'
     | '/admin/products'
+    | '/admin/staff'
     | '/admin/recall'
     | '/admin/reports'
     | '/admin/'
@@ -224,6 +235,7 @@ export interface FileRouteTypes {
     | '/admin/deliveries'
     | '/admin/lots'
     | '/admin/products'
+    | '/admin/staff'
     | '/admin/recall'
     | '/admin/reports'
     | '/admin'
@@ -245,6 +257,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/deliveries'
     | '/_authenticated/admin/lots'
     | '/_authenticated/admin/products'
+    | '/_authenticated/admin/staff'
     | '/_authenticated/admin/recall'
     | '/_authenticated/admin/reports'
     | '/_authenticated/admin/'
@@ -336,6 +349,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminProductsRouteImport
       parentRoute: typeof AuthenticatedAdminRoute
     }
+    '/_authenticated/admin/staff': {
+      id: '/_authenticated/admin/staff'
+      path: '/staff'
+      fullPath: '/admin/staff'
+      preLoaderRoute: typeof AuthenticatedAdminStaffRouteImport
+      parentRoute: typeof AuthenticatedAdminRoute
+    }
     '/_authenticated/admin/recall': {
       id: '/_authenticated/admin/recall'
       path: '/recall'
@@ -420,6 +440,7 @@ interface AuthenticatedAdminRouteChildren {
   AuthenticatedAdminDeliveriesRoute: typeof AuthenticatedAdminDeliveriesRoute
   AuthenticatedAdminLotsRoute: typeof AuthenticatedAdminLotsRouteWithChildren
   AuthenticatedAdminProductsRoute: typeof AuthenticatedAdminProductsRoute
+  AuthenticatedAdminStaffRoute: typeof AuthenticatedAdminStaffRoute
   AuthenticatedAdminRecallRoute: typeof AuthenticatedAdminRecallRoute
   AuthenticatedAdminReportsRoute: typeof AuthenticatedAdminReportsRoute
   AuthenticatedAdminIndexRoute: typeof AuthenticatedAdminIndexRoute
@@ -433,6 +454,7 @@ const AuthenticatedAdminRouteChildren: AuthenticatedAdminRouteChildren = {
   AuthenticatedAdminDeliveriesRoute: AuthenticatedAdminDeliveriesRoute,
   AuthenticatedAdminLotsRoute: AuthenticatedAdminLotsRouteWithChildren,
   AuthenticatedAdminProductsRoute: AuthenticatedAdminProductsRoute,
+  AuthenticatedAdminStaffRoute: AuthenticatedAdminStaffRoute,
   AuthenticatedAdminRecallRoute: AuthenticatedAdminRecallRoute,
   AuthenticatedAdminReportsRoute: AuthenticatedAdminReportsRoute,
   AuthenticatedAdminIndexRoute: AuthenticatedAdminIndexRoute,

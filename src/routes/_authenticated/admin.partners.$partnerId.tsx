@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { useRequireCommercial } from "@/hooks/use-session";
 import { useI18n } from "@/lib/i18n";
 import { useAdminOverview } from "@/lib/admin-data";
 import { PrimaryButton, TextAreaField, TextField } from "@/components/field";
@@ -19,6 +20,7 @@ export const Route = createFileRoute("/_authenticated/admin/partners/$partnerId"
 function PartnerDetail() {
   const { partnerId } = Route.useParams();
   const { t, lang } = useI18n();
+  const { allowed, isLoading: sessionLoading } = useRequireCommercial();
   const queryClient = useQueryClient();
   const overview = useAdminOverview();
   const partnerCard = overview.data?.partners.find((row) => row.id === partnerId);
@@ -77,6 +79,10 @@ function PartnerDetail() {
     }
     toast.success(t("save"));
     await queryClient.invalidateQueries();
+  }
+
+  if (sessionLoading || !allowed) {
+    return <main className="min-h-screen" />;
   }
 
   return (

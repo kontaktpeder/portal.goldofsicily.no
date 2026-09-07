@@ -4,6 +4,7 @@ import { useState } from "react";
 import { ChevronRight, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { useRequireCommercial } from "@/hooks/use-session";
 import { useI18n } from "@/lib/i18n";
 import { useAdminOverview } from "@/lib/admin-data";
 import { errorMessage } from "@/lib/utils";
@@ -21,6 +22,7 @@ export const Route = createFileRoute("/_authenticated/admin/partners/")({
 
 function AdminPartners() {
   const { t, lang } = useI18n();
+  const { allowed, isLoading: sessionLoading } = useRequireCommercial();
   const { data } = useAdminOverview();
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
@@ -83,6 +85,10 @@ function AdminPartners() {
     setPhone("");
     setVenueIds([]);
     await queryClient.invalidateQueries({ queryKey: ["admin-overview"] });
+  }
+
+  if (sessionLoading || !allowed) {
+    return <main className="min-h-screen" />;
   }
 
   return (

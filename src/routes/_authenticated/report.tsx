@@ -66,8 +66,8 @@ function ReportPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (info?.isAdmin) void navigate({ to: "/admin", replace: true });
-  }, [info?.isAdmin, navigate]);
+    if (info?.canManageOperations) void navigate({ to: "/admin", replace: true });
+  }, [info?.canManageOperations, navigate]);
 
   useEffect(() => {
     if (info && !languageApplied) {

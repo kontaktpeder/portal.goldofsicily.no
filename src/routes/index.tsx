@@ -4,6 +4,7 @@ import type { Session } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { useI18n } from "@/lib/i18n";
 import { identifierToEmailCandidates } from "@/lib/username";
+import { portalHomePath } from "@/lib/staff";
 import { LanguageToggle, Wordmark } from "@/components/brand";
 import { PrimaryButton, TextField } from "@/components/field";
 
@@ -43,8 +44,8 @@ function LoginPage() {
         .from("user_roles")
         .select("role")
         .eq("user_id", data.session.user.id);
-      const isAdmin = (roles ?? []).some((r) => r.role === "admin");
-      void navigate({ to: isAdmin ? "/admin" : "/report", replace: true });
+      const roleNames = (roles ?? []).map((row) => row.role);
+      void navigate({ to: portalHomePath(roleNames), replace: true });
     })();
     return () => {
       cancelled = true;
@@ -79,9 +80,9 @@ function LoginPage() {
       .from("user_roles")
       .select("role")
       .eq("user_id", session.user.id);
-    const isAdmin = (roles ?? []).some((r) => r.role === "admin");
+    const roleNames = (roles ?? []).map((row) => row.role);
     try {
-      await navigate({ to: isAdmin ? "/admin" : "/report", replace: true });
+      await navigate({ to: portalHomePath(roleNames), replace: true });
     } finally {
       setBusy(false);
     }

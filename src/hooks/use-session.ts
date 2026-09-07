@@ -1,11 +1,17 @@
 import { useQuery } from "@tanstack/react-query";
 import type { Session } from "@supabase/supabase-js";
 import { useEffect, useState } from "react";
+import { useNavigate } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
+import { canManageCommercial, canManageOperations } from "@/lib/access";
+import { portalHomePath } from "@/lib/staff";
 
 export type SessionInfo = {
   session: Session | null;
+  roles: string[];
   isAdmin: boolean;
+  canManageOperations: boolean;
+  canManageCommercial: boolean;
   username: string | null;
   customerId: string | null;
   customerName: string | null;
@@ -18,7 +24,10 @@ async function loadSessionInfo(): Promise<SessionInfo> {
   if (!session) {
     return {
       session: null,
+      roles: [],
       isAdmin: false,
+      canManageOperations: false,
+      canManageCommercial: false,
       username: null,
       customerId: null,
       customerName: null,
@@ -36,15 +45,23 @@ async function loadSessionInfo(): Promise<SessionInfo> {
   ]);
 
   const customer = (profile?.venues as { name: string } | null) ?? null;
+  const roleNames = (roles ?? []).map((row) => row.role);
 
   return {
     session,
-    isAdmin: (roles ?? []).some((r) => r.role === "admin"),
+    roles: roleNames,
+    isAdmin: canManageCommercial(roleNames),
+    canManageOperations: canManageOperations(roleNames),
+    canManageCommercial: canManageCommercial(roleNames),
     username: profile?.username ?? null,
     customerId: profile?.venue_id ?? null,
     customerName: customer?.name ?? null,
     preferredLanguage: profile?.preferred_language === "en" ? "en" : "no",
   };
+}
+
+export function sessionHomePath(roles: readonly string[]): "/admin" | "/report" {
+  return portalHomePath(roles);
 }
 
 export function useSessionInfo() {
@@ -62,4 +79,19 @@ export function useSessionInfo() {
     ...query,
     isLoading: !ready || query.isPending,
   };
+}
+
+/** Redirect Drift away from Eier-only pages (partnere, produkter, ansatte). */
+export function useRequireCommercial() {
+  const navigate = useNavigate();
+  const session = useSessionInfo();
+  const allowed = Boolean(session.data?.canManageCommercial);
+
+  useEffect(() => {
+    if (!session.isLoading && session.data && !session.data.canManageCommercial) {
+      void navigate({ to: "/admin", replace: true });
+    }
+  }, [navigate, session.data, session.isLoading]);
+
+  return { ...session, allowed };
 }

@@ -13,6 +13,3 @@ export function canManageCommercial(roles: readonly string[]): boolean {
 export function canSubmitVenueReport(roles: readonly string[]): boolean {
   return roles.includes("venue") || roles.includes("admin") || roles.includes("ops");
 }
-
-// The database enum is still admin | venue. `ops` is ready in the UI layer so a
-// future hire can produce → hand over → deliver without commercial access.

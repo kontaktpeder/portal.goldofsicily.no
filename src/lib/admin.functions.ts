@@ -2,6 +2,12 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { parseLoginIdentifier, normalizeUsername, usernameToEmail } from "@/lib/username";
+import {
+  canChangeStaffRole,
+  isStaffRole,
+  staffCreateSchema,
+  type StaffRole,
+} from "@/lib/staff";
 
 const createSchema = z.object({
   name: z.string().trim().min(1),
@@ -183,6 +189,160 @@ export const resetCustomerPassword = createServerFn({ method: "POST" })
     });
     if (error) throw new Error(error.message);
     return { ok: true };
+  });
+
+async function countAdmins(supabaseAdmin: AdminClient) {
+  const { count, error } = await supabaseAdmin
+    .from("user_roles")
+    .select("id", { count: "exact", head: true })
+    .eq("role", "admin");
+  if (error) throw new Error(error.message);
+  return count ?? 0;
+}
+
+export const listStaffAccounts = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    await assertAdmin(context.supabase as never);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: roleRows, error: roleError } = await supabaseAdmin
+      .from("user_roles")
+      .select("user_id, role, created_at");
+    if (roleError) throw new Error(roleError.message);
+
+    const byUser = new Map<string, { role: StaffRole; createdAt: string }>();
+    for (const row of roleRows ?? []) {
+      if (!isStaffRole(row.role)) continue;
+      const existing = byUser.get(row.user_id);
+      if (!existing || row.role === "admin") {
+        byUser.set(row.user_id, { role: row.role, createdAt: row.created_at });
+      }
+    }
+    const ids = [...byUser.keys()];
+    if (ids.length === 0) return { staff: [] as const };
+
+    const { data: profiles, error: profileError } = await supabaseAdmin
+      .from("profiles")
+      .select("id, username, preferred_language, created_at")
+      .in("id", ids);
+    if (profileError) throw new Error(profileError.message);
+
+    const staff = (profiles ?? [])
+      .map((profile) => {
+        const role = byUser.get(profile.id);
+        if (!role) return null;
+        return {
+          id: profile.id,
+          username: profile.username,
+          role: role.role,
+          preferredLanguage: profile.preferred_language === "en" ? ("en" as const) : ("no" as const),
+          createdAt: profile.created_at,
+        };
+      })
+      .filter((row): row is NonNullable<typeof row> => row !== null)
+      .sort((a, b) => {
+        if (a.role !== b.role) return a.role === "admin" ? -1 : 1;
+        return a.username.localeCompare(b.username);
+      });
+
+    return { staff };
+  });
+
+export const createStaffAccount = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((data: unknown) => staffCreateSchema.parse(data))
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context.supabase as never);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    const login = parseLoginIdentifier(data.username);
+    if (!login) {
+      throw new Error(
+        "Username can only contain letters, numbers, dots, hyphens and underscores (min 3).",
+      );
+    }
+    const { username, email } = login;
+
+    const { data: taken } = await supabaseAdmin
+      .from("profiles")
+      .select("id")
+      .eq("username", username)
+      .maybeSingle();
+    if (taken) throw new Error("Username is already taken");
+
+    const { data: created, error: userError } = await supabaseAdmin.auth.admin.createUser({
+      email,
+      password: data.password,
+      email_confirm: true,
+      user_metadata: { username, language: data.language },
+    });
+    if (userError || !created?.user) {
+      throw new Error(userError?.message ?? "Could not create login");
+    }
+    const userId = created.user.id;
+
+    try {
+      await saveProfile(supabaseAdmin, {
+        id: userId,
+        username,
+        venue_id: null,
+        preferred_language: data.language,
+      });
+
+      const { error: roleError } = await supabaseAdmin
+        .from("user_roles")
+        .insert({ user_id: userId, role: data.role });
+      if (roleError && roleError.code !== "23505") {
+        throw new Error(roleError.message);
+      }
+
+      return { userId, username, role: data.role };
+    } catch (error) {
+      await supabaseAdmin.auth.admin.deleteUser(userId);
+      throw error instanceof Error ? error : new Error("Could not create staff account");
+    }
+  });
+
+export const updateStaffRole = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((data: unknown) =>
+    z.object({ userId: z.string().uuid(), role: z.enum(["admin", "ops"]) }).parse(data),
+  )
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context.supabase as never);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    const { data: roleRows, error: roleError } = await supabaseAdmin
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", data.userId);
+    if (roleError) throw new Error(roleError.message);
+    const roles = (roleRows ?? []).map((row) => row.role);
+    const currentRole = roles.includes("admin") ? "admin" : roles.includes("ops") ? "ops" : null;
+    if (!currentRole) throw new Error("Not a staff account");
+
+    const allowed = canChangeStaffRole({
+      currentRole,
+      nextRole: data.role,
+      adminCount: await countAdmins(supabaseAdmin),
+    });
+    if (!allowed.ok) {
+      throw new Error("Cannot remove the last owner");
+    }
+
+    const { error: deleteError } = await supabaseAdmin
+      .from("user_roles")
+      .delete()
+      .eq("user_id", data.userId)
+      .in("role", ["admin", "ops"]);
+    if (deleteError) throw new Error(deleteError.message);
+
+    const { error: insertError } = await supabaseAdmin
+      .from("user_roles")
+      .insert({ user_id: data.userId, role: data.role });
+    if (insertError) throw new Error(insertError.message);
+
+    return { ok: true, role: data.role };
   });
 
 /**

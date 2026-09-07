@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { ChevronRight, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { useSessionInfo } from "@/hooks/use-session";
 import { useI18n } from "@/lib/i18n";
 import { statusToken, useAdminOverview } from "@/lib/admin-data";
 import { createCustomerAccount } from "@/lib/admin.functions";
@@ -34,6 +35,8 @@ export const Route = createFileRoute("/_authenticated/admin/venues/")({
 
 function AdminCustomers() {
   const { t } = useI18n();
+  const { data: session } = useSessionInfo();
+  const canCreate = Boolean(session?.canManageCommercial);
   const { partnerId: preselectedPartnerId } = Route.useSearch();
   const { data, error: loadError } = useAdminOverview();
   const queryClient = useQueryClient();
@@ -139,17 +142,19 @@ function AdminCustomers() {
     <main className="mx-auto w-full max-w-5xl px-5 pb-16">
       <div className="flex items-center justify-between pt-8">
         <h1 className="text-3xl font-semibold">{t("customers")}</h1>
-        <button
-          type="button"
-          onClick={() => setOpen((value) => !value)}
-          className="flex items-center gap-1.5 rounded-full bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground"
-        >
-          <Plus className="size-4" />
-          {t("new_customer")}
-        </button>
+        {canCreate ? (
+          <button
+            type="button"
+            onClick={() => setOpen((value) => !value)}
+            className="flex items-center gap-1.5 rounded-full bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground"
+          >
+            <Plus className="size-4" />
+            {t("new_customer")}
+          </button>
+        ) : null}
       </div>
 
-      {open ? (
+      {open && canCreate ? (
         <form className="surface-card mt-5 space-y-4 p-5" onSubmit={submit}>
           <TextField label={t("customer_name")} value={name} onChange={setName} />
           <TextField label={t("city")} value={city} onChange={setCity} />

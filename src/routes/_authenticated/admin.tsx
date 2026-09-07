@@ -16,12 +16,16 @@ function AdminLayout() {
   const { data: info, isLoading } = useSessionInfo();
 
   useEffect(() => {
-    if (!isLoading && info && !info.isAdmin) void navigate({ to: "/report", replace: true });
+    if (!isLoading && info && !info.canManageOperations) {
+      void navigate({ to: "/report", replace: true });
+    }
   }, [info, isLoading, navigate]);
 
-  if (isLoading || !info?.isAdmin) {
+  if (isLoading || !info?.canManageOperations) {
     return <main className="min-h-screen" />;
   }
+
+  const commercial = info.canManageCommercial;
 
   return (
     <div className="min-h-screen">
@@ -44,9 +48,10 @@ function AdminLayout() {
           <NavTab to="/admin/deliveries" label={t("deliveries")} />
           <NavTab to="/admin/lots" label={t("lots")} />
           <NavTab to="/admin/venues" label={t("nav_venues")} />
-          <NavTab to="/admin/partners" label={t("partners")} />
-          <NavTab to="/admin/products" label={t("nav_products")} />
+          {commercial ? <NavTab to="/admin/partners" label={t("partners")} /> : null}
+          {commercial ? <NavTab to="/admin/products" label={t("nav_products")} /> : null}
           <NavTab to="/admin/reports" label={t("reports")} />
+          {commercial ? <NavTab to="/admin/staff" label={t("staff")} /> : null}
         </nav>
       </header>
       <Outlet />
@@ -66,7 +71,8 @@ function NavTab({
     | "/admin/deliveries"
     | "/admin/partners"
     | "/admin/products"
-    | "/admin/lots";
+    | "/admin/lots"
+    | "/admin/staff";
   label: string;
   exact?: boolean;
 }) {
