@@ -24,6 +24,8 @@ export type RecallVenueDelivery = {
   venueName: string;
   quantity: number;
   deliveredAt: string;
+  note: string | null;
+  legacy: boolean;
 };
 
 export type RecallLotCard = {

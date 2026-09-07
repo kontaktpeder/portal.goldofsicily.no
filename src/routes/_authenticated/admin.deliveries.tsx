@@ -8,6 +8,7 @@ import { useI18n } from "@/lib/i18n";
 import { formatDate } from "@/lib/sign-out";
 import { PrimaryButton, TextField } from "@/components/field";
 import { DeliveryFlavorBreakdown, DeliveryFlavorEditor } from "@/components/flavor-lines";
+import { LegacyDeliveryMark } from "@/components/legacy-delivery-badge";
 import { LotPrerequisitesBanner } from "@/components/lot-prerequisites";
 import { useLotPrerequisites } from "@/hooks/use-lot-prerequisites";
 import {
@@ -19,6 +20,10 @@ import {
   type DeliveryFlavorQty,
   type StoredDeliveryLine,
 } from "@/lib/flavors";
+import {
+  applyLegacyDeliveryNote,
+  deliveriesNeedingLegacyStamp,
+} from "@/lib/legacy-delivery";
 import { isGoldLotSchemaError, toStockLots, validateDeliveryStock } from "@/lib/lot-stock";
 
 export const Route = createFileRoute("/_authenticated/admin/deliveries")({
@@ -172,6 +177,19 @@ function AdminDeliveries() {
     },
   });
 
+  const pendingLegacy = useMemo(
+    () =>
+      deliveriesNeedingLegacyStamp(
+        (deliveries ?? []).map((row) => ({
+          id: row.id,
+          deliveredAt: row.delivered_at,
+          createdAt: row.created_at,
+          note: row.note,
+        })),
+      ),
+    [deliveries],
+  );
+
   async function submit() {
     if (!canSave) {
       if (!prereq.ok) toast.error(t("lot_prereq_title"));
@@ -222,6 +240,27 @@ function AdminDeliveries() {
     await queryClient.invalidateQueries();
   }
 
+  async function stampOldestLegacy() {
+    if (pendingLegacy.length === 0) return;
+    setBusy(true);
+    const results = await Promise.all(
+      pendingLegacy.map((row) =>
+        supabase
+          .from("deliveries")
+          .update({ note: applyLegacyDeliveryNote(row.note) })
+          .eq("id", row.id),
+      ),
+    );
+    const failed = results.find((result) => result.error);
+    setBusy(false);
+    if (failed?.error) {
+      toast.error(failed.error.message);
+      return;
+    }
+    toast.success(t("legacy_stamp_done"));
+    await queryClient.invalidateQueries();
+  }
+
   return (
     <main className="mx-auto w-full max-w-5xl px-5 pb-16">
       <div className="flex items-center justify-between pt-8">
@@ -237,6 +276,20 @@ function AdminDeliveries() {
       </div>
       <p className="mt-2 max-w-2xl text-sm text-muted-foreground">{t("delivery_workflow")}</p>
       <LotPrerequisitesBanner check={prereq} />
+      {pendingLegacy.length > 0 ? (
+        <div className="mt-5 rounded-2xl border border-border bg-muted/40 p-4">
+          <p className="text-sm">{t("legacy_stamp_hint")}</p>
+          <p className="mt-1 text-xs text-muted-foreground">{t("legacy_delivery_intro")}</p>
+          <button
+            type="button"
+            onClick={() => void stampOldestLegacy()}
+            disabled={busy}
+            className="mt-3 inline-flex rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
+          >
+            {busy ? "…" : t("legacy_stamp_action")}
+          </button>
+        </div>
+      ) : null}
 
       {open ? (
         <div className="surface-card mt-5 space-y-4 p-5">
@@ -294,8 +347,8 @@ function AdminDeliveries() {
               </p>
               <p className="text-xs text-muted-foreground">
                 {formatDate(delivery.delivered_at, lang)}
-                {delivery.note ? ` · ${delivery.note}` : ""}
               </p>
+              <LegacyDeliveryMark note={delivery.note} />
               <DeliveryFlavorBreakdown
                 linkLots
                 lines={

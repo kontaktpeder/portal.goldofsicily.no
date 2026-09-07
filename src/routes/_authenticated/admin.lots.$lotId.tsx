@@ -6,6 +6,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { PrimaryButton, TextAreaField, TextField } from "@/components/field";
 import { ProducerPicker } from "@/components/producer-picker";
+import { LegacyDeliveryMark } from "@/components/legacy-delivery-badge";
 import { listProductionStaff } from "@/lib/admin.functions";
 import { useI18n, type TranslationKey } from "@/lib/i18n";
 import { nowOsloDateTimeLocal, remainingAtGold, sumQuantities } from "@/lib/gold-lot";
@@ -223,7 +224,7 @@ function AdminLotDetail() {
     queryFn: async () => {
       const { data, error: loadError } = await supabase
         .from("delivery_lines")
-        .select("quantity, deliveries(delivered_at, venues(name))")
+        .select("quantity, deliveries(delivered_at, note, venues(name))")
         .eq("gold_lot_id", lotId);
       if (loadError) throw loadError;
       return data ?? [];
@@ -360,8 +361,8 @@ function AdminLotDetail() {
           <ul className="mt-4 space-y-2">
             {deliveries?.map((row, index) => {
               const delivery = row.deliveries as
-                | { delivered_at: string; venues: { name: string } | null }
-                | { delivered_at: string; venues: { name: string } | null }[]
+                | { delivered_at: string; note: string | null; venues: { name: string } | null }
+                | { delivered_at: string; note: string | null; venues: { name: string } | null }[]
                 | null;
               const record = Array.isArray(delivery) ? delivery[0] : delivery;
               return (
@@ -372,6 +373,7 @@ function AdminLotDetail() {
                   <p className="text-xs text-muted-foreground">
                     {formatDate(record?.delivered_at, lang)}
                   </p>
+                  <LegacyDeliveryMark note={record?.note} />
                 </li>
               );
             })}

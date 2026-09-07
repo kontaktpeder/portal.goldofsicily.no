@@ -48,6 +48,8 @@ const truffleLot = {
       venueName: "Oslo Bar & Bowling",
       quantity: 120,
       deliveredAt: "2026-09-07",
+      note: "Legacy levering før nytt LOT-/pakkesystem",
+      legacy: true,
     },
   ],
 };
@@ -68,7 +70,15 @@ const ndujaLot = {
       bestBefore: null,
     },
   ],
-  venueDeliveries: [{ venueName: "Oslo Bar & Bowling", quantity: 50, deliveredAt: "2026-09-08" }],
+  venueDeliveries: [
+    {
+      venueName: "Oslo Bar & Bowling",
+      quantity: 50,
+      deliveredAt: "2026-09-08",
+      note: null,
+      legacy: false,
+    },
+  ],
 };
 
 test("recall prefers structured producer snapshots over legacy produced_by text", () => {
@@ -93,6 +103,7 @@ test("Gold-LOT recall card keeps one-up ingredients and one-down recipients", ()
   assert.equal(result.lots[0]?.lotCode, "L-20260907-T-01");
   assert.equal(result.lots[0]?.remainingQty, 120);
   assert.equal(result.lots[0]?.ingredients[1]?.matched, false);
+  assert.equal(result.lots[0]?.venueDeliveries[0]?.legacy, true);
   assert.deepEqual(contactTargets(result.lots[0]!), ["Villa Grossista", "Oslo Bar & Bowling"]);
 });
 

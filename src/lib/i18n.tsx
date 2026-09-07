@@ -687,6 +687,23 @@ const dict = {
     no: "Ingen Gold-ansatte å velge. Opprett dem under Ansatte først.",
     en: "No Gold staff to choose. Create them under Staff first.",
   },
+  legacy_delivery: { no: "Legacy", en: "Legacy" },
+  legacy_delivery_intro: {
+    no: "Dokumentert med det som er kjent. Pose, kartong og råvare-LOT er ikke etterkonstruert.",
+    en: "Documented from what is known. Bags, cartons and raw-material LOTs were not reconstructed.",
+  },
+  legacy_stamp_hint: {
+    no: "De tre eldste leveringene mangler legacy-notat. Merk dem uten å dikte opp pakkehistorikk.",
+    en: "The three oldest deliveries are missing the legacy note. Mark them without inventing packing history.",
+  },
+  legacy_stamp_action: {
+    no: "Merk de tre eldste som legacy",
+    en: "Mark the three oldest as legacy",
+  },
+  legacy_stamp_done: {
+    no: "De tre eldste leveringene er merket som legacy.",
+    en: "The three oldest deliveries are marked as legacy.",
+  },
 } satisfies Record<string, Record<Lang, string>>;
 
 export type TranslationKey = keyof typeof dict;
