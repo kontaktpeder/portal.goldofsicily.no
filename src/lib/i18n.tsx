@@ -111,7 +111,7 @@ const dict = {
   back_to_report: { no: "Til rapport", en: "To report" },
 
   // Admin
-  dashboard: { no: "Oversikt", en: "Dashboard" },
+  dashboard: { no: "Drift", en: "Ops" },
   customers: { no: "Serveringssteder", en: "Venues" },
   nav_venues: { no: "Steder", en: "Venues" },
   nav_products: { no: "Produkter", en: "Products" },
@@ -494,6 +494,39 @@ const dict = {
     en: "Every active flavor needs a LOT letter before LOT and delivery can be used.",
   },
   open_products: { no: "Åpne Produkter", en: "Open Products" },
+  ops_today: { no: "Drift i dag", en: "Ops today" },
+  ops_intro: {
+    no: "Produksjon lager LOT. Overlevering og levering flytter varen. Nye avtaler og steder ligger hos eier.",
+    en: "Production creates the LOT. Handover and delivery move it. New deals and venues stay with the owner.",
+  },
+  ops_start_production: { no: "Start produksjon", en: "Start production" },
+  ops_start_production_hint: {
+    no: "Opprett Gold-LOT og registrer råvarer",
+    en: "Create a Gold LOT and record ingredients",
+  },
+  ops_handover_villa: { no: "Overlever til Villa", en: "Hand over to Villa" },
+  ops_handover_none: {
+    no: "Ingen LOT-er klare for overlevering",
+    en: "No LOTs ready for handover",
+  },
+  ops_handover_one: { no: "1 åpen LOT klar for overlevering", en: "1 open LOT ready for handover" },
+  ops_handover_many: {
+    no: "åpne LOT-er klare for overlevering",
+    en: "open LOTs ready for handover",
+  },
+  ops_register_delivery: { no: "Registrer levering", en: "Register delivery" },
+  ops_register_delivery_hint: {
+    no: "Lever varer til eksisterende sted",
+    en: "Deliver to an existing venue",
+  },
+  ops_stock: { no: "Lager", en: "Stock" },
+  ops_stock_empty: { no: "Ingen Gold-LOT registrert ennå.", en: "No Gold LOTs recorded yet." },
+  ops_produced: { no: "Produsert", en: "Produced" },
+  ops_at_villa: { no: "Hos Villa", en: "At Villa" },
+  ops_delivered: { no: "Levert", en: "Delivered" },
+  ops_available: { no: "Tilgjengelig", en: "Available" },
+  ops_need_empty: { no: "Ingen neste behov registrert.", en: "No upcoming demand recorded." },
+  ops_estimated: { no: "estimert", en: "estimated" },
 } satisfies Record<string, Record<Lang, string>>;
 
 export type TranslationKey = keyof typeof dict;

@@ -1,180 +1,148 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { AlertTriangle, ChevronRight } from "lucide-react";
-import { useI18n } from "@/lib/i18n";
-import { formatDate } from "@/lib/sign-out";
-import { statusToken, useAdminOverview, type CustomerRow } from "@/lib/admin-data";
+import { ChevronRight } from "lucide-react";
+import { LotPrerequisitesBanner } from "@/components/lot-prerequisites";
+import { useLotPrerequisites } from "@/hooks/use-lot-prerequisites";
+import { useOpsHome } from "@/hooks/use-ops-home";
+import { useI18n, type TranslationKey } from "@/lib/i18n";
+import type { FlavorStock, NextNeedItem } from "@/lib/ops-home";
 
 export const Route = createFileRoute("/_authenticated/admin/")({
   head: () => ({
     meta: [
-      { title: "Dashboard — Gold of Sicily admin" },
+      { title: "Drift — Gold of Sicily" },
       {
         name: "description",
-        content: "Sales demand, customer stock, feedback and production planning at a glance.",
+        content: "Produce, hand over to Villa, and deliver Gold LOT stock.",
       },
-      { property: "og:title", content: "Dashboard — Gold of Sicily admin" },
+      { property: "og:title", content: "Drift — Gold of Sicily" },
       {
         property: "og:description",
-        content: "Sales demand, customer stock and production planning at a glance.",
+        content: "Produce, hand over to Villa, and deliver Gold LOT stock.",
       },
     ],
   }),
-  component: AdminDashboard,
+  component: OpsHome,
 });
 
-function AdminDashboard() {
+function OpsHome() {
   const { t, lang } = useI18n();
-  const { data } = useAdminOverview();
-  const metrics = data?.metrics;
+  const prereq = useLotPrerequisites();
+  const { data } = useOpsHome(lang);
 
   return (
     <main className="mx-auto w-full max-w-5xl px-5 pb-16">
-      <h1 className="pt-8 text-3xl font-semibold">{t("dashboard")}</h1>
+      <h1 className="pt-8 text-3xl font-semibold">{t("ops_today")}</h1>
+      <p className="mt-2 max-w-2xl text-sm text-muted-foreground">{t("ops_intro")}</p>
+      <LotPrerequisitesBanner check={prereq} />
 
-      <div className="mt-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Metric label={t("active_partners")} value={metrics?.activePartners ?? 0} plain />
-        <Metric label={t("active_venues")} value={metrics?.activeVenues ?? 0} plain />
-        <Metric label={t("sold_this_week")} value={metrics?.soldThisWeek ?? 0} />
-        <Metric label={t("stock_at_customers")} value={metrics?.currentStock ?? 0} />
-        <Metric label={t("requested_next")} value={metrics?.requestedNext ?? 0} />
-        <Metric label={t("awaiting_report")} value={metrics?.awaiting ?? 0} plain />
-        <Metric label={t("quality_issues")} value={metrics?.qualityIssues ?? 0} plain />
-        <Metric label={t("new_venues")} value={metrics?.newVenues ?? 0} plain />
+      <div className="mt-6 space-y-3">
+        <Link
+          to="/admin/lots"
+          search={{ tab: "production" }}
+          className="surface-card flex items-center justify-between gap-3 p-5 transition-shadow hover:shadow-[var(--shadow-lift)]"
+        >
+          <TaskCopy title={t("ops_start_production")} hint={t("ops_start_production_hint")} />
+        </Link>
+        <Link
+          to="/admin/lots"
+          search={{ tab: "active" }}
+          className="surface-card flex items-center justify-between gap-3 p-5 transition-shadow hover:shadow-[var(--shadow-lift)]"
+        >
+          <TaskCopy
+            title={t("ops_handover_villa")}
+            hint={handoverHint(data?.readyForHandover ?? 0, t)}
+          />
+        </Link>
+        <Link
+          to="/admin/deliveries"
+          className="surface-card flex items-center justify-between gap-3 p-5 transition-shadow hover:shadow-[var(--shadow-lift)]"
+        >
+          <TaskCopy title={t("ops_register_delivery")} hint={t("ops_register_delivery_hint")} />
+        </Link>
       </div>
 
-      {(data?.flavorWeek ?? []).length > 0 ? (
-        <>
-          <h2 className="eyebrow mt-10">{t("flavors_this_week")}</h2>
-          <div className="mt-3 grid grid-cols-2 gap-3 lg:grid-cols-4">
-            {data?.flavorWeek.map((flavor) => (
-              <Metric
-                key={flavor.productId}
-                label={lang === "en" ? flavor.nameEn : flavor.nameNo}
-                value={flavor.sold}
-              />
-            ))}
-          </div>
-        </>
-      ) : null}
-
-      <h2 className="eyebrow mt-10">{t("partners")}</h2>
+      <h2 className="eyebrow mt-10">{t("ops_stock")}</h2>
       <div className="mt-3 space-y-3">
-        {(data?.partners ?? []).length === 0 && (data?.unassigned ?? []).length === 0 ? (
-          <p className="text-sm text-muted-foreground">{t("no_partners")}</p>
-        ) : null}
-
-        {(data?.partners ?? []).map((partner) => (
-          <section key={partner.id} className="surface-card p-4">
-            <Link
-              to="/admin/partners/$partnerId"
-              params={{ partnerId: partner.id }}
-              className="flex items-start justify-between gap-3"
-            >
-              <div>
-                <p className="font-semibold">{partner.name}</p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {partner.venueCount} {t("venues_under")}
-                  {" · "}
-                  {partner.distributedThisMonth.toLocaleString(
-                    lang === "no" ? "nb-NO" : "en-GB",
-                  )}{" "}
-                  {t("pcs")} {t("distributed_month").toLowerCase()}
-                </p>
-              </div>
-              <ChevronRight className="mt-1 size-4 shrink-0 text-muted-foreground" />
-            </Link>
-            <div className="mt-3 space-y-2">
-              {partner.venues.map((row) => (
-                <VenueRow key={row.id} row={row} compact />
-              ))}
-            </div>
-          </section>
-        ))}
-
-        {(data?.unassigned ?? []).length > 0 ? (
-          <section className="surface-card p-4">
-            <p className="font-semibold">{t("unassigned_partner")}</p>
-            <div className="mt-3 space-y-2">
-              {data?.unassigned.map((row) => (
-                <VenueRow key={row.id} row={row} compact />
-              ))}
-            </div>
-          </section>
-        ) : null}
-      </div>
-
-      <h2 className="eyebrow mt-10">{t("customers")}</h2>
-      <div className="mt-3 space-y-3">
-        {(data?.rows ?? []).length === 0 ? (
-          <p className="text-sm text-muted-foreground">{t("no_customers")}</p>
+        {(data?.stock ?? []).length === 0 ? (
+          <p className="text-sm text-muted-foreground">{t("ops_stock_empty")}</p>
         ) : (
-          data?.rows.map((row) => <VenueRow key={row.id} row={row} />)
+          data?.stock.map((row) => <StockCard key={row.productId} row={row} lang={lang} />)
+        )}
+      </div>
+
+      <h2 className="eyebrow mt-10">{t("next_requirement")}</h2>
+      <div className="mt-3 space-y-2">
+        {(data?.nextNeed ?? []).length === 0 ? (
+          <p className="text-sm text-muted-foreground">{t("ops_need_empty")}</p>
+        ) : (
+          data?.nextNeed.map((item) => <NeedRow key={item.id} item={item} />)
         )}
       </div>
     </main>
   );
 }
 
-function VenueRow({ row, compact }: { row: CustomerRow; compact?: boolean }) {
-  const { t, lang } = useI18n();
+function handoverHint(count: number, t: (key: TranslationKey) => string) {
+  if (count <= 0) return t("ops_handover_none");
+  if (count === 1) return t("ops_handover_one");
+  return `${count} ${t("ops_handover_many")}`;
+}
+
+function TaskCopy({ title, hint }: { title: string; hint: string }) {
   return (
-    <Link
-      to="/admin/venues/$venueId"
-      params={{ venueId: row.id }}
-      className={
-        compact
-          ? "flex items-center gap-3 rounded-xl bg-background/60 px-3 py-2"
-          : "surface-card flex items-center gap-4 p-4 transition-shadow hover:shadow-[var(--shadow-lift)]"
-      }
-    >
-      <span className={`size-3 shrink-0 rounded-full ${statusToken(row.status)}`} />
-      <div className="min-w-0 flex-1">
-        <p className="truncate font-semibold">
-          {row.name}
-          {!row.active ? (
-            <span className="ml-2 text-xs font-normal text-muted-foreground">
-              ({t("inactive")})
-            </span>
-          ) : null}
-        </p>
-        <p className="mt-0.5 text-xs text-muted-foreground">
-          {row.partnerName ?? t("unassigned_partner")}
-          {" · "}
-          {t("last_report")}: {row.lastReportAt ? formatDate(row.lastReportAt, lang) : t("never")}
-        </p>
-        {compact ? null : (
-          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs">
-            <span>
-              {t("sold")}: <strong className="tabular-nums">{row.soldThisWeek}</strong>
-            </span>
-            <span>
-              {t("current_stock")}: <strong className="tabular-nums">{row.currentStock}</strong>
-            </span>
-            <span>
-              {t("next_requirement")}:{" "}
-              <strong className="tabular-nums">{row.nextRequirement ?? "—"}</strong>
-            </span>
-            {row.needsReview ? (
-              <span className="flex items-center gap-1 text-warning-foreground">
-                <AlertTriangle className="size-3" /> {t("needs_review")}
-              </span>
-            ) : null}
-          </div>
-        )}
+    <>
+      <div>
+        <p className="text-lg font-semibold">{title}</p>
+        <p className="mt-1 text-sm text-muted-foreground">{hint}</p>
       </div>
-      <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
-    </Link>
+      <ChevronRight className="size-5 shrink-0 text-muted-foreground" />
+    </>
   );
 }
 
-function Metric({ label, value, plain }: { label: string; value: number; plain?: boolean }) {
+function StockCard({ row, lang }: { row: FlavorStock; lang: "no" | "en" }) {
+  const { t } = useI18n();
+  const name = lang === "en" ? row.nameEn : row.nameNo;
+  return (
+    <article className="surface-card p-5">
+      <p className="text-lg font-semibold">{name}</p>
+      <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-sm sm:grid-cols-4">
+        <Stat label={t("ops_produced")} value={row.produced} />
+        <Stat label={t("ops_at_villa")} value={row.atVilla} />
+        <Stat label={t("ops_delivered")} value={row.delivered} />
+        <Stat label={t("ops_available")} value={row.available} />
+      </dl>
+    </article>
+  );
+}
+
+function Stat({ label, value }: { label: string; value: number }) {
   const { t } = useI18n();
   return (
-    <div className="surface-card p-4">
-      <p className="eyebrow">{label}</p>
-      <p className="mt-2 text-3xl font-semibold tabular-nums">
-        {value}
-        {plain ? null : <span className="ml-1 text-xs font-normal">{t("pcs")}</span>}
+    <div>
+      <dt className="text-xs text-muted-foreground">{label}</dt>
+      <dd className="mt-0.5 font-semibold tabular-nums">
+        {value} <span className="text-xs font-normal">{t("pcs")}</span>
+      </dd>
+    </div>
+  );
+}
+
+function NeedRow({ item }: { item: NextNeedItem }) {
+  const { t } = useI18n();
+  const flavor = item.flavorName ?? "";
+  const detail =
+    item.source === "villa"
+      ? `${item.quantity} ${flavor} ${t("lot_available")}`
+      : `${t("ops_estimated")} ${item.quantity}${flavor ? ` ${flavor}` : ""}`;
+  return (
+    <div className="rounded-2xl border border-border bg-card px-4 py-3">
+      <p className="font-medium">
+        {item.title}
+        <span className="font-normal text-muted-foreground">
+          {": "}
+          <span className="font-semibold text-foreground tabular-nums">{detail}</span>
+        </span>
       </p>
     </div>
   );
