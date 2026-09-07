@@ -92,7 +92,7 @@ function LoginPage() {
     <main className="flex min-h-screen flex-col px-6 pt-10 pb-12 sm:justify-center">
       <div className="mx-auto w-full max-w-sm">
         <div className="flex items-center justify-between">
-          <Wordmark size="sm" />
+          <Wordmark size="lg" />
           <LanguageToggle />
         </div>
 

@@ -60,7 +60,7 @@ function SetupPage() {
   return (
     <main className="flex min-h-screen flex-col justify-center px-6 py-12">
       <div className="mx-auto w-full max-w-sm">
-        <Wordmark size="sm" />
+        <Wordmark size="lg" />
         <h1 className="mt-10 text-3xl font-semibold">Administrator setup</h1>
 
         {isLoading ? (
