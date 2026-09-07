@@ -532,8 +532,8 @@ const dict = {
   staff: { no: "Ansatte", en: "Staff" },
   staff_title: { no: "Ansatte", en: "Staff" },
   staff_intro: {
-    no: "Opprett innlogging til Gold-ansatte. Ingen e-post sendes — du gir brukernavn og passord selv, og bytter passord her hvis de har glemt det.",
-    en: "Create logins for Gold employees. No email is sent — you give them the username and password, and reset the password here if they forget.",
+    no: "Eksisterende brukere har allerede en rad — legg inn navn der. Ny innlogging opprettes bare hvis brukernavnet ikke finnes.",
+    en: "Existing users already have a row — add their name there. A new login is created only if the username does not exist.",
   },
   staff_no_email: {
     no: "Ingen e-post. Skriv ned brukernavn og passord og gi det til den ansatte.",
@@ -663,6 +663,19 @@ const dict = {
     en: "Optional. Internal number, e.g. GOS-004.",
   },
   staff_updated: { no: "Ansatt oppdatert", en: "Staff updated" },
+  staff_add_name: { no: "Legg til navn", en: "Add name" },
+  staff_missing_name: {
+    no: "Mangler navn. Skriv inn navn og lagre — ikke opprett en ny ansatt.",
+    en: "Name missing. Enter the name and save — do not create a new staff account.",
+  },
+  staff_name_on_existing: {
+    no: "Brukeren finnes allerede. Navnet lagres på den eksisterende raden. Du trenger ikke nytt passord.",
+    en: "This login already exists. The name is saved on the existing row. A new password is not required.",
+  },
+  staff_name_saved_existing: {
+    no: "Navn lagret på eksisterende bruker.",
+    en: "Name saved on the existing user.",
+  },
   staff_name_missing: {
     no: "Skriv inn navn på den ansatte.",
     en: "Enter the employee’s name.",

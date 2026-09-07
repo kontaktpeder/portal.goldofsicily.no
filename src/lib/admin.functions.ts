@@ -4,8 +4,12 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { parseLoginIdentifier, normalizeUsername, usernameToEmail } from "@/lib/username";
 import {
   canChangeStaffRole,
+  classifyExistingAccount,
+  existingUsernameAction,
   isStaffRole,
+  staffCreateNeedsPassword,
   staffCreateSchema,
+  staffRoleFromRoles,
   type StaffRole,
 } from "@/lib/staff";
 
@@ -281,12 +285,48 @@ export const createStaffAccount = createServerFn({ method: "POST" })
     }
     const { username, email } = login;
 
-    const { data: taken } = await supabaseAdmin
+    const { data: existing } = await supabaseAdmin
       .from("profiles")
-      .select("id")
+      .select("id, username")
       .eq("username", username)
       .maybeSingle();
-    if (taken) throw new Error("Username is already taken");
+
+    const { data: existingRoles } = existing
+      ? await supabaseAdmin.from("user_roles").select("role").eq("user_id", existing.id)
+      : { data: [] as { role: string }[] };
+
+    const action = existingUsernameAction(
+      classifyExistingAccount({
+        exists: Boolean(existing),
+        roles: (existingRoles ?? []).map((row) => row.role),
+      }),
+    );
+
+    if (action === "taken") throw new Error("Username is already taken");
+
+    if (action === "add_name" && existing) {
+      if (data.employeeNumber) {
+        const { data: numberTaken } = await supabaseAdmin
+          .from("profiles")
+          .select("id")
+          .eq("employee_number", data.employeeNumber)
+          .neq("id", existing.id)
+          .maybeSingle();
+        if (numberTaken) throw new Error("Employee number is already taken");
+      }
+      await saveProfile(supabaseAdmin, {
+        id: existing.id,
+        username: existing.username,
+        full_name: data.fullName,
+        ...(data.employeeNumber ? { employee_number: data.employeeNumber } : {}),
+      });
+      const role = staffRoleFromRoles((existingRoles ?? []).map((row) => row.role)) ?? "ops";
+      return { userId: existing.id, username, role, existing: true as const };
+    }
+
+    if (staffCreateNeedsPassword(action) && data.password.trim().length < 6) {
+      throw new Error("Password must be at least 6 characters");
+    }
 
     if (data.employeeNumber) {
       const { data: numberTaken } = await supabaseAdmin
@@ -325,7 +365,7 @@ export const createStaffAccount = createServerFn({ method: "POST" })
         throw new Error(roleError.message);
       }
 
-      return { userId, username, role: data.role };
+      return { userId, username, role: data.role, existing: false as const };
     } catch (error) {
       await supabaseAdmin.auth.admin.deleteUser(userId);
       throw error instanceof Error ? error : new Error("Could not create staff account");

@@ -14,6 +14,7 @@ import {
   updateStaffRole,
 } from "@/lib/admin.functions";
 import {
+  existingUsernameAction,
   isStaffSchemaError,
   OPS_INCLUDE_KEYS,
   OWNER_INCLUDE_KEYS,
@@ -67,13 +68,25 @@ function AdminStaff() {
     queryFn: () => listStaff(),
   });
 
+  const usernameAction = existingUsernameAction(
+    (data?.staff ?? []).some(
+      (person) => person.username === (loginPreview ?? username.trim().toLowerCase()),
+    )
+      ? "staff"
+      : "none",
+  );
+
   async function submit(event: React.FormEvent) {
     event.preventDefault();
     if (!fullName.trim()) {
       toast.error(t("staff_name_missing"));
       return;
     }
-    if (!username.trim() || password.length < 6) {
+    if (!username.trim()) {
+      toast.error(t("staff_missing"));
+      return;
+    }
+    if (usernameAction === "create" && password.length < 6) {
       toast.error(t("staff_missing"));
       return;
     }
@@ -93,7 +106,11 @@ function AdminStaff() {
           employeeNumber,
         },
       });
-      toast.success(`${created.username} ${t("staff_created")}`);
+      toast.success(
+        created.existing
+          ? t("staff_name_saved_existing")
+          : `${created.username} ${t("staff_created")}`,
+      );
       setOpen(false);
       setFullName("");
       setUsername("");
@@ -147,7 +164,9 @@ function AdminStaff() {
 
       {open ? (
         <form className="surface-card mt-5 space-y-5 p-5" onSubmit={submit}>
-          <p className="text-sm text-muted-foreground">{t("staff_no_email")}</p>
+          <p className="text-sm text-muted-foreground">
+            {usernameAction === "add_name" ? t("staff_name_on_existing") : t("staff_no_email")}
+          </p>
           <TextField label={t("full_name")} value={fullName} onChange={setFullName} />
           <div>
             <TextField label={t("username")} value={username} onChange={setUsername} />
@@ -161,45 +180,49 @@ function AdminStaff() {
             <TextField label={t("employee_number")} value={employeeNumber} onChange={setEmployeeNumber} />
             <p className="mt-2 text-xs text-muted-foreground">{t("employee_number_hint")}</p>
           </div>
-          <TextField
-            label={t("password")}
-            value={password}
-            onChange={setPassword}
-            type="password"
-          />
-          <fieldset>
-            <legend className="eyebrow mb-3 block">{t("staff_choose_role")}</legend>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <RoleCard
-                selected={role === "admin"}
-                title={t("role_owner")}
-                includes={OWNER_INCLUDE_KEYS}
-                onSelect={() => setRole("admin")}
-              />
-              <RoleCard
-                selected={role === "ops"}
-                title={t("role_ops")}
-                includes={OPS_INCLUDE_KEYS}
-                onSelect={() => setRole("ops")}
-              />
-            </div>
-            <div className="mt-3 rounded-2xl border border-dashed border-border px-4 py-3">
-              <p className="text-sm font-semibold text-muted-foreground">{t("role_venue")}</p>
-              <ul className="mt-2 space-y-1 text-sm text-muted-foreground">
-                {VENUE_INCLUDE_KEYS.map((key) => (
-                  <li key={key}>· {t(key)}</li>
-                ))}
-              </ul>
-              <p className="mt-2 text-xs text-muted-foreground">
-                {t("role_venue_hint")}{" "}
-                <Link to="/admin/venues" className="underline underline-offset-2">
-                  {t("nav_venues")}
-                </Link>
-              </p>
-            </div>
-          </fieldset>
+          {usernameAction === "add_name" ? null : (
+            <TextField
+              label={t("password")}
+              value={password}
+              onChange={setPassword}
+              type="password"
+            />
+          )}
+          {usernameAction === "add_name" ? null : (
+            <fieldset>
+              <legend className="eyebrow mb-3 block">{t("staff_choose_role")}</legend>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <RoleCard
+                  selected={role === "admin"}
+                  title={t("role_owner")}
+                  includes={OWNER_INCLUDE_KEYS}
+                  onSelect={() => setRole("admin")}
+                />
+                <RoleCard
+                  selected={role === "ops"}
+                  title={t("role_ops")}
+                  includes={OPS_INCLUDE_KEYS}
+                  onSelect={() => setRole("ops")}
+                />
+              </div>
+              <div className="mt-3 rounded-2xl border border-dashed border-border px-4 py-3">
+                <p className="text-sm font-semibold text-muted-foreground">{t("role_venue")}</p>
+                <ul className="mt-2 space-y-1 text-sm text-muted-foreground">
+                  {VENUE_INCLUDE_KEYS.map((key) => (
+                    <li key={key}>· {t(key)}</li>
+                  ))}
+                </ul>
+                <p className="mt-2 text-xs text-muted-foreground">
+                  {t("role_venue_hint")}{" "}
+                  <Link to="/admin/venues" className="underline underline-offset-2">
+                    {t("nav_venues")}
+                  </Link>
+                </p>
+              </div>
+            </fieldset>
+          )}
           <PrimaryButton type="submit" disabled={busy}>
-            {busy ? "…" : t("create")}
+            {busy ? "…" : usernameAction === "add_name" ? t("staff_add_name") : t("create")}
           </PrimaryButton>
         </form>
       ) : null}
@@ -370,6 +393,9 @@ function StaffRow({
             {` · ${person.role === "admin" ? t("role_owner") : t("role_ops")}`}
             {isYou ? ` · ${t("this_is_you")}` : ""}
           </p>
+          {person.fullName.trim() ? null : (
+            <p className="mt-2 text-sm text-muted-foreground">{t("staff_missing_name")}</p>
+          )}
         </div>
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
@@ -379,7 +405,7 @@ function StaffRow({
         </div>
       </div>
       <PrimaryButton onClick={() => void saveName()} disabled={busy}>
-        {t("save")}
+        {person.fullName.trim() ? t("save") : t("staff_add_name")}
       </PrimaryButton>
       <div className="grid gap-2 sm:grid-cols-2">
         <button

@@ -7,7 +7,7 @@ export type StaffRole = (typeof STAFF_ROLES)[number];
 export const staffCreateSchema = z.object({
   fullName: z.string().trim().min(1),
   username: z.string().trim().min(3),
-  password: z.string().min(6),
+  password: z.string().optional().default(""),
   role: z.enum(STAFF_ROLES),
   language: z.enum(["no", "en"]).default("no"),
   employeeNumber: z
@@ -39,6 +39,27 @@ export const VENUE_INCLUDE_KEYS = ["role_venue_inc_report"] as const;
 
 export function isStaffRole(role: string): role is StaffRole {
   return role === "admin" || role === "ops";
+}
+
+export type ExistingAccountKind = "none" | "staff" | "other";
+export type ExistingUsernameAction = "create" | "add_name" | "taken";
+
+export function classifyExistingAccount(input: {
+  exists: boolean;
+  roles?: readonly string[] | null;
+}): ExistingAccountKind {
+  if (!input.exists) return "none";
+  return staffRoleFromRoles(input.roles ?? []) ? "staff" : "other";
+}
+
+export function existingUsernameAction(kind: ExistingAccountKind): ExistingUsernameAction {
+  if (kind === "none") return "create";
+  if (kind === "staff") return "add_name";
+  return "taken";
+}
+
+export function staffCreateNeedsPassword(action: ExistingUsernameAction): boolean {
+  return action === "create";
 }
 
 export function staffRoleFromRoles(roles: readonly string[]): StaffRole | null {
