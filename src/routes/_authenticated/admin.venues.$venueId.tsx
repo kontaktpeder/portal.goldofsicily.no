@@ -10,7 +10,7 @@ import { parseGuestPriceOre } from "@/lib/slug";
 import { isUniqueMenuItemConflict, nextAvailableProductId } from "@/lib/venue-menu-item";
 import { formatDate } from "@/lib/sign-out";
 import { errorMessage } from "@/lib/utils";
-import { resetCustomerPassword } from "@/lib/admin.functions";
+import { notifyVenueIndex, resetCustomerPassword } from "@/lib/admin.functions";
 import { PrimaryButton, TextAreaField, TextField } from "@/components/field";
 import { MenuFileUpload } from "@/components/menu-file-upload";
 import { DeliveryFlavorBreakdown, FlavorBreakdown } from "@/components/flavor-lines";
@@ -42,6 +42,20 @@ function CustomerDetail() {
   const { t, lang } = useI18n();
   const queryClient = useQueryClient();
   const [tab, setTab] = useState<Tab>("overview");
+  const notifyIndex = useServerFn(notifyVenueIndex);
+
+  function pingVenueSeo(
+    slug: string | null | undefined,
+    published: boolean,
+    previousSlug?: string | null,
+  ) {
+    const nextSlug = slug?.trim() ?? "";
+    const oldSlug = previousSlug?.trim() ?? "";
+    const slugs = nextSlug ? [nextSlug] : [];
+    const previousSlugs = oldSlug && oldSlug !== nextSlug ? [oldSlug] : [];
+    if (slugs.length === 0 && previousSlugs.length === 0) return;
+    void notifyIndex({ data: { slugs, previousSlugs, published } }).catch(() => {});
+  }
 
   const { data } = useQuery({
     queryKey: ["venue-detail", venueId],
@@ -278,6 +292,7 @@ function CustomerDetail() {
           <ProfileTab
             customer={data.customer}
             onSaved={() => queryClient.invalidateQueries()}
+            onPublicChange={pingVenueSeo}
           />
         </div>
       ) : null}
@@ -289,7 +304,13 @@ function CustomerDetail() {
           products={data.products}
           menuMaterialPath={data.customer.menu_material_path ?? null}
           menuMaterialUrl={data.customer.menu_material_url ?? null}
-          onSaved={() => queryClient.invalidateQueries()}
+          onSaved={() => {
+            queryClient.invalidateQueries();
+            pingVenueSeo(
+              data.customer.slug,
+              Boolean(data.customer.public_visible && data.customer.active),
+            );
+          }}
         />
       ) : null}
 
@@ -298,6 +319,7 @@ function CustomerDetail() {
           customer={data.customer}
           profile={data.profile ?? null}
           onSaved={() => queryClient.invalidateQueries()}
+          onPublicChange={pingVenueSeo}
         />
       ) : null}
     </main>
@@ -326,6 +348,7 @@ function AccountTab({
   customer,
   profile,
   onSaved,
+  onPublicChange,
 }: {
   customer: {
     id: string;
@@ -333,9 +356,12 @@ function AccountTab({
     location: string | null;
     active: boolean;
     default_language: string;
+    slug: string | null;
+    public_visible: boolean;
   };
   profile: { id: string; username: string; preferred_language: string } | null;
   onSaved: () => void;
+  onPublicChange: (slug: string | null, published: boolean) => void;
 }) {
   const { t } = useI18n();
   const resetPassword = useServerFn(resetCustomerPassword);
@@ -374,6 +400,7 @@ function AccountTab({
       return;
     }
     toast.success(t("save"));
+    onPublicChange(customer.slug, active && customer.public_visible);
     onSaved();
   }
 
@@ -475,6 +502,7 @@ type VenueProfile = {
   latitude: number | null;
   longitude: number | null;
   public_visible: boolean;
+  active?: boolean;
   public_profile?: "partner" | "listing" | null;
   collaboration_text?: string | null;
   serving_story?: string | null;
@@ -487,9 +515,11 @@ type VenueProfile = {
 function ProfileTab({
   customer,
   onSaved,
+  onPublicChange,
 }: {
   customer: VenueProfile;
   onSaved: () => void;
+  onPublicChange: (slug: string | null, published: boolean, previousSlug?: string | null) => void;
 }) {
   const { t } = useI18n();
   const [form, setForm] = useState({
@@ -587,6 +617,11 @@ function ProfileTab({
       return;
     }
     toast.success(t("save"));
+    onPublicChange(
+      form.slug.trim() || null,
+      form.publicVisible && customer.active !== false,
+      customer.slug,
+    );
     onSaved();
   }
 
