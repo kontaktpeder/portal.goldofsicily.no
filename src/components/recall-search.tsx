@@ -7,6 +7,7 @@ import { useI18n, type TranslationKey } from "@/lib/i18n";
 import { classifyRecallQuery } from "@/lib/gold-lot";
 import { buildRecallSearchResult, contactTargets, type RecallLotInput } from "@/lib/recall";
 import { displayProducedBy, producersFromQuery } from "@/lib/lot-producers";
+import { isLegacyDeliveryNote } from "@/lib/legacy-delivery";
 
 const STATUS_KEYS: Record<string, TranslationKey> = {
   produced: "lot_status_produced",
@@ -142,6 +143,7 @@ export function RecallSearch({ compact = false }: { compact?: boolean }) {
                   {lot.venueDeliveries.map((row, index) => (
                     <li key={`v-${index}`}>
                       {row.quantity} {t("pcs")} → {row.venueName}
+                      {row.legacy ? ` · ${t("legacy_delivery")}` : ""}
                     </li>
                   ))}
                 </ul>
@@ -283,14 +285,14 @@ async function hydrateLots(rows: LotQueryRow[]): Promise<RecallLotInput[]> {
   const ids = rows.map((row) => row.id);
   const { data: lines } = await supabase
     .from("delivery_lines")
-    .select("gold_lot_id, quantity, deliveries(delivered_at, venues(name))")
+    .select("gold_lot_id, quantity, deliveries(delivered_at, note, venues(name))")
     .in("gold_lot_id", ids);
   const byLot = new Map<string, RecallLotInput["venueDeliveries"]>();
   for (const line of lines ?? []) {
     if (!line.gold_lot_id) continue;
     const delivery = line.deliveries as
-      | { delivered_at: string; venues: { name: string } | null }
-      | { delivered_at: string; venues: { name: string } | null }[]
+      | { delivered_at: string; note: string | null; venues: { name: string } | null }
+      | { delivered_at: string; note: string | null; venues: { name: string } | null }[]
       | null;
     const record = Array.isArray(delivery) ? delivery[0] : delivery;
     const list = byLot.get(line.gold_lot_id) ?? [];
@@ -298,6 +300,8 @@ async function hydrateLots(rows: LotQueryRow[]): Promise<RecallLotInput[]> {
       venueName: record?.venues?.name ?? "—",
       quantity: line.quantity,
       deliveredAt: record?.delivered_at ?? "",
+      note: record?.note ?? null,
+      legacy: isLegacyDeliveryNote(record?.note),
     });
     byLot.set(line.gold_lot_id, list);
   }
