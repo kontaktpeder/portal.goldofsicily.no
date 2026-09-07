@@ -6,6 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { PrimaryButton, TextAreaField, TextField } from "@/components/field";
 import { useI18n, type TranslationKey } from "@/lib/i18n";
 import { nowOsloDateTimeLocal, remainingAtGold, sumQuantities } from "@/lib/gold-lot";
+import { lotRemaining } from "@/lib/lot-stock";
 import { formatDate } from "@/lib/sign-out";
 import { errorMessage } from "@/lib/utils";
 
@@ -112,7 +113,9 @@ function AdminLotDetail() {
   }
 
   const handed = sumQuantities((lot.gold_lot_handovers ?? []).map((row) => row.quantity));
-  const remaining = remainingAtGold(lot.produced_qty, handed);
+  const used = sumQuantities((deliveries ?? []).map((row) => row.quantity));
+  const remaining = lotRemaining(lot.produced_qty, used);
+  const goldLeft = remainingAtGold(lot.produced_qty, handed);
   const productName = lang === "en" ? (lot.products?.name_en ?? "") : (lot.products?.name_no ?? "");
 
   return (
@@ -130,8 +133,10 @@ function AdminLotDetail() {
       </p>
       <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Metric label={t("produced_qty")} value={`${lot.produced_qty} ${t("pcs")}`} />
+        <Metric label={t("lot_used")} value={`${used} ${t("pcs")}`} />
+        <Metric label={t("lot_remaining")} value={`${remaining} ${t("pcs")}`} />
+        <Metric label={t("remaining_gold")} value={`${goldLeft} ${t("pcs")}`} />
         <Metric label={t("carton_count")} value={String(lot.carton_count)} />
-        <Metric label={t("remaining_gold")} value={`${remaining} ${t("pcs")}`} />
         <Metric label={t("lot_status")} value={t(STATUS_KEYS[lot.status])} />
       </div>
 
@@ -186,7 +191,7 @@ function AdminLotDetail() {
             ))}
           </ul>
         )}
-        <HandoverForm lotId={lot.id} remaining={remaining} onSaved={refresh} />
+        <HandoverForm lotId={lot.id} remaining={goldLeft} onSaved={refresh} />
       </section>
 
       <section className="mt-10">

@@ -62,7 +62,7 @@ function CustomerDetail() {
           .limit(100),
         supabase
           .from("deliveries")
-          .select("*, delivery_lines(product_id, quantity, gold_lot_id, products(name_no, name_en), gold_lots(lot_code))")
+          .select("*, delivery_lines(product_id, quantity, gold_lot_id, products(name_no, name_en), gold_lots(id, lot_code))")
           .eq("venue_id", venueId)
           .order("delivered_at", { ascending: false })
           .limit(100),
@@ -253,6 +253,7 @@ function CustomerDetail() {
                   </p>
                 </div>
                 <DeliveryFlavorBreakdown
+                  linkLots
                   lines={
                     "delivery_lines" in delivery
                       ? (delivery.delivery_lines as StoredDeliveryLine[])

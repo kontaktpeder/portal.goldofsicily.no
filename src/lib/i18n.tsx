@@ -113,6 +113,8 @@ const dict = {
   // Admin
   dashboard: { no: "Oversikt", en: "Dashboard" },
   customers: { no: "Serveringssteder", en: "Venues" },
+  nav_venues: { no: "Steder", en: "Venues" },
+  nav_products: { no: "Produkter", en: "Products" },
   reports: { no: "Rapporter", en: "Reports" },
   deliveries: { no: "Leveringer", en: "Deliveries" },
   sold_this_week: { no: "Solgt denne uken", en: "Sold this week" },
@@ -266,8 +268,8 @@ const dict = {
     en: "Quantity per flavor",
   },
   delivery_qty_hint: {
-    no: "Sett antall for hver smak. Totalen summeres automatisk.",
-    en: "Set a quantity for each flavor. The total is summed automatically.",
+    no: "Skriv antall. Systemet velger nyeste åpne LOT med nok beholdning.",
+    en: "Enter quantity. The system picks the newest open LOT with enough remaining stock.",
   },
   delivery_missing: {
     no: "Velg serveringssted og sett antall for minst én smak.",
@@ -352,8 +354,8 @@ const dict = {
   lots: { no: "LOT", en: "LOT" },
   lots_title: { no: "Gold-LOT", en: "Gold LOT" },
   lots_intro: {
-    no: "Gold-LOT er master-ID gjennom produksjon, Villa og serveringssted. Koden peker på registeret — ikke omvendt.",
-    en: "Gold LOT is the master ID through production, Villa and the venue. The code points at the register — not the other way around.",
+    no: "Produksjon lager LOT. Levering bruker LOT. Registeret forklarer hvor varen kom fra og hvor den gikk.",
+    en: "Production creates the LOT. Delivery uses the LOT. The register explains where the product came from and where it went.",
   },
   new_lot: { no: "Ny produksjon", en: "New production" },
   no_lots: { no: "Ingen Gold-LOT ennå.", en: "No Gold LOTs yet." },
@@ -441,7 +443,7 @@ const dict = {
   recall_kind_gold: { no: "Gold-LOT", en: "Gold LOT" },
   recall_kind_supplier: { no: "Leverandør-LOT", en: "Supplier LOT" },
   recall_contact: { no: "Må kontaktes", en: "Must be contacted" },
-  delivery_lot: { no: "Gold-LOT", en: "Gold LOT" },
+  delivery_lot: { no: "LOT", en: "LOT" },
   delivery_lot_hint: {
     no: "Velg hvilken Gold-LOT som gikk til stedet. Ikke lag en ny leveransebatch.",
     en: "Choose which Gold LOT went to the venue. Do not create a new delivery batch.",
@@ -451,6 +453,47 @@ const dict = {
     no: "Ingen Gold-LOT for denne smaken ennå.",
     en: "No Gold LOT for this flavor yet.",
   },
+  no_active_lot_prefix: { no: "Ingen aktiv Gold-LOT for", en: "No active Gold LOT for" },
+  create_lot_before_delivery: {
+    no: "Opprett Gold-LOT før levering kan registreres.",
+    en: "Create a Gold LOT before a delivery can be registered.",
+  },
+  create_lot: { no: "Opprett LOT", en: "Create LOT" },
+  lot_available: { no: "tilgjengelig", en: "available" },
+  lot_used: { no: "Brukt", en: "Used" },
+  lot_remaining: { no: "Gjenværende", en: "Remaining" },
+  split_lots: { no: "Fordel på flere LOT", en: "Split across LOTs" },
+  split_lots_hint: {
+    no: "Ingen enkelt LOT dekker antallet. Fordel på flere LOT, eller reduser antallet.",
+    en: "No single LOT covers this quantity. Split across LOTs, or reduce the quantity.",
+  },
+  unsplit_lots: { no: "Samle til ett LOT", en: "Combine into one LOT" },
+  delivery_lot_required: {
+    no: "Ingen leveringslinje med antall kan lagres uten Gold-LOT.",
+    en: "No delivery line with quantity can be saved without a Gold LOT.",
+  },
+  delivery_lot_insufficient: {
+    no: "Valgt Gold-LOT har ikke nok tilgjengelig mengde.",
+    en: "The selected Gold LOT does not have enough remaining quantity.",
+  },
+  delivery_workflow: {
+    no: "Velg sted, skriv antall. Systemet velger LOT.",
+    en: "Choose a venue, enter quantity. The system selects the LOT.",
+  },
+  lot_tab_active: { no: "Aktive LOT-er", en: "Active LOTs" },
+  lot_tab_production: { no: "Produksjon", en: "Production" },
+  lot_tab_history: { no: "LOT-historikk", en: "LOT history" },
+  lot_tab_recall: { no: "Søk / tilbakekalling", en: "Search / recall" },
+  lot_prereq_title: { no: "LOT-infrastrukturen mangler", en: "LOT infrastructure is missing" },
+  lot_schema_missing: {
+    no: "Gold-LOT-tabellene er ikke opprettet. Kjør sql/10_gold_lots.sql i Lovable Cloud SQL Editor, deretter sql/11_delivery_lot_required.sql.",
+    en: "Gold LOT tables are not created. Run sql/10_gold_lots.sql in the Lovable Cloud SQL Editor, then sql/11_delivery_lot_required.sql.",
+  },
+  lot_letter_required_admin: {
+    no: "Alle aktive smaker må ha LOT-bokstav før LOT og levering kan brukes.",
+    en: "Every active flavor needs a LOT letter before LOT and delivery can be used.",
+  },
+  open_products: { no: "Åpne Produkter", en: "Open Products" },
 } satisfies Record<string, Record<Lang, string>>;
 
 export type TranslationKey = keyof typeof dict;

@@ -88,18 +88,25 @@ test("supplier LOT recall marks the matching ingredient and lists Gold-LOTs", ()
   assert.equal(result.lots[1]?.ingredients[0]?.matched, false);
 });
 
-test("recall page and delivery lines keep Gold-LOT as the master ID", () => {
+test("recall lives under LOT and delivery lines keep Gold-LOT as the master ID", () => {
   const recallPage = readFileSync(
     new URL("../routes/_authenticated/admin.recall.tsx", import.meta.url),
     "utf8",
   );
+  const recallSearch = readFileSync(new URL("../components/recall-search.tsx", import.meta.url), "utf8");
   const deliveries = readFileSync(
     new URL("../routes/_authenticated/admin.deliveries.tsx", import.meta.url),
     "utf8",
   );
   const lots = readFileSync(new URL("../routes/_authenticated/admin.lots.tsx", import.meta.url), "utf8");
-  assert.match(recallPage, /classifyRecallQuery/);
-  assert.match(recallPage, /supplier_lot_code/);
+  const flavorLines = readFileSync(new URL("../components/flavor-lines.tsx", import.meta.url), "utf8");
+  const sql = readFileSync(new URL("../../sql/11_delivery_lot_required.sql", import.meta.url), "utf8");
+  assert.match(recallPage, /tab: "recall"/);
+  assert.match(recallSearch, /classifyRecallQuery/);
+  assert.match(recallSearch, /supplier_lot_code/);
   assert.match(deliveries, /gold_lot_id/);
+  assert.match(deliveries, /validateDeliveryStock/);
   assert.match(lots, /formatGoldLotCode/);
+  assert.doesNotMatch(flavorLines, /delivery_lot_none/);
+  assert.match(sql, /quantity = 0 OR gold_lot_id IS NOT NULL/);
 });

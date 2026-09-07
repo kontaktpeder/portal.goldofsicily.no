@@ -41,13 +41,12 @@ function AdminLayout() {
         </div>
         <nav className="mx-auto flex w-full max-w-5xl gap-1 overflow-x-auto px-4 pb-2">
           <NavTab to="/admin" label={t("dashboard")} exact />
-          <NavTab to="/admin/partners" label={t("partners")} />
-          <NavTab to="/admin/venues" label={t("customers")} />
-          <NavTab to="/admin/products" label={t("products")} />
-          <NavTab to="/admin/lots" label={t("lots")} />
-          <NavTab to="/admin/recall" label={t("recall")} />
-          <NavTab to="/admin/reports" label={t("reports")} />
           <NavTab to="/admin/deliveries" label={t("deliveries")} />
+          <NavTab to="/admin/lots" label={t("lots")} />
+          <NavTab to="/admin/venues" label={t("nav_venues")} />
+          <NavTab to="/admin/partners" label={t("partners")} />
+          <NavTab to="/admin/products" label={t("nav_products")} />
+          <NavTab to="/admin/reports" label={t("reports")} />
         </nav>
       </header>
       <Outlet />
@@ -67,8 +66,7 @@ function NavTab({
     | "/admin/deliveries"
     | "/admin/partners"
     | "/admin/products"
-    | "/admin/lots"
-    | "/admin/recall";
+    | "/admin/lots";
   label: string;
   exact?: boolean;
 }) {

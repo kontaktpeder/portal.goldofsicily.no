@@ -28,6 +28,7 @@ export type StoredFlavorLine = {
 };
 
 export type DeliveryFlavorQty = {
+  rowId: string;
   productId: string;
   nameNo: string;
   nameEn: string;
@@ -40,7 +41,7 @@ export type StoredDeliveryLine = {
   quantity: number;
   gold_lot_id?: string | null;
   products: { name_no: string; name_en: string } | null;
-  gold_lots?: { lot_code: string } | null;
+  gold_lots?: { id: string; lot_code: string } | { id: string; lot_code: string }[] | null;
 };
 
 export function qty(value: FlavorQty) {
@@ -100,14 +101,23 @@ export function linesPayload(lines: ReportFlavorLine[]) {
   }));
 }
 
-export function initialDeliveryQtys(products: CatalogProduct[]): DeliveryFlavorQty[] {
-  return products.map((product) => ({
+export function deliveryRowId(productId: string, goldLotId?: string) {
+  return goldLotId ? `${productId}::${goldLotId}` : productId;
+}
+
+export function emptyDeliveryLine(product: CatalogProduct, goldLotId = ""): DeliveryFlavorQty {
+  return {
+    rowId: deliveryRowId(product.id, goldLotId || undefined),
     productId: product.id,
     nameNo: product.name_no,
     nameEn: product.name_en,
     quantity: 0,
-    goldLotId: "",
-  }));
+    goldLotId,
+  };
+}
+
+export function initialDeliveryQtys(products: CatalogProduct[]): DeliveryFlavorQty[] {
+  return products.map((product) => emptyDeliveryLine(product));
 }
 
 export function sumDeliveryQty(lines: DeliveryFlavorQty[]) {
@@ -115,12 +125,22 @@ export function sumDeliveryQty(lines: DeliveryFlavorQty[]) {
 }
 
 export function deliveryLinesPayload(deliveryId: string, lines: DeliveryFlavorQty[]) {
-  return lines
-    .filter((line) => qty(line.quantity) > 0)
-    .map((line) => ({
-      delivery_id: deliveryId,
-      product_id: line.productId,
-      quantity: qty(line.quantity),
-      gold_lot_id: line.goldLotId || null,
-    }));
+  const positive = lines.filter((line) => qty(line.quantity) > 0);
+  for (const line of positive) {
+    if (!line.goldLotId) {
+      throw new Error("delivery_line with quantity > 0 requires gold_lot_id");
+    }
+  }
+  return positive.map((line) => ({
+    delivery_id: deliveryId,
+    product_id: line.productId,
+    quantity: qty(line.quantity),
+    gold_lot_id: line.goldLotId,
+  }));
+}
+
+export function storedLot(line: StoredDeliveryLine): { id: string; lot_code: string } | null {
+  const value = line.gold_lots;
+  if (!value) return null;
+  return Array.isArray(value) ? (value[0] ?? null) : value;
 }

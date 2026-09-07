@@ -1,9 +1,12 @@
+import { Link } from "@tanstack/react-router";
 import { Plus, X } from "lucide-react";
 import { NumberStepper } from "@/components/field";
 import { useI18n } from "@/lib/i18n";
 import {
   flavorLabel,
   productName,
+  qty,
+  storedLot,
   type CatalogProduct,
   type DeliveryFlavorQty,
   type ReportFlavorLine,
@@ -11,6 +14,16 @@ import {
   type StoredFlavorLine,
   type FlavorQty,
 } from "@/lib/flavors";
+import {
+  allocateFifo,
+  lotsWithFormReservation,
+  needsLotSplit,
+  newestCoveringLot,
+  openLotsForProduct,
+  suggestLotId,
+  totalRemaining,
+  type StockLot,
+} from "@/lib/lot-stock";
 import { cn } from "@/lib/utils";
 
 export function FlavorReportEditor({
@@ -166,60 +179,203 @@ export function DeliveryFlavorEditor({
   onChange,
 }: {
   lines: DeliveryFlavorQty[];
-  lots: Array<{ id: string; lot_code: string; product_id: string }>;
+  lots: StockLot[];
   onChange: (lines: DeliveryFlavorQty[]) => void;
 }) {
   const { t, lang } = useI18n();
   if (lines.length === 0) {
     return <p className="text-sm text-muted-foreground">{t("no_products")}</p>;
   }
+
+  function replaceProduct(productId: string, next: DeliveryFlavorQty[]) {
+    const result: DeliveryFlavorQty[] = [];
+    let inserted = false;
+    for (const existing of lines) {
+      if (existing.productId !== productId) {
+        result.push(existing);
+        continue;
+      }
+      if (!inserted) {
+        result.push(...next);
+        inserted = true;
+      }
+    }
+    if (!inserted) result.push(...next);
+    onChange(result);
+  }
+
+  function splitProduct(line: DeliveryFlavorQty) {
+    const needed = lines
+      .filter((item) => item.productId === line.productId)
+      .reduce((sum, item) => sum + qty(item.quantity), 0);
+    const allocations = allocateFifo(lots, line.productId, needed);
+    if (allocations.length === 0) return;
+    replaceProduct(
+      line.productId,
+      allocations.map((allocation) => ({
+        rowId: `${line.productId}::${allocation.lotId}`,
+        productId: line.productId,
+        nameNo: line.nameNo,
+        nameEn: line.nameEn,
+        quantity: allocation.quantity,
+        goldLotId: allocation.lotId,
+      })),
+    );
+  }
+
+  function unsplitProduct(line: DeliveryFlavorQty) {
+    const needed = lines
+      .filter((item) => item.productId === line.productId)
+      .reduce((sum, item) => sum + qty(item.quantity), 0);
+    const covering = newestCoveringLot(lots, line.productId, needed);
+    replaceProduct(line.productId, [
+      {
+        rowId: line.productId,
+        productId: line.productId,
+        nameNo: line.nameNo,
+        nameEn: line.nameEn,
+        quantity: needed,
+        goldLotId: covering?.id ?? "",
+      },
+    ]);
+  }
+
   return (
     <div className="space-y-3">
-      {lines.map((line) => {
-        const available = lots.filter((lot) => lot.product_id === line.productId);
+      {lines.map((line, index) => {
+        const needed = qty(line.quantity);
+        const available = lotsWithFormReservation(
+          lots,
+          lines.map((item) => ({
+            productId: item.productId,
+            quantity: qty(item.quantity),
+            goldLotId: item.goldLotId,
+          })),
+          index,
+        );
+        const flavorLots = openLotsForProduct(available, line.productId);
+        const selected = available.find(
+          (lot) => lot.id === line.goldLotId && lot.productId === line.productId,
+        );
+        const uniqueOptions =
+          selected && !flavorLots.some((lot) => lot.id === selected.id)
+            ? [...flavorLots, selected]
+            : flavorLots;
+        const splitNeeded = needsLotSplit(available, line.productId, needed);
+        const productLineCount = lines.filter((item) => item.productId === line.productId).length;
+        const flavorName = lang === "en" ? line.nameEn : line.nameNo;
+        const remainingTotal = totalRemaining(available, line.productId);
+        const showSelect = uniqueOptions.length > 0 && Boolean(line.goldLotId);
+
         return (
-          <article key={line.productId} className="rounded-2xl border border-border bg-background/60 p-4">
+          <article
+            key={line.rowId}
+            className="rounded-2xl border border-border bg-background/60 p-4"
+          >
             <NumberStepper
               compact
               step={10}
-              label={lang === "en" ? line.nameEn : line.nameNo}
+              label={flavorName}
               value={line.quantity}
-              onChange={(quantity) =>
+              onChange={(quantity) => {
+                const nextQty = qty(quantity);
+                const reserved = lotsWithFormReservation(
+                  lots,
+                  lines.map((item) => ({
+                    productId: item.productId,
+                    quantity: qty(item.quantity),
+                    goldLotId: item.goldLotId,
+                  })),
+                  index,
+                );
                 onChange(
-                  lines.map((item) =>
-                    item.productId === line.productId ? { ...item, quantity } : item,
+                  lines.map((item, itemIndex) =>
+                    itemIndex === index
+                      ? {
+                          ...item,
+                          quantity,
+                          goldLotId: suggestLotId(
+                            reserved,
+                            item.productId,
+                            nextQty,
+                            item.goldLotId,
+                          ),
+                        }
+                      : item,
                   ),
-                )
-              }
+                );
+              }}
             />
-            <label className="mt-3 block">
-              <span className="eyebrow mb-2 block">{t("delivery_lot")}</span>
-              <select
-                value={line.goldLotId}
-                onChange={(event) =>
-                  onChange(
-                    lines.map((item) =>
-                      item.productId === line.productId
-                        ? { ...item, goldLotId: event.target.value }
-                        : item,
-                    ),
-                  )
-                }
-                className="h-12 w-full rounded-2xl border-2 border-border bg-card px-4 text-sm outline-none focus:border-primary"
+
+            {needed > 0 && uniqueOptions.length === 0 ? (
+              <div className="mt-3 rounded-2xl border border-destructive/30 bg-destructive/5 p-3">
+                <p className="text-sm font-medium">
+                  {t("no_active_lot_prefix")} {flavorName}. {t("create_lot_before_delivery")}
+                </p>
+                <Link
+                  to="/admin/lots"
+                  search={{ tab: "production", product: line.productId }}
+                  className="mt-3 inline-flex rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground"
+                >
+                  {t("create_lot")}
+                </Link>
+              </div>
+            ) : null}
+
+            {showSelect ? (
+              <label className="mt-3 block">
+                <span className="eyebrow mb-2 block">{t("delivery_lot")}</span>
+                <select
+                  value={line.goldLotId}
+                  onChange={(event) =>
+                    onChange(
+                      lines.map((item, itemIndex) =>
+                        itemIndex === index ? { ...item, goldLotId: event.target.value } : item,
+                      ),
+                    )
+                  }
+                  className="h-12 w-full rounded-2xl border-2 border-border bg-card px-4 text-sm outline-none focus:border-primary"
+                >
+                  {uniqueOptions.map((lot) => (
+                    <option
+                      key={lot.id}
+                      value={lot.id}
+                      disabled={lot.remaining <= 0 && lot.id !== line.goldLotId}
+                    >
+                      {lot.lotCode} · {lot.remaining} {t("lot_available")}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
+
+            {needed > 0 && splitNeeded ? (
+              <div className="mt-3">
+                <p className="text-sm text-muted-foreground">{t("split_lots_hint")}</p>
+                <button
+                  type="button"
+                  onClick={() => splitProduct(line)}
+                  className="mt-2 rounded-full border border-border px-4 py-2 text-sm font-semibold"
+                >
+                  {t("split_lots")}
+                </button>
+              </div>
+            ) : null}
+
+            {productLineCount > 1 &&
+            index === lines.findIndex((item) => item.productId === line.productId) ? (
+              <button
+                type="button"
+                onClick={() => unsplitProduct(line)}
+                className="mt-3 text-sm font-semibold text-muted-foreground"
               >
-                <option value="">{t("delivery_lot_none")}</option>
-                {available.map((lot) => (
-                  <option key={lot.id} value={lot.id}>
-                    {lot.lot_code}
-                  </option>
-                ))}
-              </select>
-              {available.length === 0 ? (
-                <p className="mt-1 text-xs text-muted-foreground">{t("no_open_lots")}</p>
-              ) : (
-                <p className="mt-1 text-xs text-muted-foreground">{t("delivery_lot_hint")}</p>
-              )}
-            </label>
+                {t("unsplit_lots")}
+              </button>
+            ) : null}
+
+            {needed > 0 && remainingTotal < needed && uniqueOptions.length > 0 ? (
+              <p className="mt-2 text-sm text-destructive">{t("delivery_lot_insufficient")}</p>
+            ) : null}
           </article>
         );
       })}
@@ -230,29 +386,41 @@ export function DeliveryFlavorEditor({
 export function DeliveryFlavorBreakdown({
   lines,
   className,
+  linkLots = false,
 }: {
   lines: StoredDeliveryLine[] | null | undefined;
   className?: string;
+  linkLots?: boolean;
 }) {
   const { t, lang } = useI18n();
   const items = (lines ?? []).filter((line) => line.quantity > 0);
   if (items.length === 0) return null;
   return (
-    <ul className={cn("mt-3 space-y-1.5", className)}>
-      {items.map((line) => (
-        <li
-          key={line.product_id}
-          className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 text-sm"
-        >
-          <span className="font-medium">
-            {line.products ? productName(line.products, lang) : t("flavors")}
-          </span>
-          <span className="tabular-nums text-muted-foreground">
-            {line.quantity} {t("pcs")}
-            {line.gold_lots?.lot_code ? ` · ${line.gold_lots.lot_code}` : ""}
-          </span>
-        </li>
-      ))}
+    <ul className={cn("mt-3 space-y-3", className)}>
+      {items.map((line, index) => {
+        const lot = storedLot(line);
+        const name = line.products ? productName(line.products, lang) : t("flavors");
+        return (
+          <li key={`${line.product_id}-${lot?.id ?? index}`} className="text-sm">
+            <p className="font-medium tabular-nums">
+              {line.quantity} × {name}
+            </p>
+            {lot ? (
+              linkLots ? (
+                <Link
+                  to="/admin/lots/$lotId"
+                  params={{ lotId: lot.id }}
+                  className="font-mono text-sm font-semibold text-primary underline-offset-2 hover:underline"
+                >
+                  {lot.lot_code}
+                </Link>
+              ) : (
+                <p className="font-mono text-sm text-muted-foreground">{lot.lot_code}</p>
+              )
+            ) : null}
+          </li>
+        );
+      })}
     </ul>
   );
 }
