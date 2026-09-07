@@ -9,7 +9,7 @@ export function Wordmark({
   size?: "sm" | "md" | "lg";
   className?: string;
 }) {
-  const height = size === "lg" ? 56 : size === "md" ? 44 : 34;
+  const height = size === "lg" ? 68 : size === "md" ? 52 : 40;
   return (
     <img
       src={logo}
