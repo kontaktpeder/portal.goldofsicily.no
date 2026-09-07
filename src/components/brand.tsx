@@ -9,25 +9,16 @@ export function Wordmark({
   size?: "sm" | "md" | "lg";
   className?: string;
 }) {
-  const dims = size === "lg" ? 72 : size === "md" ? 44 : 30;
+  const height = size === "lg" ? 36 : size === "md" ? 28 : 22;
   return (
-    <div className={cn("flex items-center gap-3", className)}>
-      <img
-        src={logo}
-        alt="Gold of Sicily"
-        width={dims}
-        height={dims}
-        style={{ width: dims, height: dims }}
-      />
-      <span
-        className={cn(
-          "font-[family-name:var(--font-display)] leading-none tracking-tight",
-          size === "lg" ? "text-3xl" : size === "md" ? "text-xl" : "text-base",
-        )}
-      >
-        Gold of Sicily
-      </span>
-    </div>
+    <img
+      src={logo}
+      alt="Gold of Sicily"
+      width={1380}
+      height={454}
+      className={cn("w-auto object-contain object-left", className)}
+      style={{ height }}
+    />
   );
 }
 
