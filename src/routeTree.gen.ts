@@ -19,9 +19,9 @@ import { Route as AuthenticatedAdminIndexRouteImport } from './routes/_authentic
 import { Route as AuthenticatedAdminDeliveriesRouteImport } from './routes/_authenticated/admin.deliveries'
 import { Route as AuthenticatedAdminLotsRouteImport } from './routes/_authenticated/admin.lots'
 import { Route as AuthenticatedAdminProductsRouteImport } from './routes/_authenticated/admin.products'
-import { Route as AuthenticatedAdminStaffRouteImport } from './routes/_authenticated/admin.staff'
 import { Route as AuthenticatedAdminRecallRouteImport } from './routes/_authenticated/admin.recall'
 import { Route as AuthenticatedAdminReportsRouteImport } from './routes/_authenticated/admin.reports'
+import { Route as AuthenticatedAdminStaffRouteImport } from './routes/_authenticated/admin.staff'
 import { Route as AuthenticatedAdminLotsLotIdRouteImport } from './routes/_authenticated/admin.lots.$lotId'
 import { Route as AuthenticatedAdminPartnersIndexRouteImport } from './routes/_authenticated/admin.partners.index'
 import { Route as AuthenticatedAdminPartnersPartnerIdRouteImport } from './routes/_authenticated/admin.partners.$partnerId'
@@ -81,12 +81,6 @@ const AuthenticatedAdminProductsRoute =
     path: '/products',
     getParentRoute: () => AuthenticatedAdminRoute,
   } as any)
-const AuthenticatedAdminStaffRoute =
-  AuthenticatedAdminStaffRouteImport.update({
-    id: '/staff',
-    path: '/staff',
-    getParentRoute: () => AuthenticatedAdminRoute,
-  } as any)
 const AuthenticatedAdminRecallRoute =
   AuthenticatedAdminRecallRouteImport.update({
     id: '/recall',
@@ -99,6 +93,11 @@ const AuthenticatedAdminReportsRoute =
     path: '/reports',
     getParentRoute: () => AuthenticatedAdminRoute,
   } as any)
+const AuthenticatedAdminStaffRoute = AuthenticatedAdminStaffRouteImport.update({
+  id: '/staff',
+  path: '/staff',
+  getParentRoute: () => AuthenticatedAdminRoute,
+} as any)
 const AuthenticatedAdminLotsLotIdRoute =
   AuthenticatedAdminLotsLotIdRouteImport.update({
     id: '/$lotId',
@@ -149,9 +148,9 @@ export interface FileRoutesByFullPath {
   '/admin/deliveries': typeof AuthenticatedAdminDeliveriesRoute
   '/admin/lots': typeof AuthenticatedAdminLotsRouteWithChildren
   '/admin/products': typeof AuthenticatedAdminProductsRoute
-  '/admin/staff': typeof AuthenticatedAdminStaffRoute
   '/admin/recall': typeof AuthenticatedAdminRecallRoute
   '/admin/reports': typeof AuthenticatedAdminReportsRoute
+  '/admin/staff': typeof AuthenticatedAdminStaffRoute
   '/admin/': typeof AuthenticatedAdminIndexRoute
   '/admin/lots/$lotId': typeof AuthenticatedAdminLotsLotIdRoute
   '/admin/partners/$partnerId': typeof AuthenticatedAdminPartnersPartnerIdRoute
@@ -169,9 +168,9 @@ export interface FileRoutesByTo {
   '/admin/deliveries': typeof AuthenticatedAdminDeliveriesRoute
   '/admin/lots': typeof AuthenticatedAdminLotsRouteWithChildren
   '/admin/products': typeof AuthenticatedAdminProductsRoute
-  '/admin/staff': typeof AuthenticatedAdminStaffRoute
   '/admin/recall': typeof AuthenticatedAdminRecallRoute
   '/admin/reports': typeof AuthenticatedAdminReportsRoute
+  '/admin/staff': typeof AuthenticatedAdminStaffRoute
   '/admin': typeof AuthenticatedAdminIndexRoute
   '/admin/lots/$lotId': typeof AuthenticatedAdminLotsLotIdRoute
   '/admin/partners/$partnerId': typeof AuthenticatedAdminPartnersPartnerIdRoute
@@ -192,9 +191,9 @@ export interface FileRoutesById {
   '/_authenticated/admin/deliveries': typeof AuthenticatedAdminDeliveriesRoute
   '/_authenticated/admin/lots': typeof AuthenticatedAdminLotsRouteWithChildren
   '/_authenticated/admin/products': typeof AuthenticatedAdminProductsRoute
-  '/_authenticated/admin/staff': typeof AuthenticatedAdminStaffRoute
   '/_authenticated/admin/recall': typeof AuthenticatedAdminRecallRoute
   '/_authenticated/admin/reports': typeof AuthenticatedAdminReportsRoute
+  '/_authenticated/admin/staff': typeof AuthenticatedAdminStaffRoute
   '/_authenticated/admin/': typeof AuthenticatedAdminIndexRoute
   '/_authenticated/admin/lots/$lotId': typeof AuthenticatedAdminLotsLotIdRoute
   '/_authenticated/admin/partners/$partnerId': typeof AuthenticatedAdminPartnersPartnerIdRoute
@@ -215,9 +214,9 @@ export interface FileRouteTypes {
     | '/admin/deliveries'
     | '/admin/lots'
     | '/admin/products'
-    | '/admin/staff'
     | '/admin/recall'
     | '/admin/reports'
+    | '/admin/staff'
     | '/admin/'
     | '/admin/lots/$lotId'
     | '/admin/partners/$partnerId'
@@ -235,9 +234,9 @@ export interface FileRouteTypes {
     | '/admin/deliveries'
     | '/admin/lots'
     | '/admin/products'
-    | '/admin/staff'
     | '/admin/recall'
     | '/admin/reports'
+    | '/admin/staff'
     | '/admin'
     | '/admin/lots/$lotId'
     | '/admin/partners/$partnerId'
@@ -257,9 +256,9 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/deliveries'
     | '/_authenticated/admin/lots'
     | '/_authenticated/admin/products'
-    | '/_authenticated/admin/staff'
     | '/_authenticated/admin/recall'
     | '/_authenticated/admin/reports'
+    | '/_authenticated/admin/staff'
     | '/_authenticated/admin/'
     | '/_authenticated/admin/lots/$lotId'
     | '/_authenticated/admin/partners/$partnerId'
@@ -349,13 +348,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminProductsRouteImport
       parentRoute: typeof AuthenticatedAdminRoute
     }
-    '/_authenticated/admin/staff': {
-      id: '/_authenticated/admin/staff'
-      path: '/staff'
-      fullPath: '/admin/staff'
-      preLoaderRoute: typeof AuthenticatedAdminStaffRouteImport
-      parentRoute: typeof AuthenticatedAdminRoute
-    }
     '/_authenticated/admin/recall': {
       id: '/_authenticated/admin/recall'
       path: '/recall'
@@ -368,6 +360,13 @@ declare module '@tanstack/react-router' {
       path: '/reports'
       fullPath: '/admin/reports'
       preLoaderRoute: typeof AuthenticatedAdminReportsRouteImport
+      parentRoute: typeof AuthenticatedAdminRoute
+    }
+    '/_authenticated/admin/staff': {
+      id: '/_authenticated/admin/staff'
+      path: '/staff'
+      fullPath: '/admin/staff'
+      preLoaderRoute: typeof AuthenticatedAdminStaffRouteImport
       parentRoute: typeof AuthenticatedAdminRoute
     }
     '/_authenticated/admin/lots/$lotId': {
@@ -440,9 +439,9 @@ interface AuthenticatedAdminRouteChildren {
   AuthenticatedAdminDeliveriesRoute: typeof AuthenticatedAdminDeliveriesRoute
   AuthenticatedAdminLotsRoute: typeof AuthenticatedAdminLotsRouteWithChildren
   AuthenticatedAdminProductsRoute: typeof AuthenticatedAdminProductsRoute
-  AuthenticatedAdminStaffRoute: typeof AuthenticatedAdminStaffRoute
   AuthenticatedAdminRecallRoute: typeof AuthenticatedAdminRecallRoute
   AuthenticatedAdminReportsRoute: typeof AuthenticatedAdminReportsRoute
+  AuthenticatedAdminStaffRoute: typeof AuthenticatedAdminStaffRoute
   AuthenticatedAdminIndexRoute: typeof AuthenticatedAdminIndexRoute
   AuthenticatedAdminPartnersPartnerIdRoute: typeof AuthenticatedAdminPartnersPartnerIdRoute
   AuthenticatedAdminVenuesVenueIdRoute: typeof AuthenticatedAdminVenuesVenueIdRoute
@@ -454,9 +453,9 @@ const AuthenticatedAdminRouteChildren: AuthenticatedAdminRouteChildren = {
   AuthenticatedAdminDeliveriesRoute: AuthenticatedAdminDeliveriesRoute,
   AuthenticatedAdminLotsRoute: AuthenticatedAdminLotsRouteWithChildren,
   AuthenticatedAdminProductsRoute: AuthenticatedAdminProductsRoute,
-  AuthenticatedAdminStaffRoute: AuthenticatedAdminStaffRoute,
   AuthenticatedAdminRecallRoute: AuthenticatedAdminRecallRoute,
   AuthenticatedAdminReportsRoute: AuthenticatedAdminReportsRoute,
+  AuthenticatedAdminStaffRoute: AuthenticatedAdminStaffRoute,
   AuthenticatedAdminIndexRoute: AuthenticatedAdminIndexRoute,
   AuthenticatedAdminPartnersPartnerIdRoute:
     AuthenticatedAdminPartnersPartnerIdRoute,
