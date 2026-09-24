@@ -21,7 +21,7 @@ const createSchema = z.object({
   directPartner: z.boolean().default(false),
   publicVisible: z.boolean().default(false),
   username: z.string().trim().min(3),
-  password: z.string().min(6),
+  password: z.string().min(1),
   language: z.enum(["no", "en"]).default("no"),
   active: z.boolean().default(true),
 });
@@ -199,7 +199,7 @@ export const createCustomerAccount = createServerFn({ method: "POST" })
 export const resetCustomerPassword = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((data: unknown) =>
-    z.object({ userId: z.string().uuid(), password: z.string().min(6) }).parse(data),
+    z.object({ userId: z.string().uuid(), password: z.string().min(1) }).parse(data),
   )
   .handler(async ({ data, context }) => {
     await assertAdmin(context.supabase as never);
@@ -324,8 +324,8 @@ export const createStaffAccount = createServerFn({ method: "POST" })
       return { userId: existing.id, username, role, existing: true as const };
     }
 
-    if (staffCreateNeedsPassword(action) && data.password.trim().length < 6) {
-      throw new Error("Password must be at least 6 characters");
+    if (staffCreateNeedsPassword(action) && data.password.trim().length < 1) {
+      throw new Error("Password must be at least 1 character");
     }
 
     if (data.employeeNumber) {
@@ -502,7 +502,7 @@ export const updateStaffRole = createServerFn({ method: "POST" })
  */
 export const bootstrapFirstAdmin = createServerFn({ method: "POST" })
   .validator((data: unknown) =>
-    z.object({ username: z.string().min(3), password: z.string().min(6) }).parse(data),
+    z.object({ username: z.string().min(3), password: z.string().min(1) }).parse(data),
   )
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");

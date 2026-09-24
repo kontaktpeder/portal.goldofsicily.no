@@ -78,7 +78,7 @@ function AdminCustomers() {
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
-    if (!name.trim() || username.trim().length < 3 || password.length < 6) {
+    if (!name.trim() || username.trim().length < 3 || password.length < 1) {
       toast.error(t("create_customer_missing"));
       return;
     }

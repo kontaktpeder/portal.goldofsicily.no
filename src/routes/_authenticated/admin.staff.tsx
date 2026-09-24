@@ -86,7 +86,7 @@ function AdminStaff() {
       toast.error(t("staff_missing"));
       return;
     }
-    if (usernameAction === "create" && password.length < 6) {
+    if (usernameAction === "create" && password.length < 1) {
       toast.error(t("staff_missing"));
       return;
     }
@@ -343,7 +343,7 @@ function StaffRow({
   }
 
   async function savePassword() {
-    if (password.length < 6) {
+    if (password.length < 1) {
       toast.error(t("staff_missing"));
       return;
     }

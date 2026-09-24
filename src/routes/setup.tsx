@@ -40,8 +40,8 @@ function SetupPage() {
   });
 
   async function handleCreate() {
-    if (username.trim().length < 3 || password.length < 6) {
-      toast.error("Username min 3 characters, password min 6 characters.");
+    if (username.trim().length < 3 || password.length < 1) {
+      toast.error("Username min 3 characters, password min 1 character.");
       return;
     }
     setBusy(true);

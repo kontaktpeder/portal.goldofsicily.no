@@ -385,8 +385,8 @@ function AccountTab({
   }
 
   async function changePassword() {
-    if (!profile || password.length < 6) {
-      toast.error("Password must be at least 6 characters.");
+    if (!profile || password.length < 1) {
+      toast.error("Password must be at least 1 character.");
       return;
     }
     setBusy(true);
