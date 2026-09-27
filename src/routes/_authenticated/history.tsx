@@ -36,7 +36,7 @@ function HistoryPage() {
           .select(
             "id, created_at, sold_this_shift, remaining_stock, next_required_quantity, guest_feedback_rating, preparation_issue, shift_report_lines(product_id, sold, remaining_stock, next_required_quantity, products(name_no, name_en))",
           )
-          .eq("venue_id", customerId!)
+          .eq("customer_id", customerId!)
           .order("created_at", { ascending: false })
           .limit(50),
         supabase
@@ -44,7 +44,7 @@ function HistoryPage() {
           .select(
             "id, quantity, delivered_at, note, delivery_lines(product_id, quantity, gold_lot_id, products(name_no, name_en), gold_lots(id, lot_code))",
           )
-          .eq("venue_id", customerId!)
+          .eq("customer_id", customerId!)
           .order("delivered_at", { ascending: false })
           .limit(50),
       ]);
@@ -53,7 +53,7 @@ function HistoryPage() {
           ? await supabase
               .from("deliveries")
               .select("id, quantity, delivered_at, note")
-              .eq("venue_id", customerId!)
+              .eq("customer_id", customerId!)
               .order("delivered_at", { ascending: false })
               .limit(50)
           : deliveriesRes;

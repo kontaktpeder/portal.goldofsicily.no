@@ -54,7 +54,7 @@ export function MenuFileUpload({
 
     const publicUrl = supabase.storage.from(MENU_FILE_BUCKET).getPublicUrl(objectPath).data.publicUrl;
     const { error: updateError } = await supabase
-      .from("venues")
+      .from("customers")
       .update({
         menu_material_path: objectPath,
         menu_material_url: publicUrl,
@@ -90,7 +90,7 @@ export function MenuFileUpload({
       await supabase.storage.from(MENU_FILE_BUCKET).remove([path]);
     }
     const { error } = await supabase
-      .from("venues")
+      .from("customers")
       .update({ menu_material_path: null, menu_material_url: null })
       .eq("id", venueId);
     setBusy(false);

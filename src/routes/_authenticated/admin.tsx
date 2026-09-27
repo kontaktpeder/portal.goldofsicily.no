@@ -48,7 +48,7 @@ function AdminLayout() {
           <NavTab to="/admin/deliveries" label={t("deliveries")} />
           <NavTab to="/admin/lots" label={t("lots")} />
           <NavTab to="/admin/venues" label={t("nav_venues")} />
-          {commercial ? <NavTab to="/admin/partners" label={t("partners")} /> : null}
+          {commercial ? <NavTab to="/admin/wholesalers" label={t("wholesalers")} /> : null}
           {commercial ? <NavTab to="/admin/products" label={t("nav_products")} /> : null}
           <NavTab to="/admin/reports" label={t("reports")} />
           {commercial ? <NavTab to="/admin/staff" label={t("staff")} /> : null}
@@ -69,7 +69,7 @@ function NavTab({
     | "/admin/venues"
     | "/admin/reports"
     | "/admin/deliveries"
-    | "/admin/partners"
+    | "/admin/wholesalers"
     | "/admin/products"
     | "/admin/lots"
     | "/admin/staff";

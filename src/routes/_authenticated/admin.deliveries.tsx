@@ -37,7 +37,7 @@ export const Route = createFileRoute("/_authenticated/admin/deliveries")({
 });
 
 const deliverySelect =
-  "*, venues(name), delivery_lines(product_id, quantity, gold_lot_id, products(name_no, name_en), gold_lots(id, lot_code))";
+  "*, customers(name, type), delivery_lines(product_id, quantity, gold_lot_id, products(name_no, name_en), gold_lots(id, lot_code))";
 
 function AdminDeliveries() {
   const { t, lang } = useI18n();
@@ -54,8 +54,8 @@ function AdminDeliveries() {
     queryKey: ["customers-list"],
     queryFn: async () => {
       const { data } = await supabase
-        .from("venues")
-        .select("id, name")
+        .from("customers")
+        .select("id, name, type")
         .eq("active", true)
         .order("name");
       return data ?? [];
@@ -163,7 +163,7 @@ function AdminDeliveries() {
       if (error) {
         const fallback = await supabase
           .from("deliveries")
-          .select("*, venues(name)")
+          .select("*, customers(name, type)")
           .order("delivered_at", { ascending: false })
           .limit(200);
         return fallback.data ?? [];
@@ -185,7 +185,7 @@ function AdminDeliveries() {
     const { data: created, error } = await supabase
       .from("deliveries")
       .insert({
-        venue_id: customerId,
+        customer_id: customerId,
         quantity: total,
         delivered_at: date,
         note: note.trim() || null,
@@ -241,7 +241,7 @@ function AdminDeliveries() {
       {open ? (
         <div className="surface-card mt-5 space-y-4 p-5">
           <label className="block">
-            <span className="eyebrow mb-2 block">{t("customer")}</span>
+            <span className="eyebrow mb-2 block">{t("delivery_customer")}</span>
             <select
               value={customerId}
               onChange={(event) => setCustomerId(event.target.value)}
@@ -251,6 +251,8 @@ function AdminDeliveries() {
               {customers?.map((customer) => (
                 <option key={customer.id} value={customer.id}>
                   {customer.name}
+                  {" · "}
+                  {customer.type === "wholesaler" ? t("customer_type_wholesaler") : t("customer_type_venue")}
                 </option>
               ))}
             </select>
@@ -290,7 +292,7 @@ function AdminDeliveries() {
           deliveries?.map((delivery) => (
             <article key={delivery.id} className="surface-card p-4">
               <p className="font-semibold">
-                {(delivery.venues as { name: string } | null)?.name ?? "—"}
+                {(delivery.customers as { name: string } | null)?.name ?? "—"}
               </p>
               <p className="text-xs text-muted-foreground">
                 {formatDate(delivery.delivered_at, lang)}

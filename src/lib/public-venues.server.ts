@@ -2,7 +2,7 @@ import type { Database } from "@/integrations/supabase/types";
 import { formatPriceNok } from "@/lib/slug";
 import { isPublicMenuUrl } from "@/lib/venue-menu-file";
 
-type Customer = Database["public"]["Tables"]["venues"]["Row"];
+type Customer = Database["public"]["Tables"]["customers"]["Row"];
 type Product = Database["public"]["Tables"]["products"]["Row"];
 type MenuItem = Database["public"]["Tables"]["venue_menu_items"]["Row"];
 
@@ -73,7 +73,7 @@ export function mapPublicVenue(
   productsById: Map<string, Product>,
   lang: "no" | "en" = "no",
 ): PublicVenue | null {
-  if (!customer.active || !customer.public_visible || !customer.slug) return null;
+  if (customer.type !== "venue" || !customer.active || !customer.public_visible || !customer.slug) return null;
   const menu = menuItems
     .slice()
     .sort((a, b) => a.sort_order - b.sort_order)
@@ -110,8 +110,9 @@ export async function loadPublicVenues(lang: "no" | "en" = "no") {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const [venuesRes, menuRes, productsRes] = await Promise.all([
     supabaseAdmin
-      .from("venues")
+      .from("customers")
       .select("*")
+      .eq("type", "venue")
       .eq("active", true)
       .eq("public_visible", true)
       .not("slug", "is", null)
@@ -127,9 +128,9 @@ export async function loadPublicVenues(lang: "no" | "en" = "no") {
   const productsById = new Map((productsRes.data ?? []).map((product) => [product.id, product]));
   const menuByVenue = new Map<string, typeof menuRes.data>();
   for (const item of menuRes.data ?? []) {
-    const list = menuByVenue.get(item.venue_id) ?? [];
+    const list = menuByVenue.get(item.customer_id) ?? [];
     list.push(item);
-    menuByVenue.set(item.venue_id, list);
+    menuByVenue.set(item.customer_id, list);
   }
 
   return (venuesRes.data ?? [])
@@ -140,9 +141,10 @@ export async function loadPublicVenues(lang: "no" | "en" = "no") {
 export async function loadPublicVenue(slug: string, lang: "no" | "en" = "no") {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const { data: venue, error } = await supabaseAdmin
-    .from("venues")
+    .from("customers")
     .select("*")
     .eq("slug", slug)
+    .eq("type", "venue")
     .eq("active", true)
     .eq("public_visible", true)
     .maybeSingle();
@@ -153,7 +155,7 @@ export async function loadPublicVenue(slug: string, lang: "no" | "en" = "no") {
     supabaseAdmin
       .from("venue_menu_items")
       .select("*")
-      .eq("venue_id", venue.id)
+      .eq("customer_id", venue.id)
       .eq("available", true)
       .order("sort_order"),
     supabaseAdmin.from("products").select("*").eq("active", true),

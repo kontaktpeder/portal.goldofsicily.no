@@ -5,11 +5,13 @@ import { daysSince } from "@/lib/sign-out";
 export type CustomerRow = {
   id: string;
   name: string;
+  type: "venue" | "wholesaler";
   location: string | null;
   city: string | null;
   active: boolean;
-  partnerId: string | null;
-  partnerName: string | null;
+  partnershipLevel: "gold_partner" | "gold_supply" | null;
+  suppliedById: string | null;
+  suppliedByName: string | null;
   publicVisible: boolean;
   createdAt: string;
   lastReportAt: string | null;
@@ -29,13 +31,14 @@ export type FlavorWeekRow = {
   sold: number;
 };
 
-export type PartnerOverview = {
+export type WholesalerOverview = {
   id: string;
   name: string;
-  kind: "distributor" | "direct";
   active: boolean;
+  partnershipLevel: "gold_partner" | "gold_supply" | null;
   venueCount: number;
   distributedThisMonth: number;
+  latestHandoverAt: string | null;
   venues: CustomerRow[];
 };
 
@@ -66,8 +69,8 @@ export function useAdminOverview() {
       const weekStart = startOfWeek();
       const monthStart = startOfMonth();
       const recentCutoff = daysAgoIso(30);
-      const [customersRes, reportsRes, deliveriesRes, partnersRes, linesRes] = await Promise.all([
-        supabase.from("venues").select("*").order("name"),
+      const [customersRes, reportsRes, deliveriesRes, handoversRes, linesRes] = await Promise.all([
+        supabase.from("customers").select("*").order("name"),
         supabase
           .from("shift_reports")
           .select("*")
@@ -78,7 +81,11 @@ export function useAdminOverview() {
           .select("*")
           .order("delivered_at", { ascending: false })
           .limit(1000),
-        supabase.from("partners").select("*").order("name"),
+        supabase
+          .from("gold_lot_handovers")
+          .select("customer_id, handed_over_at, quantity")
+          .order("handed_over_at", { ascending: false })
+          .limit(500),
         supabase
           .from("shift_report_lines")
           .select("sold, product_id, products(name_no, name_en), shift_reports(created_at)")
@@ -86,15 +93,16 @@ export function useAdminOverview() {
       ]);
 
       if (customersRes.error) throw customersRes.error;
-      if (partnersRes.error) throw partnersRes.error;
+      if (handoversRes.error) throw handoversRes.error;
 
       const customers = customersRes.data ?? [];
       const reports = reportsRes.data ?? [];
       const deliveries = deliveriesRes.data ?? [];
-      const partners = partnersRes.data ?? [];
+      const handovers = handoversRes.data ?? [];
+      const nameById = new Map(customers.map((customer) => [customer.id, customer.name]));
 
       const rows: CustomerRow[] = customers.map((customer) => {
-        const own = reports.filter((r) => r.venue_id === customer.id);
+        const own = reports.filter((r) => r.customer_id === customer.id);
         const latest = own[0] ?? null;
         const soldThisWeek = own
           .filter((r) => r.created_at >= weekStart)
@@ -102,10 +110,10 @@ export function useAdminOverview() {
 
         const deliveredSinceReport = latest
           ? deliveries
-              .filter((d) => d.venue_id === customer.id && d.created_at > latest.created_at)
+              .filter((d) => d.customer_id === customer.id && d.created_at > latest.created_at)
               .reduce((sum, d) => sum + d.quantity, 0)
           : deliveries
-              .filter((d) => d.venue_id === customer.id)
+              .filter((d) => d.customer_id === customer.id)
               .reduce((sum, d) => sum + d.quantity, 0);
 
         const currentStock = latest?.remaining_stock ?? 0;
@@ -120,11 +128,15 @@ export function useAdminOverview() {
         return {
           id: customer.id,
           name: customer.name,
+          type: customer.type,
           location: customer.location,
           city: customer.city,
           active: customer.active,
-          partnerId: customer.partner_id,
-          partnerName: partners.find((partner) => partner.id === customer.partner_id)?.name ?? null,
+          partnershipLevel: customer.partnership_level,
+          suppliedById: customer.supplied_by_customer_id,
+          suppliedByName: customer.supplied_by_customer_id
+            ? nameById.get(customer.supplied_by_customer_id) ?? null
+            : null,
           publicVisible: customer.public_visible,
           createdAt: customer.created_at,
           lastReportAt: latest?.created_at ?? null,
@@ -138,26 +150,34 @@ export function useAdminOverview() {
         };
       });
 
-      const active = rows.filter((row) => row.active);
-      const partnerOverviews: PartnerOverview[] = partners.map((partner) => {
-        const venues = rows.filter((row) => row.partnerId === partner.id);
-        const venueIds = new Set(venues.map((venue) => venue.id));
-        const distributedThisMonth = deliveries
-          .filter(
-            (delivery) => venueIds.has(delivery.venue_id) && delivery.delivered_at >= monthStart,
-          )
-          .reduce((sum, delivery) => sum + delivery.quantity, 0);
-        return {
-          id: partner.id,
-          name: partner.name,
-          kind: partner.kind,
-          active: partner.active,
-          venueCount: venues.filter((venue) => venue.active).length,
-          distributedThisMonth,
-          venues,
-        };
-      });
-      const unassigned = rows.filter((row) => !row.partnerId);
+      const venues = rows.filter((row) => row.type === "venue");
+      const active = venues.filter((row) => row.active);
+      const wholesalers: WholesalerOverview[] = rows
+        .filter((row) => row.type === "wholesaler")
+        .map((wholesaler) => {
+          const supplied = venues.filter((venue) => venue.suppliedById === wholesaler.id);
+          const suppliedIds = new Set(supplied.map((venue) => venue.id));
+          const distributedThisMonth = deliveries
+            .filter(
+              (delivery) =>
+                delivery.delivered_at >= monthStart &&
+                (delivery.customer_id === wholesaler.id || suppliedIds.has(delivery.customer_id)),
+            )
+            .reduce((sum, delivery) => sum + delivery.quantity, 0);
+          const latestHandoverAt =
+            handovers.find((handover) => handover.customer_id === wholesaler.id)?.handed_over_at ??
+            null;
+          return {
+            id: wholesaler.id,
+            name: wholesaler.name,
+            active: wholesaler.active,
+            partnershipLevel: wholesaler.partnershipLevel,
+            venueCount: supplied.filter((venue) => venue.active).length,
+            distributedThisMonth,
+            latestHandoverAt,
+            venues: supplied,
+          };
+        });
 
       const flavorWeekMap = new Map<string, FlavorWeekRow>();
       for (const line of linesRes.data ?? []) {
@@ -179,16 +199,15 @@ export function useAdminOverview() {
       const flavorWeek = [...flavorWeekMap.values()].sort((a, b) => b.sold - a.sold);
 
       return {
-        rows,
-        partners: partnerOverviews,
-        unassigned,
+        rows: venues,
+        wholesalers,
         flavorWeek,
         metrics: {
           soldThisWeek: active.reduce((sum, row) => sum + row.soldThisWeek, 0),
           currentStock: active.reduce((sum, row) => sum + row.estimatedStock, 0),
           requestedNext: active.reduce((sum, row) => sum + (row.nextRequirement ?? 0), 0),
           awaiting: active.filter((row) => row.status !== "green").length,
-          activePartners: partners.filter((partner) => partner.active).length,
+          activeWholesalers: wholesalers.filter((row) => row.active).length,
           activeVenues: active.length,
           qualityIssues: active.filter((row) => row.prepIssue || row.needsReview).length,
           newVenues: active.filter((row) => row.createdAt >= recentCutoff).length,
