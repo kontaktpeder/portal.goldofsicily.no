@@ -202,7 +202,7 @@ function WholesalerForm({
         void save();
       }}
     >
-      <TextField label={t("customer_name")} value={name} onChange={setName} />
+      <TextField label={t("wholesaler_name")} value={name} onChange={setName} />
       <div>
         <span className="eyebrow mb-2 block">{t("partnership_level")}</span>
         <div className="flex flex-col gap-2 sm:flex-row">

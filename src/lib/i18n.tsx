@@ -179,6 +179,7 @@ const dict = {
   today: { no: "I dag", en: "Today" },
   wholesalers: { no: "Grossister", en: "Wholesalers" },
   new_wholesaler: { no: "Ny grossist", en: "New wholesaler" },
+  wholesaler_name: { no: "Navn", en: "Name" },
   no_wholesalers: { no: "Ingen grossister ennå.", en: "No wholesalers yet." },
   wholesalers_intro: {
     no: "Virksomheter som mottar varer og forsyner serveringssteder.",
@@ -805,6 +806,8 @@ const dict = {
   legal_entity_missing: { no: "Ingen juridisk virksomhet koblet ennå.", en: "No legal entity linked yet." },
   brreg_search: { no: "Søk i BRREG", en: "Search BRREG" },
   brreg_find: { no: "Søk", en: "Search" },
+  brreg_empty: { no: "Ingen treff i BRREG.", en: "No BRREG matches." },
+  brreg_picked: { no: "Valgt", en: "Selected" },
   brreg_failed: { no: "BRREG-oppslaget feilet.", en: "The BRREG lookup failed." },
   brreg_refresh: { no: "Oppdater fra BRREG", en: "Refresh from BRREG" },
   brreg_refreshed: { no: "Oppdatert fra BRREG", en: "Refreshed from BRREG" },

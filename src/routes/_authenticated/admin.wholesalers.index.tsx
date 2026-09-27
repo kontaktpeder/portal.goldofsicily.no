@@ -39,7 +39,7 @@ function AdminWholesalers() {
   async function submit(event: React.FormEvent) {
     event.preventDefault();
     if (!name.trim()) {
-      toast.error(t("customer_name"));
+      toast.error(t("wholesaler_name"));
       return;
     }
     setBusy(true);
@@ -99,7 +99,7 @@ function AdminWholesalers() {
               if (!name.trim()) setName(hit.legalName);
             }}
           />
-          <TextField label={t("customer_name")} value={name} onChange={setName} />
+          <TextField label={t("wholesaler_name")} value={name} onChange={setName} />
           <div>
             <span className="eyebrow mb-2 block">{t("partnership_level")}</span>
             <div className="flex flex-col gap-2 sm:flex-row">
