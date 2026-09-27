@@ -20,6 +20,7 @@ import {
   type StoredDeliveryLine,
 } from "@/lib/flavors";
 import { isGoldLotSchemaError, toStockLots, validateDeliveryStock } from "@/lib/lot-stock";
+import { commercialRouteAtConfirmation, priceOreAt } from "@/lib/economy";
 
 export const Route = createFileRoute("/_authenticated/admin/deliveries")({
   head: () => ({
@@ -37,7 +38,7 @@ export const Route = createFileRoute("/_authenticated/admin/deliveries")({
 });
 
 const deliverySelect =
-  "*, customers(name, type), delivery_lines(product_id, quantity, gold_lot_id, products(name_no, name_en), gold_lots(id, lot_code))";
+  "*, customers!deliveries_customer_id_fkey(name, type), delivery_lines(product_id, quantity, gold_lot_id, unit_price_ore, product_name_snapshot, products(name_no, name_en), gold_lots(id, lot_code))";
 
 function AdminDeliveries() {
   const { t, lang } = useI18n();
@@ -55,7 +56,7 @@ function AdminDeliveries() {
     queryFn: async () => {
       const { data } = await supabase
         .from("customers")
-        .select("id, name, type")
+        .select("id, name, type, supplied_by_customer_id")
         .eq("active", true)
         .order("name");
       return data ?? [];
@@ -163,7 +164,7 @@ function AdminDeliveries() {
       if (error) {
         const fallback = await supabase
           .from("deliveries")
-          .select("*, customers(name, type)")
+          .select("*, customers!deliveries_customer_id_fkey(name, type)")
           .order("delivered_at", { ascending: false })
           .limit(200);
         return fallback.data ?? [];
@@ -180,6 +181,43 @@ function AdminDeliveries() {
       else if (stockCheck.ok === false) toast.error(t("delivery_lot_insufficient"));
       else toast.error(t("delivery_missing"));
       return;
+    }
+    const customer = customers?.find((row) => row.id === customerId);
+    const route = customer
+      ? commercialRouteAtConfirmation({
+          type: customer.type,
+          suppliedByCustomerId: customer.supplied_by_customer_id,
+        })
+      : null;
+    if (route?.commercialRoute === "direct") {
+      const { data: agreements, error: priceError } = await supabase
+        .from("customer_product_prices")
+        .select("product_id, price_ore, valid_from, valid_to")
+        .eq("customer_id", customerId);
+      if (priceError) {
+        toast.error(priceError.message);
+        return;
+      }
+      const missing = flavorQtys.some(
+        (line) =>
+          qty(line.quantity) > 0 &&
+          priceOreAt(
+            (agreements ?? []).map((price) => ({
+              customerId,
+              productId: price.product_id,
+              priceOre: price.price_ore,
+              validFrom: price.valid_from,
+              validTo: price.valid_to,
+            })),
+            customerId,
+            line.productId,
+            date,
+          ) === null,
+      );
+      if (missing) {
+        toast.error(t("price_required"));
+        return;
+      }
     }
     setBusy(true);
     const { data: created, error } = await supabase
@@ -202,8 +240,9 @@ function AdminDeliveries() {
       if (lines.length > 0) {
         const { error: lineError } = await supabase.from("delivery_lines").insert(lines);
         if (lineError) {
+          await supabase.from("deliveries").delete().eq("id", created.id);
           setBusy(false);
-          toast.error(lineError.message);
+          toast.error(lineError.message.includes("missing price") ? t("price_required") : lineError.message);
           return;
         }
       }
@@ -296,6 +335,9 @@ function AdminDeliveries() {
               </p>
               <p className="text-xs text-muted-foreground">
                 {formatDate(delivery.delivered_at, lang)}
+                {"commercial_route" in delivery && delivery.commercial_route === "via_wholesaler"
+                  ? ` · ${t("route_via_wholesaler")}`
+                  : ` · ${t("route_direct")}`}
                 {delivery.note ? ` · ${delivery.note}` : ""}
               </p>
               <DeliveryFlavorBreakdown

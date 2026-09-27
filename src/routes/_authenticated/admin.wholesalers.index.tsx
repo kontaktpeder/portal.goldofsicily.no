@@ -8,6 +8,7 @@ import { useRequireCommercial } from "@/hooks/use-session";
 import { useI18n } from "@/lib/i18n";
 import { useAdminOverview } from "@/lib/admin-data";
 import { partnershipLabel } from "@/components/customer-agreement";
+import { BrregSearch } from "@/components/brreg-search";
 import { PrimaryButton, TextField } from "@/components/field";
 import type { PartnershipLevel } from "@/lib/customer-domain";
 
@@ -32,6 +33,7 @@ function AdminWholesalers() {
   const [contact, setContact] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
+  const [legalEntityId, setLegalEntityId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   async function submit(event: React.FormEvent) {
@@ -52,6 +54,7 @@ function AdminWholesalers() {
       public_visible: false,
       public_profile: null,
       slug: null,
+      legal_entity_id: legalEntityId,
     });
     setBusy(false);
     if (error) {
@@ -65,6 +68,7 @@ function AdminWholesalers() {
     setEmail("");
     setPhone("");
     setLevel(null);
+    setLegalEntityId(null);
     await queryClient.invalidateQueries({ queryKey: ["admin-overview"] });
   }
 
@@ -89,6 +93,12 @@ function AdminWholesalers() {
 
       {open ? (
         <form className="surface-card mt-5 space-y-4 p-5" onSubmit={submit}>
+          <BrregSearch
+            onPicked={({ legalEntityId: pickedId, hit }) => {
+              setLegalEntityId(pickedId);
+              if (!name.trim()) setName(hit.legalName);
+            }}
+          />
           <TextField label={t("customer_name")} value={name} onChange={setName} />
           <div>
             <span className="eyebrow mb-2 block">{t("partnership_level")}</span>

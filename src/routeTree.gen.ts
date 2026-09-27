@@ -17,6 +17,7 @@ import { Route as AuthenticatedHistoryRouteImport } from './routes/_authenticate
 import { Route as AuthenticatedReportRouteImport } from './routes/_authenticated/report'
 import { Route as AuthenticatedAdminIndexRouteImport } from './routes/_authenticated/admin.index'
 import { Route as AuthenticatedAdminDeliveriesRouteImport } from './routes/_authenticated/admin.deliveries'
+import { Route as AuthenticatedAdminInvoicesRouteImport } from './routes/_authenticated/admin.invoices'
 import { Route as AuthenticatedAdminProductsRouteImport } from './routes/_authenticated/admin.products'
 import { Route as AuthenticatedAdminRecallRouteImport } from './routes/_authenticated/admin.recall'
 import { Route as AuthenticatedAdminReportsRouteImport } from './routes/_authenticated/admin.reports'
@@ -68,6 +69,12 @@ const AuthenticatedAdminDeliveriesRoute =
   AuthenticatedAdminDeliveriesRouteImport.update({
     id: '/deliveries',
     path: '/deliveries',
+    getParentRoute: () => AuthenticatedAdminRoute,
+  } as any)
+const AuthenticatedAdminInvoicesRoute =
+  AuthenticatedAdminInvoicesRouteImport.update({
+    id: '/invoices',
+    path: '/invoices',
     getParentRoute: () => AuthenticatedAdminRoute,
   } as any)
 const AuthenticatedAdminProductsRoute =
@@ -147,6 +154,7 @@ export interface FileRoutesByFullPath {
   '/history': typeof AuthenticatedHistoryRoute
   '/report': typeof AuthenticatedReportRoute
   '/admin/deliveries': typeof AuthenticatedAdminDeliveriesRoute
+  '/admin/invoices': typeof AuthenticatedAdminInvoicesRoute
   '/admin/products': typeof AuthenticatedAdminProductsRoute
   '/admin/recall': typeof AuthenticatedAdminRecallRoute
   '/admin/reports': typeof AuthenticatedAdminReportsRoute
@@ -167,6 +175,7 @@ export interface FileRoutesByTo {
   '/history': typeof AuthenticatedHistoryRoute
   '/report': typeof AuthenticatedReportRoute
   '/admin/deliveries': typeof AuthenticatedAdminDeliveriesRoute
+  '/admin/invoices': typeof AuthenticatedAdminInvoicesRoute
   '/admin/products': typeof AuthenticatedAdminProductsRoute
   '/admin/recall': typeof AuthenticatedAdminRecallRoute
   '/admin/reports': typeof AuthenticatedAdminReportsRoute
@@ -190,6 +199,7 @@ export interface FileRoutesById {
   '/_authenticated/history': typeof AuthenticatedHistoryRoute
   '/_authenticated/report': typeof AuthenticatedReportRoute
   '/_authenticated/admin/deliveries': typeof AuthenticatedAdminDeliveriesRoute
+  '/_authenticated/admin/invoices': typeof AuthenticatedAdminInvoicesRoute
   '/_authenticated/admin/products': typeof AuthenticatedAdminProductsRoute
   '/_authenticated/admin/recall': typeof AuthenticatedAdminRecallRoute
   '/_authenticated/admin/reports': typeof AuthenticatedAdminReportsRoute
@@ -213,6 +223,7 @@ export interface FileRouteTypes {
     | '/history'
     | '/report'
     | '/admin/deliveries'
+    | '/admin/invoices'
     | '/admin/products'
     | '/admin/recall'
     | '/admin/reports'
@@ -233,6 +244,7 @@ export interface FileRouteTypes {
     | '/history'
     | '/report'
     | '/admin/deliveries'
+    | '/admin/invoices'
     | '/admin/products'
     | '/admin/recall'
     | '/admin/reports'
@@ -255,6 +267,7 @@ export interface FileRouteTypes {
     | '/_authenticated/history'
     | '/_authenticated/report'
     | '/_authenticated/admin/deliveries'
+    | '/_authenticated/admin/invoices'
     | '/_authenticated/admin/products'
     | '/_authenticated/admin/recall'
     | '/_authenticated/admin/reports'
@@ -333,6 +346,13 @@ declare module '@tanstack/react-router' {
       path: '/deliveries'
       fullPath: '/admin/deliveries'
       preLoaderRoute: typeof AuthenticatedAdminDeliveriesRouteImport
+      parentRoute: typeof AuthenticatedAdminRoute
+    }
+    '/_authenticated/admin/invoices': {
+      id: '/_authenticated/admin/invoices'
+      path: '/invoices'
+      fullPath: '/admin/invoices'
+      preLoaderRoute: typeof AuthenticatedAdminInvoicesRouteImport
       parentRoute: typeof AuthenticatedAdminRoute
     }
     '/_authenticated/admin/products': {
@@ -424,6 +444,7 @@ declare module '@tanstack/react-router' {
 
 interface AuthenticatedAdminRouteChildren {
   AuthenticatedAdminDeliveriesRoute: typeof AuthenticatedAdminDeliveriesRoute
+  AuthenticatedAdminInvoicesRoute: typeof AuthenticatedAdminInvoicesRoute
   AuthenticatedAdminProductsRoute: typeof AuthenticatedAdminProductsRoute
   AuthenticatedAdminRecallRoute: typeof AuthenticatedAdminRecallRoute
   AuthenticatedAdminReportsRoute: typeof AuthenticatedAdminReportsRoute
@@ -439,6 +460,7 @@ interface AuthenticatedAdminRouteChildren {
 
 const AuthenticatedAdminRouteChildren: AuthenticatedAdminRouteChildren = {
   AuthenticatedAdminDeliveriesRoute: AuthenticatedAdminDeliveriesRoute,
+  AuthenticatedAdminInvoicesRoute: AuthenticatedAdminInvoicesRoute,
   AuthenticatedAdminProductsRoute: AuthenticatedAdminProductsRoute,
   AuthenticatedAdminRecallRoute: AuthenticatedAdminRecallRoute,
   AuthenticatedAdminReportsRoute: AuthenticatedAdminReportsRoute,

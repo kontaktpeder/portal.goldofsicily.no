@@ -16,6 +16,8 @@ import { PrimaryButton, TextAreaField, TextField } from "@/components/field";
 import { MenuFileUpload } from "@/components/menu-file-upload";
 import { DeliveryFlavorBreakdown, FlavorBreakdown } from "@/components/flavor-lines";
 import { CustomerAgreementCard, partnershipLabel } from "@/components/customer-agreement";
+import { LegalEntityCard } from "@/components/legal-entity-card";
+import { CustomerPrices } from "@/components/customer-prices";
 import type { StoredDeliveryLine, StoredFlavorLine } from "@/lib/flavors";
 
 export const Route = createFileRoute("/_authenticated/admin/venues/$venueId")({
@@ -285,6 +287,8 @@ function CustomerDetail() {
             wholesalers={data.wholesalers}
             onChanged={() => queryClient.invalidateQueries()}
           />
+          <LegalEntityCard customerId={venueId} />
+          <CustomerPrices customerId={venueId} />
           <ProfileTab
             customer={data.customer}
             onSaved={() => queryClient.invalidateQueries()}

@@ -9,6 +9,8 @@ import { useI18n } from "@/lib/i18n";
 import { useAdminOverview } from "@/lib/admin-data";
 import { formatDate } from "@/lib/sign-out";
 import { partnershipLabel } from "@/components/customer-agreement";
+import { LegalEntityCard } from "@/components/legal-entity-card";
+import { CustomerPrices } from "@/components/customer-prices";
 import { PrimaryButton, TextAreaField, TextField } from "@/components/field";
 import type { PartnershipLevel } from "@/lib/customer-domain";
 
@@ -84,6 +86,11 @@ function WholesalerDetail() {
           }}
         />
       ) : null}
+
+      <div className="mt-6 space-y-4">
+        <LegalEntityCard customerId={customerId} />
+        <CustomerPrices customerId={customerId} />
+      </div>
 
       <h2 className="mt-10 text-xl font-semibold">{t("supplied_venues")}</h2>
       <div className="mt-3 space-y-2">
