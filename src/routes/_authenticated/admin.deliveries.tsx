@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { Plus } from "lucide-react";
@@ -20,7 +20,7 @@ import {
   type StoredDeliveryLine,
 } from "@/lib/flavors";
 import { isGoldLotSchemaError, toStockLots, validateDeliveryStock } from "@/lib/lot-stock";
-import { commercialRouteAtConfirmation, priceOreAt } from "@/lib/economy";
+import { commercialRouteAtConfirmation, productsMissingPrice, type PriceAgreement } from "@/lib/economy";
 
 export const Route = createFileRoute("/_authenticated/admin/deliveries")({
   head: () => ({
@@ -42,6 +42,7 @@ const deliverySelect =
 
 function AdminDeliveries() {
   const { t, lang } = useI18n();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const prereq = useLotPrerequisites();
   const [open, setOpen] = useState(false);
@@ -173,6 +174,30 @@ function AdminDeliveries() {
     },
   });
 
+  function openPriceAgreement(
+    customer: { id: string; type: string } | undefined,
+    productNames: string[],
+  ) {
+    const search = { priceDate: date.slice(0, 10), priceNames: productNames.join("|") };
+    if (!customer || productNames.length === 0) {
+      toast.error(t("price_required"));
+      return;
+    }
+    if (customer.type === "wholesaler") {
+      void navigate({
+        to: "/admin/wholesalers/$customerId",
+        params: { customerId: customer.id },
+        search,
+      });
+      return;
+    }
+    void navigate({
+      to: "/admin/venues/$venueId",
+      params: { venueId: customer.id },
+      search,
+    });
+  }
+
   async function submit() {
     if (!canSave) {
       if (!prereq.ok) toast.error(t("lot_prereq_title"));
@@ -198,24 +223,25 @@ function AdminDeliveries() {
         toast.error(priceError.message);
         return;
       }
-      const missing = flavorQtys.some(
-        (line) =>
-          qty(line.quantity) > 0 &&
-          priceOreAt(
-            (agreements ?? []).map((price) => ({
-              customerId,
-              productId: price.product_id,
-              priceOre: price.price_ore,
-              validFrom: price.valid_from,
-              validTo: price.valid_to,
-            })),
-            customerId,
-            line.productId,
-            date,
-          ) === null,
+      const prices: PriceAgreement[] = (agreements ?? []).map((price) => ({
+        customerId,
+        productId: price.product_id,
+        priceOre: price.price_ore,
+        validFrom: price.valid_from,
+        validTo: price.valid_to,
+      }));
+      const missing = productsMissingPrice(
+        flavorQtys.map((line) => ({
+          productId: line.productId,
+          quantity: qty(line.quantity),
+          name: lang === "en" ? line.nameEn : line.nameNo,
+        })),
+        prices,
+        customerId,
+        date,
       );
-      if (missing) {
-        toast.error(t("price_required"));
+      if (missing.length > 0) {
+        openPriceAgreement(customer, missing.map((line) => line.name));
         return;
       }
     }
@@ -242,7 +268,14 @@ function AdminDeliveries() {
         if (lineError) {
           await supabase.from("deliveries").delete().eq("id", created.id);
           setBusy(false);
-          toast.error(lineError.message.includes("missing price") ? t("price_required") : lineError.message);
+          if (lineError.message.includes("missing price")) {
+            openPriceAgreement(
+              customer,
+              flavorQtys.filter((line) => qty(line.quantity) > 0).map((line) => (lang === "en" ? line.nameEn : line.nameNo)),
+            );
+          } else {
+            toast.error(lineError.message);
+          }
           return;
         }
       }

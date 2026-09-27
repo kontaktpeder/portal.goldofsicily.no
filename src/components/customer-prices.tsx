@@ -1,14 +1,22 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useI18n } from "@/lib/i18n";
 import { formatPriceNok, parseGuestPriceOre } from "@/lib/slug";
+import { PriceGapBanner } from "@/components/price-gap-banner";
 import { PrimaryButton, TextField } from "@/components/field";
 
-export function CustomerPrices({ customerId }: { customerId: string }) {
+export function CustomerPrices({
+  customerId,
+  gap,
+}: {
+  customerId: string;
+  gap?: { date: string; productNames: string[] } | null;
+}) {
   const { t } = useI18n();
   const queryClient = useQueryClient();
+  const sectionRef = useRef<HTMLElement>(null);
   const [productId, setProductId] = useState("");
   const [price, setPrice] = useState("");
   const [validFrom, setValidFrom] = useState(() => new Date().toISOString().slice(0, 10));
@@ -65,8 +73,26 @@ export function CustomerPrices({ customerId }: { customerId: string }) {
     await queryClient.invalidateQueries({ queryKey: ["customer-prices", customerId] });
   }
 
+  async function remove(id: string) {
+    setBusy(true);
+    const { error } = await supabase.from("customer_product_prices").delete().eq("id", id);
+    setBusy(false);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    await queryClient.invalidateQueries({ queryKey: ["customer-prices", customerId] });
+  }
+
+  const gapKey = gap && gap.productNames.length > 0 ? `${gap.date}|${gap.productNames.join("|")}` : "";
+  useEffect(() => {
+    if (!gapKey) return;
+    sectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [gapKey]);
+
   return (
-    <section className="surface-card space-y-4 p-5">
+    <section ref={sectionRef} id="prices" className="surface-card space-y-4 p-5">
+      {gap ? <PriceGapBanner date={gap.date} productNames={gap.productNames} /> : null}
       <div>
         <h2 className="text-lg font-semibold">{t("prices")}</h2>
         <p className="text-sm text-muted-foreground">{t("prices_hint")}</p>
@@ -99,13 +125,23 @@ export function CustomerPrices({ customerId }: { customerId: string }) {
           const product = row.products as { name_no: string } | { name_no: string }[] | null;
           const name = Array.isArray(product) ? product[0]?.name_no : product?.name_no;
           return (
-            <li key={row.id} className="text-sm">
-              <span className="font-semibold">{name ?? row.product_id}</span>
-              {" · "}
-              {formatPriceNok(row.price_ore)} kr
-              {" · "}
-              {row.valid_from}
-              {row.valid_to ? `–${row.valid_to}` : ""}
+            <li key={row.id} className="flex items-center justify-between gap-3 text-sm">
+              <span>
+                <span className="font-semibold">{name ?? row.product_id}</span>
+                {" · "}
+                {formatPriceNok(row.price_ore)} kr
+                {" · "}
+                {row.valid_from}
+                {row.valid_to ? `–${row.valid_to}` : ""}
+              </span>
+              <button
+                type="button"
+                onClick={() => void remove(row.id)}
+                disabled={busy}
+                className="shrink-0 font-semibold text-muted-foreground"
+              >
+                {t("delete_price")}
+              </button>
             </li>
           );
         })}
