@@ -6,7 +6,10 @@ import {
   commercialRouteAtConfirmation,
   isUninvoicedSale,
   legalEntityParentError,
+  parsePriceGap,
+  priceGapNames,
   priceOreAt,
+  productsMissingPrice,
 } from "./economy.ts";
 
 test("a wholesaler delivery is a direct Gold sale", () => {
@@ -174,4 +177,35 @@ test("product name backfill drops the gold-lot check before updating historical 
     assert.ok(updateAt > dropAt);
     assert.equal(source.indexOf("ADD CONSTRAINT delivery_lines_quantity_requires_gold_lot"), -1);
   }
+});
+
+test("a delivery names only the flavors that lack a price on that date", () => {
+  const prices = [
+    {
+      customerId: "villa",
+      productId: "nduja",
+      priceOre: 2500,
+      validFrom: "2026-09-01",
+      validTo: null,
+    },
+  ];
+  assert.deepEqual(
+    productsMissingPrice(
+      [
+        { productId: "nduja", quantity: 10, name: "’Nduja" },
+        { productId: "truffle", quantity: 4, name: "Truffle" },
+        { productId: "truffle", quantity: 2, name: "Truffle" },
+        { productId: "plain", quantity: 0, name: "Plain" },
+      ],
+      prices,
+      "villa",
+      "2026-09-05",
+    ),
+    [{ productId: "truffle", name: "Truffle" }],
+  );
+  assert.deepEqual(parsePriceGap({ priceDate: "2026-09-05T00:00:00", priceNames: "Truffle" }), {
+    priceDate: "2026-09-05",
+    priceNames: "Truffle",
+  });
+  assert.deepEqual(priceGapNames("Truffle| ’Nduja "), ["Truffle", "’Nduja"]);
 });

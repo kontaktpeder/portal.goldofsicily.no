@@ -11,10 +11,12 @@ import { formatDate } from "@/lib/sign-out";
 import { partnershipLabel } from "@/components/customer-agreement";
 import { LegalEntityCard } from "@/components/legal-entity-card";
 import { CustomerPrices } from "@/components/customer-prices";
+import { parsePriceGap, priceGapNames } from "@/lib/economy";
 import { PrimaryButton, TextAreaField, TextField } from "@/components/field";
 import type { PartnershipLevel } from "@/lib/customer-domain";
 
 export const Route = createFileRoute("/_authenticated/admin/wholesalers/$customerId")({
+  validateSearch: (search: Record<string, unknown>) => parsePriceGap(search),
   head: () => ({
     meta: [
       { title: "Grossist — Gold of Sicily admin" },
@@ -26,6 +28,9 @@ export const Route = createFileRoute("/_authenticated/admin/wholesalers/$custome
 
 function WholesalerDetail() {
   const { customerId } = Route.useParams();
+  const { priceDate, priceNames } = Route.useSearch();
+  const gapNames = priceGapNames(priceNames);
+  const gap = priceDate && gapNames.length > 0 ? { date: priceDate, productNames: gapNames } : null;
   const { t, lang } = useI18n();
   const { allowed, isLoading: sessionLoading } = useRequireCommercial();
   const overview = useAdminOverview();
@@ -89,7 +94,7 @@ function WholesalerDetail() {
 
       <div className="mt-6 space-y-4">
         <LegalEntityCard customerId={customerId} />
-        <CustomerPrices customerId={customerId} />
+        <CustomerPrices customerId={customerId} gap={gap} />
       </div>
 
       <h2 className="mt-10 text-xl font-semibold">{t("supplied_venues")}</h2>

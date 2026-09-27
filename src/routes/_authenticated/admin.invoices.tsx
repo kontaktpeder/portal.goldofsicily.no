@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -35,6 +35,7 @@ type SaleLine = {
   productName: string;
   deliveredAt: string;
   customerId: string;
+  customerType: string;
   customerName: string;
   commercialRoute: CommercialRoute;
   legalEntityId: string | null;
@@ -43,6 +44,7 @@ type SaleLine = {
 
 function AdminInvoices() {
   const { t, lang } = useI18n();
+  const navigate = useNavigate();
   const { allowed, isLoading } = useRequireCommercial();
   const queryClient = useQueryClient();
   const [busy, setBusy] = useState(false);
@@ -54,7 +56,7 @@ function AdminInvoices() {
         supabase
           .from("delivery_lines")
           .select(
-            "id, quantity, unit_price_ore, product_name_snapshot, deliveries!inner(delivered_at, customer_id, customer_name_snapshot, commercial_route, customers!deliveries_customer_id_fkey(legal_entity_id, billing_legal_entity_id))",
+            "id, quantity, unit_price_ore, product_name_snapshot, deliveries!inner(delivered_at, customer_id, customer_name_snapshot, commercial_route, customers!deliveries_customer_id_fkey(type, legal_entity_id, billing_legal_entity_id))",
           )
           .limit(1000),
         supabase.from("invoice_draft_lines").select("delivery_line_id").eq("active", true),
@@ -97,6 +99,7 @@ function AdminInvoices() {
         productName: row.product_name_snapshot,
         deliveredAt: delivery.delivered_at,
         customerId: delivery.customer_id,
+        customerType: customer?.type ?? "venue",
         customerName: delivery.customer_name_snapshot,
         commercialRoute: delivery.commercial_route,
         legalEntityId: customer?.legal_entity_id ?? null,
@@ -127,10 +130,20 @@ function AdminInvoices() {
     groups.set(recipient, [...(groups.get(recipient) ?? []), line]);
   }
 
-  async function freezePrice(lineId: string) {
-    const { error } = await supabase.from("delivery_lines").update({ unit_price_ore: 1 }).eq("id", lineId);
+  function openPriceAgreement(line: SaleLine) {
+    const search = { priceDate: line.deliveredAt.slice(0, 10), priceNames: line.productName };
+    if (line.customerType === "wholesaler") {
+      void navigate({ to: "/admin/wholesalers/$customerId", params: { customerId: line.customerId }, search });
+      return;
+    }
+    void navigate({ to: "/admin/venues/$venueId", params: { venueId: line.customerId }, search });
+  }
+
+  async function freezePrice(line: SaleLine) {
+    const { error } = await supabase.from("delivery_lines").update({ unit_price_ore: 1 }).eq("id", line.id);
     if (error) {
-      toast.error(error.message.includes("missing price") ? t("price_required") : error.message);
+      if (error.message.includes("missing price")) openPriceAgreement(line);
+      else toast.error(error.message);
       return;
     }
     await queryClient.invalidateQueries({ queryKey: ["invoice-desk"] });
@@ -189,9 +202,14 @@ function AdminInvoices() {
                 {line.customerName} · {formatDate(line.deliveredAt, lang)} · {line.productName} · {line.quantity}{" "}
                 {t("pcs")}
               </span>
-              <button type="button" className="font-semibold text-primary" onClick={() => void freezePrice(line.id)}>
-                {t("freeze_price")}
-              </button>
+              <span className="flex shrink-0 gap-3">
+                <button type="button" className="font-semibold text-primary" onClick={() => openPriceAgreement(line)}>
+                  {t("open_price_agreement")}
+                </button>
+                <button type="button" className="font-semibold text-primary" onClick={() => void freezePrice(line)}>
+                  {t("freeze_price")}
+                </button>
+              </span>
             </div>
           ))}
         </section>
@@ -202,6 +220,24 @@ function AdminInvoices() {
           {missingRecipient.map((line) => (
             <p key={line.id} className="mt-2 text-sm text-muted-foreground">
               {line.customerName} · {formatDate(line.deliveredAt, lang)} · {line.quantity} {t("pcs")}
+              {" · "}
+              {line.customerType === "wholesaler" ? (
+                <Link
+                  to="/admin/wholesalers/$customerId"
+                  params={{ customerId: line.customerId }}
+                  className="font-semibold text-primary"
+                >
+                  {t("open_customer")}
+                </Link>
+              ) : (
+                <Link
+                  to="/admin/venues/$venueId"
+                  params={{ venueId: line.customerId }}
+                  className="font-semibold text-primary"
+                >
+                  {t("open_customer")}
+                </Link>
+              )}
             </p>
           ))}
         </section>

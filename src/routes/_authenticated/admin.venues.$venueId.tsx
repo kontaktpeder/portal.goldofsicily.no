@@ -18,9 +18,12 @@ import { DeliveryFlavorBreakdown, FlavorBreakdown } from "@/components/flavor-li
 import { CustomerAgreementCard, partnershipLabel } from "@/components/customer-agreement";
 import { LegalEntityCard } from "@/components/legal-entity-card";
 import { CustomerPrices } from "@/components/customer-prices";
+import { PriceGapBanner } from "@/components/price-gap-banner";
+import { parsePriceGap, priceGapNames } from "@/lib/economy";
 import type { StoredDeliveryLine, StoredFlavorLine } from "@/lib/flavors";
 
 export const Route = createFileRoute("/_authenticated/admin/venues/$venueId")({
+  validateSearch: (search: Record<string, unknown>) => parsePriceGap(search),
   head: () => ({
     meta: [
       { title: "Serveringssted — Gold of Sicily admin" },
@@ -42,11 +45,18 @@ type Tab = "overview" | "reports" | "deliveries" | "profile" | "menu" | "account
 
 function CustomerDetail() {
   const { venueId } = Route.useParams();
+  const { priceDate, priceNames } = Route.useSearch();
+  const gapNames = priceGapNames(priceNames);
+  const gap = priceDate && gapNames.length > 0 ? { date: priceDate, productNames: gapNames } : null;
   const { t, lang } = useI18n();
   const { data: session } = useSessionInfo();
   const commercial = Boolean(session?.canManageCommercial);
   const queryClient = useQueryClient();
   const [tab, setTab] = useState<Tab>("overview");
+
+  useEffect(() => {
+    if (priceDate && priceNames && commercial) setTab("profile");
+  }, [priceDate, priceNames, commercial]);
 
   const { data } = useQuery({
     queryKey: ["venue-detail", venueId],
@@ -146,6 +156,12 @@ function CustomerDetail() {
             : ""}
         </p>
       </div>
+
+      {gap && !commercial ? (
+        <div className="mt-5">
+          <PriceGapBanner date={gap.date} productNames={gap.productNames} />
+        </div>
+      ) : null}
 
       <div className="mt-6 flex gap-1 overflow-x-auto">
         {(
@@ -288,7 +304,7 @@ function CustomerDetail() {
             onChanged={() => queryClient.invalidateQueries()}
           />
           <LegalEntityCard customerId={venueId} />
-          <CustomerPrices customerId={venueId} />
+          <CustomerPrices customerId={venueId} gap={gap} />
           <ProfileTab
             customer={data.customer}
             onSaved={() => queryClient.invalidateQueries()}
