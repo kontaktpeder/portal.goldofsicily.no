@@ -38,13 +38,13 @@ async function loadSessionInfo(): Promise<SessionInfo> {
   const [{ data: profile }, { data: roles }] = await Promise.all([
     supabase
       .from("profiles")
-      .select("username, venue_id, preferred_language, venues(name)")
+      .select("username, customer_id, preferred_language, customers(name)")
       .eq("id", session.user.id)
       .maybeSingle(),
     supabase.from("user_roles").select("role").eq("user_id", session.user.id),
   ]);
 
-  const customer = (profile?.venues as { name: string } | null) ?? null;
+  const customer = (profile?.customers as { name: string } | null) ?? null;
   const roleNames = (roles ?? []).map((row) => row.role);
 
   return {
@@ -54,7 +54,7 @@ async function loadSessionInfo(): Promise<SessionInfo> {
     canManageOperations: canManageOperations(roleNames),
     canManageCommercial: canManageCommercial(roleNames),
     username: profile?.username ?? null,
-    customerId: profile?.venue_id ?? null,
+    customerId: profile?.customer_id ?? null,
     customerName: customer?.name ?? null,
     preferredLanguage: profile?.preferred_language === "en" ? "en" : "no",
   };

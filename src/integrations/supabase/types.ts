@@ -14,7 +14,7 @@ export type Database = {
   }
   public: {
     Tables: {
-      venues: {
+      customers: {
         Row: {
           active: boolean
           address: string | null
@@ -32,10 +32,13 @@ export type Database = {
           longitude: number | null
           menu_intro: string | null
           name: string
-          partner_id: string | null
+          notes: string | null
+          partnership_level: Database["public"]["Enums"]["partnership_level"] | null
           phone: string | null
-          public_profile: "partner" | "listing"
+          public_profile: "partner" | "listing" | null
           public_visible: boolean
+          supplied_by_customer_id: string | null
+          type: Database["public"]["Enums"]["customer_type"]
           collaboration_text: string | null
           serving_story: string | null
           video_url: string | null
@@ -64,10 +67,13 @@ export type Database = {
           longitude?: number | null
           menu_intro?: string | null
           name: string
-          partner_id?: string | null
+          notes?: string | null
+          partnership_level?: Database["public"]["Enums"]["partnership_level"] | null
           phone?: string | null
-          public_profile?: "partner" | "listing"
+          public_profile?: "partner" | "listing" | null
           public_visible?: boolean
+          supplied_by_customer_id?: string | null
+          type?: Database["public"]["Enums"]["customer_type"]
           collaboration_text?: string | null
           serving_story?: string | null
           video_url?: string | null
@@ -96,10 +102,13 @@ export type Database = {
           longitude?: number | null
           menu_intro?: string | null
           name?: string
-          partner_id?: string | null
+          notes?: string | null
+          partnership_level?: Database["public"]["Enums"]["partnership_level"] | null
           phone?: string | null
-          public_profile?: "partner" | "listing"
+          public_profile?: "partner" | "listing" | null
           public_visible?: boolean
+          supplied_by_customer_id?: string | null
+          type?: Database["public"]["Enums"]["customer_type"]
           collaboration_text?: string | null
           serving_story?: string | null
           video_url?: string | null
@@ -113,10 +122,10 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "customers_partner_id_fkey"
-            columns: ["partner_id"]
+            foreignKeyName: "customers_supplied_by_customer_id_fkey"
+            columns: ["supplied_by_customer_id"]
             isOneToOne: false
-            referencedRelation: "partners"
+            referencedRelation: "customers"
             referencedColumns: ["id"]
           },
         ]
@@ -124,7 +133,7 @@ export type Database = {
       deliveries: {
         Row: {
           created_at: string
-          venue_id: string
+          customer_id: string
           delivered_at: string
           id: string
           note: string | null
@@ -132,7 +141,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
-          venue_id: string
+          customer_id: string
           delivered_at?: string
           id?: string
           note?: string | null
@@ -140,7 +149,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
-          venue_id?: string
+          customer_id?: string
           delivered_at?: string
           id?: string
           note?: string | null
@@ -149,9 +158,9 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "deliveries_customer_id_fkey"
-            columns: ["venue_id"]
+            columns: ["customer_id"]
             isOneToOne: false
-            referencedRelation: "venues"
+            referencedRelation: "customers"
             referencedColumns: ["id"]
           },
         ]
@@ -381,9 +390,8 @@ export type Database = {
           ownership_after_handover: Database["public"]["Enums"]["handover_ownership"]
           quantity: number
           recipient_company: string
-          recipient_partner_id: string | null
+          customer_id: string | null
           recipient_person: string | null
-          recipient_venue_id: string | null
           storage_location: string | null
         }
         Insert: {
@@ -395,9 +403,8 @@ export type Database = {
           ownership_after_handover?: Database["public"]["Enums"]["handover_ownership"]
           quantity: number
           recipient_company: string
-          recipient_partner_id?: string | null
+          customer_id?: string | null
           recipient_person?: string | null
-          recipient_venue_id?: string | null
           storage_location?: string | null
         }
         Update: {
@@ -409,9 +416,8 @@ export type Database = {
           ownership_after_handover?: Database["public"]["Enums"]["handover_ownership"]
           quantity?: number
           recipient_company?: string
-          recipient_partner_id?: string | null
+          customer_id?: string | null
           recipient_person?: string | null
-          recipient_venue_id?: string | null
           storage_location?: string | null
         }
         Relationships: [
@@ -423,17 +429,10 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "gold_lot_handovers_recipient_partner_id_fkey"
-            columns: ["recipient_partner_id"]
+            foreignKeyName: "gold_lot_handovers_customer_id_fkey"
+            columns: ["customer_id"]
             isOneToOne: false
-            referencedRelation: "partners"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "gold_lot_handovers_recipient_venue_id_fkey"
-            columns: ["recipient_venue_id"]
-            isOneToOne: false
-            referencedRelation: "venues"
+            referencedRelation: "customers"
             referencedColumns: ["id"]
           },
         ]
@@ -595,45 +594,6 @@ export type Database = {
           created_at?: string
           email?: string | null
           id?: string
-          name?: string
-          notes?: string | null
-          phone?: string | null
-          updated_at?: string
-        }
-        Relationships: []
-      }
-      partners: {
-        Row: {
-          active: boolean
-          contact_name: string | null
-          created_at: string
-          email: string | null
-          id: string
-          kind: Database["public"]["Enums"]["partner_kind"]
-          name: string
-          notes: string | null
-          phone: string | null
-          updated_at: string
-        }
-        Insert: {
-          active?: boolean
-          contact_name?: string | null
-          created_at?: string
-          email?: string | null
-          id?: string
-          kind?: Database["public"]["Enums"]["partner_kind"]
-          name: string
-          notes?: string | null
-          phone?: string | null
-          updated_at?: string
-        }
-        Update: {
-          active?: boolean
-          contact_name?: string | null
-          created_at?: string
-          email?: string | null
-          id?: string
-          kind?: Database["public"]["Enums"]["partner_kind"]
           name?: string
           notes?: string | null
           phone?: string | null
@@ -811,7 +771,7 @@ export type Database = {
       profiles: {
         Row: {
           created_at: string
-          venue_id: string | null
+          customer_id: string | null
           employee_number: string | null
           full_name: string | null
           id: string
@@ -821,7 +781,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
-          venue_id?: string | null
+          customer_id?: string | null
           employee_number?: string | null
           full_name?: string | null
           id: string
@@ -831,7 +791,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
-          venue_id?: string | null
+          customer_id?: string | null
           employee_number?: string | null
           full_name?: string | null
           id?: string
@@ -842,9 +802,9 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "profiles_customer_id_fkey"
-            columns: ["venue_id"]
+            columns: ["customer_id"]
             isOneToOne: false
-            referencedRelation: "venues"
+            referencedRelation: "customers"
             referencedColumns: ["id"]
           },
         ]
@@ -853,7 +813,7 @@ export type Database = {
         Row: {
           actual_quantity_received: number | null
           created_at: string
-          venue_id: string
+          customer_id: string
           delivery_correct: boolean | null
           delivery_id: string | null
           guest_feedback_rating:
@@ -873,7 +833,7 @@ export type Database = {
         Insert: {
           actual_quantity_received?: number | null
           created_at?: string
-          venue_id: string
+          customer_id: string
           delivery_correct?: boolean | null
           delivery_id?: string | null
           guest_feedback_rating?:
@@ -893,7 +853,7 @@ export type Database = {
         Update: {
           actual_quantity_received?: number | null
           created_at?: string
-          venue_id?: string
+          customer_id?: string
           delivery_correct?: boolean | null
           delivery_id?: string | null
           guest_feedback_rating?:
@@ -913,9 +873,9 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "shift_reports_customer_id_fkey"
-            columns: ["venue_id"]
+            columns: ["customer_id"]
             isOneToOne: false
-            referencedRelation: "venues"
+            referencedRelation: "customers"
             referencedColumns: ["id"]
           },
           {
@@ -976,7 +936,7 @@ export type Database = {
         Row: {
           available: boolean
           created_at: string
-          venue_id: string
+          customer_id: string
           description: string | null
           display_name: string | null
           id: string
@@ -989,7 +949,7 @@ export type Database = {
         Insert: {
           available?: boolean
           created_at?: string
-          venue_id: string
+          customer_id: string
           description?: string | null
           display_name?: string | null
           id?: string
@@ -1002,7 +962,7 @@ export type Database = {
         Update: {
           available?: boolean
           created_at?: string
-          venue_id?: string
+          customer_id?: string
           description?: string | null
           display_name?: string | null
           id?: string
@@ -1015,9 +975,9 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "venue_menu_items_customer_id_fkey"
-            columns: ["venue_id"]
+            columns: ["customer_id"]
             isOneToOne: false
-            referencedRelation: "venues"
+            referencedRelation: "customers"
             referencedColumns: ["id"]
           },
           {
@@ -1056,7 +1016,6 @@ export type Database = {
     }
     Functions: {
       current_customer_id: { Args: never; Returns: string }
-      current_venue_id: { Args: never; Returns: string }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -1075,7 +1034,7 @@ export type Database = {
       submit_shift_report: {
         Args: {
           p_actual_quantity_received?: number | null
-          p_venue_id: string
+          p_customer_id: string
           p_delivery_correct?: boolean | null
           p_delivery_id?: string | null
           p_guest_feedback_rating?:
@@ -1094,8 +1053,9 @@ export type Database = {
       feedback_rating: "positive" | "mixed" | "negative"
       gold_lot_event_type: "created" | "packed" | "handover" | "closed" | "recalled"
       gold_lot_status: "produced" | "packed" | "handed_over" | "closed" | "recalled"
+      customer_type: "venue" | "wholesaler"
       handover_ownership: "gold" | "villa"
-      partner_kind: "distributor" | "direct"
+      partnership_level: "gold_partner" | "gold_supply"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -1227,8 +1187,9 @@ export const Constants = {
       feedback_rating: ["positive", "mixed", "negative"],
       gold_lot_event_type: ["created", "packed", "handover", "closed", "recalled"],
       gold_lot_status: ["produced", "packed", "handed_over", "closed", "recalled"],
+      customer_type: ["venue", "wholesaler"],
       handover_ownership: ["gold", "villa"],
-      partner_kind: ["distributor", "direct"],
+      partnership_level: ["gold_partner", "gold_supply"],
     },
   },
 } as const

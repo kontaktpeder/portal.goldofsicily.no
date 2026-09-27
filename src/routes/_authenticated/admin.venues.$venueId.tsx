@@ -15,7 +15,7 @@ import { useSessionInfo } from "@/hooks/use-session";
 import { PrimaryButton, TextAreaField, TextField } from "@/components/field";
 import { MenuFileUpload } from "@/components/menu-file-upload";
 import { DeliveryFlavorBreakdown, FlavorBreakdown } from "@/components/flavor-lines";
-import { VenuePartnerCard } from "@/components/partner-venue-link";
+import { CustomerAgreementCard, partnershipLabel } from "@/components/customer-agreement";
 import type { StoredDeliveryLine, StoredFlavorLine } from "@/lib/flavors";
 
 export const Route = createFileRoute("/_authenticated/admin/venues/$venueId")({
@@ -49,44 +49,45 @@ function CustomerDetail() {
   const { data } = useQuery({
     queryKey: ["venue-detail", venueId],
     queryFn: async () => {
-      const [customer, reports, deliveriesRes, profile, menu, products, partners] = await Promise.all([
+      const [customer, reports, deliveriesRes, profile, menu, products, wholesalers] = await Promise.all([
         supabase
-          .from("venues")
-          .select("*, partners(id, name)")
+          .from("customers")
+          .select("*, supplier:customers!customers_supplied_by_customer_id_fkey(id, name)")
           .eq("id", venueId)
+          .eq("type", "venue")
           .maybeSingle(),
         supabase
           .from("shift_reports")
           .select(
             "*, shift_report_lines(product_id, sold, remaining_stock, next_required_quantity, products(name_no, name_en))",
           )
-          .eq("venue_id", venueId)
+          .eq("customer_id", venueId)
           .order("created_at", { ascending: false })
           .limit(100),
         supabase
           .from("deliveries")
           .select("*, delivery_lines(product_id, quantity, gold_lot_id, products(name_no, name_en), gold_lots(id, lot_code))")
-          .eq("venue_id", venueId)
+          .eq("customer_id", venueId)
           .order("delivered_at", { ascending: false })
           .limit(100),
         supabase
           .from("profiles")
           .select("id, username, preferred_language")
-          .eq("venue_id", venueId)
+          .eq("customer_id", venueId)
           .maybeSingle(),
         supabase
           .from("venue_menu_items")
           .select("*, products(*)")
-          .eq("venue_id", venueId)
+          .eq("customer_id", venueId)
           .order("sort_order"),
         supabase.from("products").select("*").eq("active", true).order("sort_order"),
-        supabase.from("partners").select("id, name, kind, active").order("name"),
+        supabase.from("customers").select("id, name").eq("type", "wholesaler").eq("active", true).order("name"),
       ]);
       const deliveries = deliveriesRes.error
         ? await supabase
             .from("deliveries")
             .select("*")
-            .eq("venue_id", venueId)
+            .eq("customer_id", venueId)
             .order("delivered_at", { ascending: false })
             .limit(100)
         : deliveriesRes;
@@ -97,13 +98,14 @@ function CustomerDetail() {
         profile: profile.data,
         menu: menu.data ?? [],
         products: products.data ?? [],
-        partners: partners.data ?? [],
+        wholesalers: wholesalers.data ?? [],
       };
     },
   });
 
-  const linkedPartner =
-    data?.partners.find((partner) => partner.id === data.customer?.partner_id) ?? null;
+  const agreement = partnershipLabel(data?.customer?.partnership_level ?? null, t);
+  const supplier = data?.customer?.supplier;
+  const suppliedByName = (Array.isArray(supplier) ? supplier[0] : supplier)?.name ?? null;
   const latest = data?.reports[0] ?? null;
   const weekStart = (() => {
     const now = new Date();
@@ -132,7 +134,8 @@ function CustomerDetail() {
         </Link>
         <h1 className="mt-3 text-3xl font-semibold">{data?.customer?.name ?? "—"}</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          {linkedPartner?.name ?? t("unassigned_partner")} ·{" "}
+          {agreement ? `${agreement} · ` : ""}
+          {suppliedByName ? `${t("supplied_via")} ${suppliedByName}` : t("supplied_direct")} ·{" "}
           {data?.customer?.city || data?.customer?.location || "—"} ·{" "}
           {data?.customer?.active ? t("active") : t("inactive")}
           {data?.customer?.public_visible ? ` · ${t("public_yes")}` : ""}
@@ -166,11 +169,11 @@ function CustomerDetail() {
 
       {tab === "overview" && data?.customer ? (
         <div className="mt-5 space-y-4">
-          <VenuePartnerCard
-            venueId={venueId}
-            venueName={data.customer.name}
-            partnerId={data.customer.partner_id}
-            partners={data.partners}
+          <CustomerAgreementCard
+            customerId={venueId}
+            partnershipLevel={data.customer.partnership_level ?? null}
+            suppliedByCustomerId={data.customer.supplied_by_customer_id ?? null}
+            wholesalers={data.wholesalers}
             onChanged={() => queryClient.invalidateQueries()}
           />
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
@@ -275,11 +278,11 @@ function CustomerDetail() {
 
       {commercial && tab === "profile" && data?.customer ? (
         <div className="mt-5 space-y-4">
-          <VenuePartnerCard
-            venueId={venueId}
-            venueName={data.customer.name}
-            partnerId={data.customer.partner_id}
-            partners={data.partners}
+          <CustomerAgreementCard
+            customerId={venueId}
+            partnershipLevel={data.customer.partnership_level ?? null}
+            suppliedByCustomerId={data.customer.supplied_by_customer_id ?? null}
+            wholesalers={data.wholesalers}
             onChanged={() => queryClient.invalidateQueries()}
           />
           <ProfileTab
@@ -364,7 +367,7 @@ function AccountTab({
   async function save() {
     setBusy(true);
     const { error } = await supabase
-      .from("venues")
+      .from("customers")
       .update({
         name,
         location: location.trim() || null,
@@ -469,7 +472,6 @@ type VenueProfile = {
   city: string | null;
   address: string | null;
   slug: string | null;
-  partner_id: string | null;
   contact_name: string | null;
   email: string | null;
   phone: string | null;
@@ -517,7 +519,12 @@ function ProfileTab({
     latitude: customer.latitude?.toString() ?? "",
     longitude: customer.longitude?.toString() ?? "",
     publicVisible: customer.public_visible,
-    publicProfile: customer.public_profile === "partner" ? "partner" : "listing",
+    publicProfile:
+      customer.public_profile === "partner"
+        ? "partner"
+        : customer.public_profile === "listing"
+          ? "listing"
+          : "none",
     collaborationText: customer.collaboration_text ?? "",
     servingStory: customer.serving_story ?? "",
     videoUrl: customer.video_url ?? "",
@@ -544,7 +551,12 @@ function ProfileTab({
       latitude: customer.latitude?.toString() ?? "",
       longitude: customer.longitude?.toString() ?? "",
       publicVisible: customer.public_visible,
-      publicProfile: customer.public_profile === "partner" ? "partner" : "listing",
+      publicProfile:
+      customer.public_profile === "partner"
+        ? "partner"
+        : customer.public_profile === "listing"
+          ? "listing"
+          : "none",
       collaborationText: customer.collaboration_text ?? "",
       servingStory: customer.serving_story ?? "",
       videoUrl: customer.video_url ?? "",
@@ -559,7 +571,7 @@ function ProfileTab({
   async function save() {
     setBusy(true);
     const { error } = await supabase
-      .from("venues")
+      .from("customers")
       .update({
         name: form.name.trim(),
         city: form.city.trim() || null,
@@ -578,7 +590,10 @@ function ProfileTab({
         latitude: form.latitude.trim() ? Number(form.latitude) : null,
         longitude: form.longitude.trim() ? Number(form.longitude) : null,
         public_visible: form.publicVisible,
-        public_profile: form.publicProfile === "partner" ? "partner" : "listing",
+        public_profile:
+          form.publicProfile === "partner" || form.publicProfile === "listing"
+            ? form.publicProfile
+            : null,
         collaboration_text: form.collaborationText.trim() || null,
         serving_story: form.servingStory.trim() || null,
         video_url: form.videoUrl.trim() || null,
@@ -685,7 +700,7 @@ function ProfileTab({
         <span className="eyebrow mb-2 block">{t("public_profile")}</span>
         <p className="mb-3 text-sm text-muted-foreground">{t("public_profile_hint")}</p>
         <div className="flex flex-col gap-2 sm:flex-row">
-          {(["partner", "listing"] as const).map((option) => (
+          {(["partner", "listing", "none"] as const).map((option) => (
             <button
               key={option}
               type="button"
@@ -696,7 +711,11 @@ function ProfileTab({
                   : "border border-border text-muted-foreground"
               }`}
             >
-              {option === "partner" ? t("public_profile_partner") : t("public_profile_listing")}
+              {option === "partner"
+                ? t("public_profile_partner")
+                : option === "listing"
+                  ? t("public_profile_listing")
+                  : t("public_profile_none")}
             </button>
           ))}
         </div>
@@ -797,7 +816,7 @@ function MenuTab({
         ).error
       : (
           await supabase.from("venue_menu_items").insert({
-            venue_id: customerId,
+            customer_id: customerId,
             product_id: productId,
             ...payload,
             sort_order: menu.length * 10,
@@ -808,7 +827,7 @@ function MenuTab({
       const updated = await supabase
         .from("venue_menu_items")
         .update(payload)
-        .eq("venue_id", customerId)
+        .eq("customer_id", customerId)
         .eq("product_id", productId);
       error = updated.error;
       setBusy(false);

@@ -17,9 +17,10 @@ const createSchema = z.object({
   name: z.string().trim().min(1),
   location: z.string().trim().optional().default(""),
   city: z.string().trim().optional().default(""),
-  partnerId: z.string().uuid().nullable().optional(),
-  directPartner: z.boolean().default(false),
+  partnershipLevel: z.enum(["gold_partner", "gold_supply"]).nullable().optional(),
+  suppliedByCustomerId: z.string().uuid().nullable().optional(),
   publicVisible: z.boolean().default(false),
+  publicProfile: z.enum(["listing", "partner"]).nullable().optional(),
   username: z.string().trim().min(3),
   password: z.string().min(1),
   language: z.enum(["no", "en"]).default("no"),
@@ -33,7 +34,7 @@ async function saveProfile(
   row: {
     id: string;
     username: string;
-    venue_id?: string | null;
+    customer_id?: string | null;
     preferred_language?: string;
     full_name?: string | null;
     employee_number?: string | null;
@@ -47,7 +48,7 @@ async function saveProfile(
 
   const patch = {
     username: row.username,
-    ...(row.venue_id !== undefined ? { venue_id: row.venue_id } : {}),
+    ...(row.customer_id !== undefined ? { customer_id: row.customer_id } : {}),
     ...(row.preferred_language !== undefined ? { preferred_language: row.preferred_language } : {}),
     ...(row.full_name !== undefined ? { full_name: row.full_name } : {}),
     ...(row.employee_number !== undefined ? { employee_number: row.employee_number } : {}),
@@ -119,33 +120,18 @@ export const createCustomerAccount = createServerFn({ method: "POST" })
       .maybeSingle();
     if (taken) throw new Error("Username is already taken");
 
-    let partnerId = data.partnerId ?? null;
-    if (data.directPartner && !partnerId) {
-      const { data: partner, error: partnerError } = await supabaseAdmin
-        .from("partners")
-        .insert({
-          name: data.name,
-          kind: "direct",
-          active: true,
-        })
-        .select("id")
-        .single();
-      if (partnerError || !partner) {
-        throw new Error(partnerError?.message ?? "Could not create trade partner");
-      }
-      partnerId = partner.id;
-    }
-
     const city = data.city.trim() || data.location.trim() || null;
     const { data: customer, error: customerError } = await supabaseAdmin
-      .from("venues")
+      .from("customers")
       .insert({
         name: data.name,
+        type: "venue",
         location: data.location || city,
         city,
-        partner_id: partnerId,
+        partnership_level: data.partnershipLevel ?? null,
+        supplied_by_customer_id: data.suppliedByCustomerId ?? null,
         public_visible: data.publicVisible,
-        public_profile: data.directPartner ? "partner" : "listing",
+        public_profile: data.publicProfile === undefined ? "listing" : data.publicProfile,
         active: data.active,
         default_language: data.language,
       })
@@ -162,7 +148,6 @@ export const createCustomerAccount = createServerFn({ method: "POST" })
         email_confirm: true,
         user_metadata: {
           username,
-          venue_id: customer.id,
           customer_id: customer.id,
           language: data.language,
         },
@@ -175,7 +160,7 @@ export const createCustomerAccount = createServerFn({ method: "POST" })
       await saveProfile(supabaseAdmin, {
         id: userId,
         username,
-        venue_id: customer.id,
+        customer_id: customer.id,
         preferred_language: data.language,
       });
 
@@ -191,7 +176,7 @@ export const createCustomerAccount = createServerFn({ method: "POST" })
       if (userId) {
         await supabaseAdmin.auth.admin.deleteUser(userId);
       }
-      await supabaseAdmin.from("venues").delete().eq("id", customer.id);
+      await supabaseAdmin.from("customers").delete().eq("id", customer.id);
       throw error instanceof Error ? error : new Error("Could not create customer");
     }
   });
@@ -352,7 +337,7 @@ export const createStaffAccount = createServerFn({ method: "POST" })
       await saveProfile(supabaseAdmin, {
         id: userId,
         username,
-        venue_id: null,
+        customer_id: null,
         preferred_language: data.language,
         full_name: data.fullName,
         employee_number: data.employeeNumber,

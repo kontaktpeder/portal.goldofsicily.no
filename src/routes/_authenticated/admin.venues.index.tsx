@@ -12,13 +12,14 @@ import { createCustomerAccount } from "@/lib/admin.functions";
 import { isValidUsername, parseLoginIdentifier } from "@/lib/username";
 import { errorMessage } from "@/lib/utils";
 import { PrimaryButton, TextField } from "@/components/field";
-import { partnerOptionLabel } from "@/components/partner-venue-link";
+import { partnershipLabel } from "@/components/customer-agreement";
+import type { PartnershipLevel, PublicProfile } from "@/lib/customer-domain";
 
 export const Route = createFileRoute("/_authenticated/admin/venues/")({
-  validateSearch: (search: Record<string, unknown>): { partnerId?: string } => {
-    const partnerId = search["partnerId"];
-    if (typeof partnerId === "string" && partnerId.length > 0) {
-      return { partnerId };
+  validateSearch: (search: Record<string, unknown>): { suppliedBy?: string } => {
+    const suppliedBy = search["suppliedBy"];
+    if (typeof suppliedBy === "string" && suppliedBy.length > 0) {
+      return { suppliedBy };
     }
     return {};
   },
@@ -37,44 +38,46 @@ function AdminCustomers() {
   const { t } = useI18n();
   const { data: session } = useSessionInfo();
   const canCreate = Boolean(session?.canManageCommercial);
-  const { partnerId: preselectedPartnerId } = Route.useSearch();
+  const { suppliedBy: preselectedSupplierId } = Route.useSearch();
   const { data, error: loadError } = useAdminOverview();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const create = useServerFn(createCustomerAccount);
 
-  const [open, setOpen] = useState(Boolean(preselectedPartnerId));
+  const [open, setOpen] = useState(Boolean(preselectedSupplierId));
   const [name, setName] = useState("");
   const [location, setLocation] = useState("");
   const [city, setCity] = useState("");
-  const [partnerId, setPartnerId] = useState(preselectedPartnerId ?? "");
-  const [directPartner, setDirectPartner] = useState(false);
+  const [partnershipLevel, setPartnershipLevel] = useState<PartnershipLevel>(null);
+  const [suppliedBy, setSuppliedBy] = useState(preselectedSupplierId ?? "");
   const [publicVisible, setPublicVisible] = useState(false);
+  const [publicProfile, setPublicProfile] = useState<PublicProfile>("listing");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [language, setLanguage] = useState<"no" | "en">("no");
   const [busy, setBusy] = useState(false);
   const loginPreview = parseLoginIdentifier(username)?.username;
 
-  const { data: partners } = useQuery({
-    queryKey: ["partners-list"],
+  const { data: wholesalers } = useQuery({
+    queryKey: ["wholesalers-list"],
     queryFn: async () => {
       const { data } = await supabase
-        .from("partners")
-        .select("id, name, kind, active")
+        .from("customers")
+        .select("id, name")
+        .eq("type", "wholesaler")
+        .eq("active", true)
         .order("name");
       return data ?? [];
     },
   });
 
   useEffect(() => {
-    if (!preselectedPartnerId) return;
+    if (!preselectedSupplierId) return;
     setOpen(true);
-    setPartnerId(preselectedPartnerId);
-    setDirectPartner(false);
-  }, [preselectedPartnerId]);
+    setSuppliedBy(preselectedSupplierId);
+  }, [preselectedSupplierId]);
 
-  const preselectedPartner = partners?.find((partner) => partner.id === partnerId);
+  const preselectedSupplier = wholesalers?.find((row) => row.id === suppliedBy);
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -93,9 +96,10 @@ function AdminCustomers() {
           name,
           location,
           city,
-          partnerId: partnerId || null,
-          directPartner,
+          partnershipLevel,
+          suppliedByCustomerId: suppliedBy || null,
           publicVisible,
+          publicProfile,
           username,
           password,
           language,
@@ -159,44 +163,68 @@ function AdminCustomers() {
           <TextField label={t("customer_name")} value={name} onChange={setName} />
           <TextField label={t("city")} value={city} onChange={setCity} />
           <TextField label={t("location")} value={location} onChange={setLocation} />
+          <div>
+            <span className="eyebrow mb-2 block">{t("partnership_level")}</span>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              {([null, "gold_partner", "gold_supply"] as const).map((option) => (
+                <button
+                  key={option ?? "none"}
+                  type="button"
+                  onClick={() => setPartnershipLevel(option)}
+                  className={`rounded-2xl px-4 py-3 text-left text-sm font-semibold ${
+                    partnershipLevel === option
+                      ? "bg-primary text-primary-foreground"
+                      : "border border-border text-muted-foreground"
+                  }`}
+                >
+                  {option === null ? t("partnership_none") : partnershipLabel(option, t)}
+                </button>
+              ))}
+            </div>
+          </div>
           <label className="block">
-            <span className="eyebrow mb-2 block">{t("partner")}</span>
-            {preselectedPartner && preselectedPartnerId === partnerId ? (
+            <span className="eyebrow mb-2 block">{t("supplied_by")}</span>
+            {preselectedSupplier && preselectedSupplierId === suppliedBy ? (
               <p className="mb-2 text-sm text-muted-foreground">
-                {t("creating_under_partner")}: <strong>{preselectedPartner.name}</strong>
+                {t("creating_supplied_by")}: <strong>{preselectedSupplier.name}</strong>
               </p>
             ) : null}
             <select
-              value={partnerId}
-              onChange={(event) => setPartnerId(event.target.value)}
-              disabled={directPartner}
-              className="h-13 w-full rounded-2xl border-2 border-border bg-card px-4 text-base outline-none focus:border-primary disabled:opacity-50"
+              value={suppliedBy}
+              onChange={(event) => setSuppliedBy(event.target.value)}
+              className="h-13 w-full rounded-2xl border-2 border-border bg-card px-4 text-base outline-none focus:border-primary"
             >
-              <option value="">{t("unassigned_partner")}</option>
-              {partners?.map((partner) => (
-                <option key={partner.id} value={partner.id}>
-                  {partnerOptionLabel(partner, t)}
+              <option value="">{t("supplied_direct")}</option>
+              {wholesalers?.map((wholesaler) => (
+                <option key={wholesaler.id} value={wholesaler.id}>
+                  {wholesaler.name}
                 </option>
               ))}
             </select>
           </label>
-          <button
-            type="button"
-            onClick={() => {
-              setDirectPartner((value) => !value);
-              if (!directPartner) setPartnerId("");
-            }}
-            className="flex items-center gap-3 text-left text-sm"
-          >
-            <span
-              className={`flex h-7 w-12 shrink-0 items-center rounded-full p-1 ${directPartner ? "bg-success" : "bg-muted"}`}
-            >
-              <span
-                className={`size-5 rounded-full bg-card transition-transform ${directPartner ? "translate-x-5" : ""}`}
-              />
-            </span>
-            {t("direct_partner_hint")}
-          </button>
+          <div>
+            <span className="eyebrow mb-2 block">{t("public_profile")}</span>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              {(["listing", "partner", null] as const).map((option) => (
+                <button
+                  key={option ?? "none"}
+                  type="button"
+                  onClick={() => setPublicProfile(option)}
+                  className={`rounded-2xl px-4 py-3 text-left text-sm font-semibold ${
+                    publicProfile === option
+                      ? "bg-primary text-primary-foreground"
+                      : "border border-border text-muted-foreground"
+                  }`}
+                >
+                  {option === "partner"
+                    ? t("public_profile_partner")
+                    : option === "listing"
+                      ? t("public_profile_listing")
+                      : t("public_profile_none")}
+                </button>
+              ))}
+            </div>
+          </div>
           <button
             type="button"
             onClick={() => setPublicVisible((value) => !value)}
@@ -269,7 +297,11 @@ function AdminCustomers() {
               <div className="min-w-0 flex-1">
                 <p className="truncate font-semibold">{row.name}</p>
                 <p className="text-xs text-muted-foreground">
-                  {row.partnerName ?? t("unassigned_partner")} · {row.location ?? row.city ?? "—"} ·{" "}
+                  {partnershipLabel(row.partnershipLevel, t)
+                    ? `${partnershipLabel(row.partnershipLevel, t)} · `
+                    : ""}
+                  {row.suppliedByName ? `${t("supplied_via")} ${row.suppliedByName}` : t("supplied_direct")} ·{" "}
+                  {row.location ?? row.city ?? "—"} ·{" "}
                   {row.active ? t("active") : t("inactive")}
                   {row.publicVisible ? ` · ${t("public_yes")}` : ""}
                 </p>

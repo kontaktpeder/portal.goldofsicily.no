@@ -20,10 +20,10 @@ type LotQueryRow = {
 };
 
 type ReportQueryRow = {
-  venue_id: string;
+  customer_id: string;
   created_at: string;
   next_required_quantity: number | null;
-  venues: { name: string } | { name: string }[] | null;
+  customers: { name: string } | { name: string }[] | null;
   shift_report_lines:
     | {
         product_id: string;
@@ -55,9 +55,9 @@ function toOpsLots(rows: LotQueryRow[]): OpsLot[] {
 
 function toNeedReports(rows: ReportQueryRow[]): VenueNeedReport[] {
   return rows.map((row) => {
-    const venue = asOne(row.venues);
+    const venue = asOne(row.customers);
     return {
-      venueId: row.venue_id,
+      venueId: row.customer_id,
       venueName: venue?.name ?? "—",
       createdAt: row.created_at,
       nextRequired: row.next_required_quantity,
@@ -94,7 +94,7 @@ export function useOpsHome(lang: "no" | "en") {
         supabase
           .from("shift_reports")
           .select(
-            "venue_id, created_at, next_required_quantity, venues(name), shift_report_lines(product_id, next_required_quantity, products(name_no, name_en))",
+            "customer_id, created_at, next_required_quantity, customers(name), shift_report_lines(product_id, next_required_quantity, products(name_no, name_en))",
           )
           .order("created_at", { ascending: false })
           .limit(200),

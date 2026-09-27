@@ -8,6 +8,7 @@ import { PrimaryButton, TextAreaField, TextField } from "@/components/field";
 import { ProducerPicker } from "@/components/producer-picker";
 import { listProductionStaff } from "@/lib/admin.functions";
 import { useI18n, type TranslationKey } from "@/lib/i18n";
+import { handoverRecipient } from "@/lib/customer-domain";
 import { nowOsloDateTimeLocal, remainingAtGold, sumQuantities } from "@/lib/gold-lot";
 import {
   cartonLabelsDocument,
@@ -60,8 +61,7 @@ export const Route = createFileRoute("/_authenticated/admin/lots/$lotId")({
 });
 
 type Supplier = { id: string; name: string };
-type Partner = { id: string; name: string };
-type Venue = { id: string; name: string };
+type CustomerOption = { id: string; name: string; type: "venue" | "wholesaler" };
 
 type LotDetail = {
   id: string;
@@ -163,13 +163,13 @@ const EVENT_ACTION_KEYS: Record<Exclude<LotEvent["eventType"], "handover">, Tran
 
 function venueNameFromDeliveryRow(row: {
   deliveries:
-    | { delivered_at: string; venues: { name: string } | null }
-    | { delivered_at: string; venues: { name: string } | null }[]
+    | { delivered_at: string; customers: { name: string } | null }
+    | { delivered_at: string; customers: { name: string } | null }[]
     | null;
 }): string {
   const delivery = row.deliveries;
   const record = Array.isArray(delivery) ? delivery[0] : delivery;
-  return record?.venues?.name ?? "";
+  return record?.customers?.name ?? "";
 }
 
 function AdminLotDetail() {
@@ -258,7 +258,7 @@ function AdminLotDetail() {
     queryFn: async () => {
       const { data, error: loadError } = await supabase
         .from("delivery_lines")
-        .select("quantity, deliveries(delivered_at, venues(name))")
+        .select("quantity, deliveries(delivered_at, customers(name))")
         .eq("gold_lot_id", lotId);
       if (loadError) throw loadError;
       return data ?? [];
@@ -428,14 +428,14 @@ function AdminLotDetail() {
           <ul className="mt-4 space-y-2">
             {deliveries?.map((row, index) => {
               const delivery = row.deliveries as
-                | { delivered_at: string; venues: { name: string } | null }
-                | { delivered_at: string; venues: { name: string } | null }[]
+                | { delivered_at: string; customers: { name: string } | null }
+                | { delivered_at: string; customers: { name: string } | null }[]
                 | null;
               const record = Array.isArray(delivery) ? delivery[0] : delivery;
               return (
                 <li key={`${row.quantity}-${index}`} className="surface-card p-4">
                   <p className="font-semibold">
-                    {row.quantity} {t("pcs")} → {record?.venues?.name ?? "—"}
+                    {row.quantity} {t("pcs")} → {record?.customers?.name ?? "—"}
                   </p>
                   <p className="text-xs text-muted-foreground">
                     {formatDate(record?.delivered_at, lang)}
@@ -496,8 +496,8 @@ function LotActions({
   lot: LotDetail;
   deliveries: Array<{
     deliveries:
-      | { delivered_at: string; venues: { name: string } | null }
-      | { delivered_at: string; venues: { name: string } | null }[]
+      | { delivered_at: string; customers: { name: string } | null }
+      | { delivered_at: string; customers: { name: string } | null }[]
       | null;
   }>;
   onSaved: () => Promise<void>;
@@ -1156,38 +1156,29 @@ function HandoverForm({
     setQuantity(String(remaining || 0));
   }, [remaining]);
 
-  const { data: partners } = useQuery({
-    queryKey: ["partners-list"],
+  const { data: customers } = useQuery({
+    queryKey: ["customers-list"],
     queryFn: async () => {
-      const { data } = await supabase.from("partners").select("id, name").eq("active", true).order("name");
-      return (data ?? []) as Partner[];
-    },
-  });
-  const { data: venues } = useQuery({
-    queryKey: ["venues-list"],
-    queryFn: async () => {
-      const { data } = await supabase.from("venues").select("id, name").eq("active", true).order("name");
-      return (data ?? []) as Venue[];
+      const { data } = await supabase
+        .from("customers")
+        .select("id, name, type")
+        .eq("active", true)
+        .order("name");
+      return (data ?? []) as CustomerOption[];
     },
   });
 
-  const recipientOptions = useMemo(() => {
-    const partnerOpts = (partners ?? []).map((partner) => ({
-      key: `partner:${partner.id}`,
-      label: partner.name,
-      company: partner.name,
-      partnerId: partner.id,
-      venueId: null as string | null,
-    }));
-    const venueOpts = (venues ?? []).map((venue) => ({
-      key: `venue:${venue.id}`,
-      label: venue.name,
-      company: venue.name,
-      partnerId: null as string | null,
-      venueId: venue.id,
-    }));
-    return [...partnerOpts, ...venueOpts];
-  }, [partners, venues]);
+  const recipientOptions = useMemo(
+    () =>
+      (customers ?? []).map((customer) => ({
+        key: customer.id,
+        label: customer.name,
+        company: customer.name,
+        customerId: customer.id,
+        type: customer.type,
+      })),
+    [customers],
+  );
 
   function pickRecipient(key: string) {
     setRecipientKey(key);
@@ -1202,9 +1193,13 @@ function HandoverForm({
     }
     const qty = Number.parseInt(quantity, 10) || 0;
     const chosen = recipientOptions.find((option) => option.key === recipientKey);
-    const recipientCompany = company.trim() || chosen?.company || "";
-    if (!recipientCompany || qty <= 0) {
-      toast.error(t("recipient_company"));
+    const recipient = handoverRecipient({
+      customerId: chosen?.customerId ?? null,
+      customerName: chosen?.company ?? null,
+      companySnapshot: company,
+    });
+    if (!recipient || qty <= 0) {
+      toast.error(t("choose_recipient"));
       return;
     }
     setBusy(true);
@@ -1215,10 +1210,9 @@ function HandoverForm({
       quantity: qty,
       cartons: cartonQty,
       handed_over_at: handedAt,
-      recipient_company: recipientCompany,
+      recipient_company: recipient.recipientCompany,
       recipient_person: person.trim() || null,
-      recipient_partner_id: chosen?.partnerId ?? null,
-      recipient_venue_id: chosen?.venueId ?? null,
+      customer_id: recipient.customerId,
       storage_location: storage.trim() || null,
       ownership_after_handover: ownership,
     });
@@ -1243,7 +1237,7 @@ function HandoverForm({
       metadata: {
         quantity: qty,
         cartons: cartonQty,
-        recipient_company: recipientCompany,
+        recipient_company: recipient.recipientCompany,
       },
     });
     setBusy(false);
@@ -1274,7 +1268,7 @@ function HandoverForm({
           onChange={(event) => pickRecipient(event.target.value)}
           className="h-13 w-full rounded-2xl border-2 border-border bg-card px-4 text-base outline-none focus:border-primary"
         >
-          <option value="">{t("recipient_other")}</option>
+          <option value="">—</option>
           {recipientOptions.map((option) => (
             <option key={option.key} value={option.key}>
               {option.label}
