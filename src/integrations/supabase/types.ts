@@ -31,6 +31,8 @@ export type Database = {
           logo_url: string | null
           longitude: number | null
           menu_intro: string | null
+          legal_entity_id: string | null
+          billing_legal_entity_id: string | null
           name: string
           notes: string | null
           partnership_level: Database["public"]["Enums"]["partnership_level"] | null
@@ -66,6 +68,8 @@ export type Database = {
           logo_url?: string | null
           longitude?: number | null
           menu_intro?: string | null
+          legal_entity_id?: string | null
+          billing_legal_entity_id?: string | null
           name: string
           notes?: string | null
           partnership_level?: Database["public"]["Enums"]["partnership_level"] | null
@@ -101,6 +105,8 @@ export type Database = {
           logo_url?: string | null
           longitude?: number | null
           menu_intro?: string | null
+          legal_entity_id?: string | null
+          billing_legal_entity_id?: string | null
           name?: string
           notes?: string | null
           partnership_level?: Database["public"]["Enums"]["partnership_level"] | null
@@ -128,37 +134,67 @@ export type Database = {
             referencedRelation: "customers"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "customers_legal_entity_id_fkey"
+            columns: ["legal_entity_id"]
+            isOneToOne: false
+            referencedRelation: "legal_entities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "customers_billing_legal_entity_id_fkey"
+            columns: ["billing_legal_entity_id"]
+            isOneToOne: false
+            referencedRelation: "legal_entities"
+            referencedColumns: ["id"]
+          },
         ]
       }
       deliveries: {
         Row: {
+          commercial_route: Database["public"]["Enums"]["commercial_route"]
           created_at: string
           customer_id: string
+          customer_name_snapshot: string
           delivered_at: string
           id: string
           note: string | null
           quantity: number
+          wholesaler_customer_id: string | null
         }
         Insert: {
+          commercial_route?: Database["public"]["Enums"]["commercial_route"]
           created_at?: string
           customer_id: string
+          customer_name_snapshot?: string
           delivered_at?: string
           id?: string
           note?: string | null
           quantity: number
+          wholesaler_customer_id?: string | null
         }
         Update: {
+          commercial_route?: Database["public"]["Enums"]["commercial_route"]
           created_at?: string
           customer_id?: string
+          customer_name_snapshot?: string
           delivered_at?: string
           id?: string
           note?: string | null
           quantity?: number
+          wholesaler_customer_id?: string | null
         }
         Relationships: [
           {
             foreignKeyName: "deliveries_customer_id_fkey"
             columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "deliveries_wholesaler_customer_id_fkey"
+            columns: ["wholesaler_customer_id"]
             isOneToOne: false
             referencedRelation: "customers"
             referencedColumns: ["id"]
@@ -172,7 +208,9 @@ export type Database = {
           gold_lot_id: string | null
           id: string
           product_id: string
+          product_name_snapshot: string
           quantity: number
+          unit_price_ore: number | null
         }
         Insert: {
           created_at?: string
@@ -180,7 +218,9 @@ export type Database = {
           gold_lot_id?: string | null
           id?: string
           product_id: string
+          product_name_snapshot?: string
           quantity?: number
+          unit_price_ore?: number | null
         }
         Update: {
           created_at?: string
@@ -188,7 +228,9 @@ export type Database = {
           gold_lot_id?: string | null
           id?: string
           product_id?: string
+          product_name_snapshot?: string
           quantity?: number
+          unit_price_ore?: number | null
         }
         Relationships: [
           {
@@ -1010,6 +1052,205 @@ export type Database = {
         }
         Relationships: []
       }
+      legal_entities: {
+        Row: {
+          accounting_customer_id: string | null
+          accounting_synced_at: string | null
+          brreg_data: Json | null
+          brreg_synced_at: string | null
+          business_address: string | null
+          created_at: string
+          id: string
+          legal_name: string
+          organization_form: string | null
+          organization_number: string
+          parent_legal_entity_id: string | null
+          postal_address: string | null
+          updated_at: string
+          vat_registered: boolean
+        }
+        Insert: {
+          accounting_customer_id?: string | null
+          accounting_synced_at?: string | null
+          brreg_data?: Json | null
+          brreg_synced_at?: string | null
+          business_address?: string | null
+          created_at?: string
+          id?: string
+          legal_name: string
+          organization_form?: string | null
+          organization_number: string
+          parent_legal_entity_id?: string | null
+          postal_address?: string | null
+          updated_at?: string
+          vat_registered?: boolean
+        }
+        Update: {
+          accounting_customer_id?: string | null
+          accounting_synced_at?: string | null
+          brreg_data?: Json | null
+          brreg_synced_at?: string | null
+          business_address?: string | null
+          created_at?: string
+          id?: string
+          legal_name?: string
+          organization_form?: string | null
+          organization_number?: string
+          parent_legal_entity_id?: string | null
+          postal_address?: string | null
+          updated_at?: string
+          vat_registered?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "legal_entities_parent_legal_entity_id_fkey"
+            columns: ["parent_legal_entity_id"]
+            isOneToOne: false
+            referencedRelation: "legal_entities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      customer_product_prices: {
+        Row: {
+          created_at: string
+          customer_id: string
+          id: string
+          price_ore: number
+          product_id: string
+          valid_from: string
+          valid_to: string | null
+        }
+        Insert: {
+          created_at?: string
+          customer_id: string
+          id?: string
+          price_ore: number
+          product_id: string
+          valid_from: string
+          valid_to?: string | null
+        }
+        Update: {
+          created_at?: string
+          customer_id?: string
+          id?: string
+          price_ore?: number
+          product_id?: string
+          valid_from?: string
+          valid_to?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "customer_product_prices_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "customer_product_prices_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      invoice_drafts: {
+        Row: {
+          accounting_invoice_id: string | null
+          accounting_invoice_number: string | null
+          created_at: string
+          id: string
+          legal_entity_id: string
+          legal_name_snapshot: string
+          organization_number_snapshot: string
+          status: Database["public"]["Enums"]["invoice_draft_status"]
+          updated_at: string
+        }
+        Insert: {
+          accounting_invoice_id?: string | null
+          accounting_invoice_number?: string | null
+          created_at?: string
+          id?: string
+          legal_entity_id: string
+          legal_name_snapshot?: string
+          organization_number_snapshot?: string
+          status?: Database["public"]["Enums"]["invoice_draft_status"]
+          updated_at?: string
+        }
+        Update: {
+          accounting_invoice_id?: string | null
+          accounting_invoice_number?: string | null
+          created_at?: string
+          id?: string
+          legal_entity_id?: string
+          legal_name_snapshot?: string
+          organization_number_snapshot?: string
+          status?: Database["public"]["Enums"]["invoice_draft_status"]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "invoice_drafts_legal_entity_id_fkey"
+            columns: ["legal_entity_id"]
+            isOneToOne: false
+            referencedRelation: "legal_entities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      invoice_draft_lines: {
+        Row: {
+          active: boolean
+          created_at: string
+          delivery_line_id: string
+          id: string
+          invoice_draft_id: string
+          product_name_snapshot: string
+          quantity: number
+          unit_price_ore: number
+          venue_name_snapshot: string
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          delivery_line_id: string
+          id?: string
+          invoice_draft_id: string
+          product_name_snapshot?: string
+          quantity?: number
+          unit_price_ore?: number
+          venue_name_snapshot?: string
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          delivery_line_id?: string
+          id?: string
+          invoice_draft_id?: string
+          product_name_snapshot?: string
+          quantity?: number
+          unit_price_ore?: number
+          venue_name_snapshot?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "invoice_draft_lines_invoice_draft_id_fkey"
+            columns: ["invoice_draft_id"]
+            isOneToOne: false
+            referencedRelation: "invoice_drafts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoice_draft_lines_delivery_line_id_fkey"
+            columns: ["delivery_line_id"]
+            isOneToOne: false
+            referencedRelation: "delivery_lines"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
@@ -1053,8 +1294,10 @@ export type Database = {
       feedback_rating: "positive" | "mixed" | "negative"
       gold_lot_event_type: "created" | "packed" | "handover" | "closed" | "recalled"
       gold_lot_status: "produced" | "packed" | "handed_over" | "closed" | "recalled"
+      commercial_route: "direct" | "via_wholesaler"
       customer_type: "venue" | "wholesaler"
       handover_ownership: "gold" | "villa"
+      invoice_draft_status: "draft" | "sent" | "credited" | "cancelled"
       partnership_level: "gold_partner" | "gold_supply"
     }
     CompositeTypes: {
@@ -1187,8 +1430,10 @@ export const Constants = {
       feedback_rating: ["positive", "mixed", "negative"],
       gold_lot_event_type: ["created", "packed", "handover", "closed", "recalled"],
       gold_lot_status: ["produced", "packed", "handed_over", "closed", "recalled"],
+      commercial_route: ["direct", "via_wholesaler"],
       customer_type: ["venue", "wholesaler"],
       handover_ownership: ["gold", "villa"],
+      invoice_draft_status: ["draft", "sent", "credited", "cancelled"],
       partnership_level: ["gold_partner", "gold_supply"],
     },
   },

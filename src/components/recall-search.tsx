@@ -283,7 +283,7 @@ async function hydrateLots(rows: LotQueryRow[]): Promise<RecallLotInput[]> {
   const ids = rows.map((row) => row.id);
   const { data: lines } = await supabase
     .from("delivery_lines")
-    .select("gold_lot_id, quantity, deliveries(delivered_at, customers(name))")
+    .select("gold_lot_id, quantity, deliveries(delivered_at, customers!deliveries_customer_id_fkey(name))")
     .in("gold_lot_id", ids);
   const byLot = new Map<string, RecallLotInput["venueDeliveries"]>();
   for (const line of lines ?? []) {

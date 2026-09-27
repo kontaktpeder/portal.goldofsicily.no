@@ -13,6 +13,7 @@ import { isValidUsername, parseLoginIdentifier } from "@/lib/username";
 import { errorMessage } from "@/lib/utils";
 import { PrimaryButton, TextField } from "@/components/field";
 import { partnershipLabel } from "@/components/customer-agreement";
+import { BrregSearch } from "@/components/brreg-search";
 import type { PartnershipLevel, PublicProfile } from "@/lib/customer-domain";
 
 export const Route = createFileRoute("/_authenticated/admin/venues/")({
@@ -55,6 +56,7 @@ function AdminCustomers() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [language, setLanguage] = useState<"no" | "en">("no");
+  const [legalEntityId, setLegalEntityId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const loginPreview = parseLoginIdentifier(username)?.username;
 
@@ -100,6 +102,7 @@ function AdminCustomers() {
           suppliedByCustomerId: suppliedBy || null,
           publicVisible,
           publicProfile,
+          legalEntityId,
           username,
           password,
           language,
@@ -160,6 +163,13 @@ function AdminCustomers() {
 
       {open && canCreate ? (
         <form className="surface-card mt-5 space-y-4 p-5" onSubmit={submit}>
+          <BrregSearch
+            onPicked={({ legalEntityId: pickedId, hit }) => {
+              setLegalEntityId(pickedId);
+              if (!name.trim()) setName(hit.legalName);
+              if (!city.trim() && hit.city) setCity(hit.city);
+            }}
+          />
           <TextField label={t("customer_name")} value={name} onChange={setName} />
           <TextField label={t("city")} value={city} onChange={setCity} />
           <TextField label={t("location")} value={location} onChange={setLocation} />

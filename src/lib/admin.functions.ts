@@ -21,6 +21,7 @@ const createSchema = z.object({
   suppliedByCustomerId: z.string().uuid().nullable().optional(),
   publicVisible: z.boolean().default(false),
   publicProfile: z.enum(["listing", "partner"]).nullable().optional(),
+  legalEntityId: z.string().uuid().nullable().optional(),
   username: z.string().trim().min(3),
   password: z.string().min(1),
   language: z.enum(["no", "en"]).default("no"),
@@ -132,6 +133,7 @@ export const createCustomerAccount = createServerFn({ method: "POST" })
         supplied_by_customer_id: data.suppliedByCustomerId ?? null,
         public_visible: data.publicVisible,
         public_profile: data.publicProfile === undefined ? "listing" : data.publicProfile,
+        legal_entity_id: data.legalEntityId ?? null,
         active: data.active,
         default_language: data.language,
       })

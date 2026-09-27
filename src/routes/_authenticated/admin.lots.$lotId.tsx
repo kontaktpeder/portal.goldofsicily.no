@@ -258,7 +258,7 @@ function AdminLotDetail() {
     queryFn: async () => {
       const { data, error: loadError } = await supabase
         .from("delivery_lines")
-        .select("quantity, deliveries(delivered_at, customers(name))")
+        .select("quantity, deliveries(delivered_at, customers!deliveries_customer_id_fkey(name))")
         .eq("gold_lot_id", lotId);
       if (loadError) throw loadError;
       return data ?? [];
