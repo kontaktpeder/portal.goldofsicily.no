@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
   customerInvariantError,
@@ -127,4 +128,23 @@ test("handover identity is the customer and company is a snapshot", () => {
     handoverRecipient({ customerId: "villa", customerName: "Villa Import", companySnapshot: "  " }),
     { customerId: "villa", recipientCompany: "Villa Import" },
   );
+});
+
+test("a wholesaler form asks for its own name and the BRREG search stays beside the field", () => {
+  const index = readFileSync(
+    new URL("../routes/_authenticated/admin.wholesalers.index.tsx", import.meta.url),
+    "utf8",
+  );
+  const detail = readFileSync(
+    new URL("../routes/_authenticated/admin.wholesalers.$customerId.tsx", import.meta.url),
+    "utf8",
+  );
+  const search = readFileSync(new URL("../components/brreg-search.tsx", import.meta.url), "utf8");
+  assert.match(index, /wholesaler_name/);
+  assert.match(detail, /wholesaler_name/);
+  assert.doesNotMatch(index, /customer_name/);
+  assert.doesNotMatch(detail, /customer_name/);
+  assert.match(search, /shrink-0/);
+  assert.doesNotMatch(search, /PrimaryButton/);
+  assert.match(search, /event.preventDefault\(\)/);
 });
