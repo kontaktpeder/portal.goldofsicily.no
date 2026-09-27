@@ -128,6 +128,17 @@ ALTER TABLE public.delivery_lines
   ADD COLUMN IF NOT EXISTS unit_price_ore INTEGER,
   ADD COLUMN IF NOT EXISTS product_name_snapshot TEXT;
 
+-- Historiske linjer kan ha quantity > 0 og gold_lot_id NULL.
+-- CHECK-en er NOT VALID, men Postgres validerer den likevel når raden oppdateres,
+-- også når bare product_name_snapshot eller unit_price_ore endres.
+-- Triggeren trg_enforce_delivery_line_lot håndhever fortsatt kravet ved INSERT
+-- og ved endring av quantity, gold_lot_id eller product_id.
+-- Prisfrys senere er også en UPDATE, så CHECK-en skal ikke legges tilbake.
+ALTER TABLE public.delivery_lines
+  DROP CONSTRAINT IF EXISTS delivery_lines_quantity_requires_gold_lot;
+
+DROP TRIGGER IF EXISTS trg_delivery_lines_snapshot_price ON public.delivery_lines;
+
 UPDATE public.delivery_lines dl
 SET product_name_snapshot = p.name_no
 FROM public.products p

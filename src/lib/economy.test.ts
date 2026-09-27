@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
   billingLegalEntityId,
@@ -158,4 +159,19 @@ test("a subunit points at a hovedenhet and a parent cannot become a subunit", ()
       "",
     /subunits/,
   );
+});
+
+test("product name backfill drops the gold-lot check before updating historical lines", () => {
+  const sql = readFileSync(new URL("../../sql/17_economy_domain.sql", import.meta.url), "utf8");
+  const migration = readFileSync(
+    new URL("../../supabase/migrations/20260927150000_economy_domain.sql", import.meta.url),
+    "utf8",
+  );
+  for (const source of [sql, migration]) {
+    const dropAt = source.indexOf("DROP CONSTRAINT IF EXISTS delivery_lines_quantity_requires_gold_lot");
+    const updateAt = source.indexOf("SET product_name_snapshot = p.name_no");
+    assert.ok(dropAt > 0);
+    assert.ok(updateAt > dropAt);
+    assert.equal(source.indexOf("ADD CONSTRAINT delivery_lines_quantity_requires_gold_lot"), -1);
+  }
 });
