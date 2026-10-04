@@ -157,6 +157,8 @@ export type Database = {
           customer_id: string
           customer_name_snapshot: string
           delivered_at: string
+          delivered_by: string | null
+          delivered_by_name: string | null
           id: string
           note: string | null
           quantity: number
@@ -168,6 +170,8 @@ export type Database = {
           customer_id: string
           customer_name_snapshot?: string
           delivered_at?: string
+          delivered_by?: string | null
+          delivered_by_name?: string | null
           id?: string
           note?: string | null
           quantity: number
@@ -179,6 +183,8 @@ export type Database = {
           customer_id?: string
           customer_name_snapshot?: string
           delivered_at?: string
+          delivered_by?: string | null
+          delivered_by_name?: string | null
           id?: string
           note?: string | null
           quantity?: number
@@ -190,6 +196,13 @@ export type Database = {
             columns: ["customer_id"]
             isOneToOne: false
             referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "deliveries_delivered_by_fkey"
+            columns: ["delivered_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
           {
