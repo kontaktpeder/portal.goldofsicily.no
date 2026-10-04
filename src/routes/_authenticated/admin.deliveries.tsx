@@ -1,5 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useMemo, useState } from "react";
 import { Plus } from "lucide-react";
 import { toast } from "sonner";
@@ -10,6 +11,15 @@ import { PrimaryButton, TextField } from "@/components/field";
 import { DeliveryFlavorBreakdown, DeliveryFlavorEditor } from "@/components/flavor-lines";
 import { LotPrerequisitesBanner } from "@/components/lot-prerequisites";
 import { useLotPrerequisites } from "@/hooks/use-lot-prerequisites";
+import { useSessionInfo } from "@/hooks/use-session";
+import { listProductionStaff } from "@/lib/admin.functions";
+import {
+  deliverySettingsPatch,
+  driverOptionLabel,
+  isDeliveryDriverSchemaError,
+  suggestedDeliveredBy,
+} from "@/lib/delivery-driver";
+import type { ProductionStaff } from "@/lib/lot-producers";
 import {
   deliveryLinesPayload,
   initialDeliveryQtys,
@@ -50,7 +60,29 @@ function AdminDeliveries() {
   const [flavorQtys, setFlavorQtys] = useState<DeliveryFlavorQty[]>([]);
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [note, setNote] = useState("");
+  const [deliveredBy, setDeliveredBy] = useState("");
+  const [driverTouched, setDriverTouched] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editDate, setEditDate] = useState("");
+  const [editNote, setEditNote] = useState("");
+  const [editDriver, setEditDriver] = useState("");
+  const [editBusy, setEditBusy] = useState(false);
+  const session = useSessionInfo();
+  const listStaff = useServerFn(listProductionStaff);
+
+  const { data: productionStaff } = useQuery({
+    queryKey: ["production-staff"],
+    queryFn: () => listStaff(),
+  });
+  const staff = productionStaff?.staff ?? [];
+  const currentUserId = session.data?.session?.user.id ?? null;
+
+  const staffIds = staff.map((person) => person.id).join("\n");
+  useEffect(() => {
+    if (!open || driverTouched) return;
+    setDeliveredBy(suggestedDeliveredBy(staffIds ? staffIds.split("\n") : [], currentUserId));
+  }, [open, driverTouched, staffIds, currentUserId]);
 
   const { data: customers } = useQuery({
     queryKey: ["customers-list"],
@@ -246,16 +278,28 @@ function AdminDeliveries() {
       }
     }
     setBusy(true);
-    const { data: created, error } = await supabase
+    const base = {
+      customer_id: customerId,
+      quantity: total,
+      delivered_at: date,
+      note: note.trim() || null,
+    };
+    let driverSkipped = false;
+    let created: { id: string } | null = null;
+    let error: { message: string } | null = null;
+    const inserted = await supabase
       .from("deliveries")
-      .insert({
-        customer_id: customerId,
-        quantity: total,
-        delivered_at: date,
-        note: note.trim() || null,
-      })
+      .insert(deliveredBy ? { ...base, delivered_by: deliveredBy } : base)
       .select("id")
       .single();
+    created = inserted.data;
+    error = inserted.error;
+    if (error && deliveredBy && isDeliveryDriverSchemaError(error.message)) {
+      driverSkipped = true;
+      const retry = await supabase.from("deliveries").insert(base).select("id").single();
+      created = retry.data;
+      error = retry.error;
+    }
     if (error || !created) {
       setBusy(false);
       toast.error(error?.message ?? t("create_customer_failed"));
@@ -287,11 +331,71 @@ function AdminDeliveries() {
       return;
     }
     setBusy(false);
-    toast.success(t("register_delivery"));
+    if (driverSkipped) toast.warning(t("delivered_by_pending_sql"));
+    else toast.success(t("register_delivery"));
     setOpen(false);
     setNote("");
+    setDeliveredBy("");
+    setDriverTouched(false);
     setFlavorQtys(products ? initialDeliveryQtys(products) : []);
     await queryClient.invalidateQueries();
+  }
+
+  function startEdit(delivery: {
+    id: string;
+    delivered_at: string;
+    note: string | null;
+    delivered_by?: string | null;
+  }) {
+    setEditingId(delivery.id);
+    setEditDate(delivery.delivered_at.slice(0, 10));
+    setEditNote(delivery.note ?? "");
+    setEditDriver(delivery.delivered_by ?? "");
+  }
+
+  async function saveEdit() {
+    if (!editingId || !editDate) return;
+    setEditBusy(true);
+    const patch = deliverySettingsPatch({
+      deliveredAt: editDate,
+      note: editNote,
+      deliveredBy: editDriver,
+    });
+    let driverSkipped = false;
+    let { error } = await supabase.from("deliveries").update(patch).eq("id", editingId);
+    if (error && isDeliveryDriverSchemaError(error.message)) {
+      driverSkipped = true;
+      const { delivered_by: _driver, ...rest } = patch;
+      const retry = await supabase.from("deliveries").update(rest).eq("id", editingId);
+      error = retry.error;
+    }
+    setEditBusy(false);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    if (driverSkipped) toast.warning(t("delivered_by_pending_sql"));
+    else toast.success(t("delivery_updated"));
+    setEditingId(null);
+    await queryClient.invalidateQueries();
+  }
+
+  function requestSaveEdit() {
+    if (!editingId || !editDate) return;
+    toast(t("delivery_edit_confirm"), {
+      id: `delivery-edit-${editingId}`,
+      duration: Infinity,
+      action: {
+        label: t("delivery_edit_yes"),
+        onClick: () => {
+          void saveEdit();
+        },
+      },
+      cancel: {
+        label: t("cancel"),
+        onClick: () => {},
+      },
+    });
   }
 
   return (
@@ -300,7 +404,12 @@ function AdminDeliveries() {
         <h1 className="text-3xl font-semibold">{t("deliveries")}</h1>
         <button
           type="button"
-          onClick={() => setOpen((value) => !value)}
+          onClick={() =>
+            setOpen((value) => {
+              if (!value) setDriverTouched(false);
+              return !value;
+            })
+          }
           className="flex items-center gap-1.5 rounded-full bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground"
         >
           <Plus className="size-4" />
@@ -343,6 +452,16 @@ function AdminDeliveries() {
             </p>
           </div>
           <TextField label={t("date")} value={date} onChange={setDate} type="date" />
+          <DriverSelect
+            label={t("delivered_by")}
+            value={deliveredBy}
+            staff={staff}
+            emptyLabel={t("delivered_by_none")}
+            onChange={(value) => {
+              setDriverTouched(true);
+              setDeliveredBy(value);
+            }}
+          />
           <TextField label={t("note")} value={note} onChange={setNote} />
           <PrimaryButton onClick={submit} disabled={busy || !canSave}>
             {busy ? "…" : t("save")}
@@ -373,6 +492,12 @@ function AdminDeliveries() {
                   : ` · ${t("route_direct")}`}
                 {delivery.note ? ` · ${delivery.note}` : ""}
               </p>
+              <p className="mt-1 text-sm">
+                {t("delivered_by")}:{" "}
+                {"delivered_by_name" in delivery && delivery.delivered_by_name
+                  ? delivery.delivered_by_name
+                  : t("delivered_by_missing")}
+              </p>
               <DeliveryFlavorBreakdown
                 linkLots
                 lines={
@@ -381,10 +506,87 @@ function AdminDeliveries() {
                     : null) ?? null
                 }
               />
+              {editingId === delivery.id ? (
+                <div className="mt-4 space-y-3 border-t border-border pt-4">
+                  <p className="eyebrow">{t("delivery_settings")}</p>
+                  <TextField label={t("date")} value={editDate} onChange={setEditDate} type="date" />
+                  <DriverSelect
+                    label={t("delivered_by")}
+                    value={editDriver}
+                    staff={staff}
+                    emptyLabel={t("delivered_by_none")}
+                    extra={
+                      delivery.delivered_by &&
+                      "delivered_by_name" in delivery &&
+                      delivery.delivered_by_name
+                        ? { id: delivery.delivered_by, label: delivery.delivered_by_name }
+                        : null
+                    }
+                    onChange={setEditDriver}
+                  />
+                  <TextField label={t("note")} value={editNote} onChange={setEditNote} />
+                  <PrimaryButton onClick={requestSaveEdit} disabled={editBusy || !editDate}>
+                    {editBusy ? "…" : t("save")}
+                  </PrimaryButton>
+                  <button
+                    type="button"
+                    onClick={() => setEditingId(null)}
+                    className="w-full py-2 text-sm font-semibold text-muted-foreground"
+                  >
+                    {t("cancel")}
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => startEdit(delivery)}
+                  className="mt-3 text-sm font-semibold text-primary"
+                >
+                  {t("delivery_edit")}
+                </button>
+              )}
             </article>
           ))
         )}
       </div>
     </main>
+  );
+}
+
+function DriverSelect({
+  label,
+  value,
+  staff,
+  emptyLabel,
+  extra,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  staff: readonly ProductionStaff[];
+  emptyLabel: string;
+  extra?: { id: string; label: string } | null;
+  onChange: (value: string) => void;
+}) {
+  const known = staff.some((person) => person.id === value);
+  return (
+    <label className="block">
+      <span className="eyebrow mb-2 block">{label}</span>
+      <select
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="h-13 w-full rounded-2xl border-2 border-border bg-card px-4 text-base outline-none focus:border-primary"
+      >
+        <option value="">{emptyLabel}</option>
+        {extra && !known ? (
+          <option value={extra.id}>{extra.label}</option>
+        ) : null}
+        {staff.map((person) => (
+          <option key={person.id} value={person.id}>
+            {driverOptionLabel(person)}
+          </option>
+        ))}
+      </select>
+    </label>
   );
 }

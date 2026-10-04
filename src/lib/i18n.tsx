@@ -308,6 +308,18 @@ const dict = {
     no: "Velg kunde og sett antall for minst én smak.",
     en: "Choose a customer and set a quantity for at least one flavor.",
   },
+  delivered_by: { no: "Levert av", en: "Delivered by" },
+  delivered_by_none: { no: "Ikke valgt", en: "Not selected" },
+  delivered_by_missing: { no: "Ikke registrert", en: "Not recorded" },
+  delivered_by_pending_sql: {
+    no: "Leveringen er lagret, men ansattfeltet finnes ikke i databasen ennå. Kjør SQL for leveringsansatt i Lovable Cloud.",
+    en: "The delivery was saved, but the staff field is not in the database yet. Run the delivery-driver SQL in Lovable Cloud.",
+  },
+  delivery_settings: { no: "Innstillinger", en: "Settings" },
+  delivery_edit: { no: "Rediger", en: "Edit" },
+  delivery_edit_confirm: { no: "Er du sikker?", en: "Are you sure?" },
+  delivery_edit_yes: { no: "Bekreft", en: "Confirm" },
+  delivery_updated: { no: "Leveringen er oppdatert.", en: "Delivery updated." },
   delivery_no_products: {
     no: "Ingen aktive smaker. Registrer smaker med norsk og engelsk navn først.",
     en: "No active flavors. Register flavors with Norwegian and English names first.",
