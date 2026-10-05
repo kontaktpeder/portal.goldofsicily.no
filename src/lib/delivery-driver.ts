@@ -19,20 +19,22 @@ export function driverOptionLabel(staff: {
 export type DeliverySettingsPatch = {
   delivered_at: string;
   note: string | null;
-  delivered_by: string | null;
 };
 
-/** Date, note, and driver only. Customer, route, and line prices stay frozen. */
+/** Date and note only. The driver is a separate edit so a date change cannot clear who delivered. */
 export function deliverySettingsPatch(input: {
   deliveredAt: string;
   note: string;
-  deliveredBy: string;
 }): DeliverySettingsPatch {
   return {
     delivered_at: input.deliveredAt,
     note: input.note.trim() || null,
-    delivered_by: input.deliveredBy || null,
   };
+}
+
+/** After-the-fact change of who delivered. Customer, route, prices, date, and note stay as they are. */
+export function deliveryDriverPatch(deliveredBy: string): { delivered_by: string | null } {
+  return { delivered_by: deliveredBy || null };
 }
 
 export function isDeliveryDriverSchemaError(message: string): boolean {
