@@ -13,13 +13,12 @@ import { LotPrerequisitesBanner } from "@/components/lot-prerequisites";
 import { useLotPrerequisites } from "@/hooks/use-lot-prerequisites";
 import { useSessionInfo } from "@/hooks/use-session";
 import { listProductionStaff } from "@/lib/admin.functions";
+import { DeliveryDriverEditor, DriverSelect } from "@/components/delivery-driver-editor";
 import {
   deliverySettingsPatch,
-  driverOptionLabel,
   isDeliveryDriverSchemaError,
   suggestedDeliveredBy,
 } from "@/lib/delivery-driver";
-import type { ProductionStaff } from "@/lib/lot-producers";
 import {
   deliveryLinesPayload,
   initialDeliveryQtys,
@@ -66,7 +65,6 @@ function AdminDeliveries() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDate, setEditDate] = useState("");
   const [editNote, setEditNote] = useState("");
-  const [editDriver, setEditDriver] = useState("");
   const [editBusy, setEditBusy] = useState(false);
   const session = useSessionInfo();
   const listStaff = useServerFn(listProductionStaff);
@@ -341,16 +339,10 @@ function AdminDeliveries() {
     await queryClient.invalidateQueries();
   }
 
-  function startEdit(delivery: {
-    id: string;
-    delivered_at: string;
-    note: string | null;
-    delivered_by?: string | null;
-  }) {
+  function startEdit(delivery: { id: string; delivered_at: string; note: string | null }) {
     setEditingId(delivery.id);
     setEditDate(delivery.delivered_at.slice(0, 10));
     setEditNote(delivery.note ?? "");
-    setEditDriver(delivery.delivered_by ?? "");
   }
 
   async function saveEdit() {
@@ -359,23 +351,14 @@ function AdminDeliveries() {
     const patch = deliverySettingsPatch({
       deliveredAt: editDate,
       note: editNote,
-      deliveredBy: editDriver,
     });
-    let driverSkipped = false;
-    let { error } = await supabase.from("deliveries").update(patch).eq("id", editingId);
-    if (error && isDeliveryDriverSchemaError(error.message)) {
-      driverSkipped = true;
-      const { delivered_by: _driver, ...rest } = patch;
-      const retry = await supabase.from("deliveries").update(rest).eq("id", editingId);
-      error = retry.error;
-    }
+    const { error } = await supabase.from("deliveries").update(patch).eq("id", editingId);
     setEditBusy(false);
     if (error) {
       toast.error(error.message);
       return;
     }
-    if (driverSkipped) toast.warning(t("delivered_by_pending_sql"));
-    else toast.success(t("delivery_updated"));
+    toast.success(t("delivery_updated"));
     setEditingId(null);
     await queryClient.invalidateQueries();
   }
@@ -492,12 +475,12 @@ function AdminDeliveries() {
                   : ` · ${t("route_direct")}`}
                 {delivery.note ? ` · ${delivery.note}` : ""}
               </p>
-              <p className="mt-1 text-sm">
-                {t("delivered_by")}:{" "}
-                {"delivered_by_name" in delivery && delivery.delivered_by_name
-                  ? delivery.delivered_by_name
-                  : t("delivered_by_missing")}
-              </p>
+              <DeliveryDriverEditor
+                deliveryId={delivery.id}
+                deliveredBy={delivery.delivered_by}
+                deliveredByName={delivery.delivered_by_name}
+                staff={staff}
+              />
               <DeliveryFlavorBreakdown
                 linkLots
                 lines={
@@ -510,20 +493,6 @@ function AdminDeliveries() {
                 <div className="mt-4 space-y-3 border-t border-border pt-4">
                   <p className="eyebrow">{t("delivery_settings")}</p>
                   <TextField label={t("date")} value={editDate} onChange={setEditDate} type="date" />
-                  <DriverSelect
-                    label={t("delivered_by")}
-                    value={editDriver}
-                    staff={staff}
-                    emptyLabel={t("delivered_by_none")}
-                    extra={
-                      delivery.delivered_by &&
-                      "delivered_by_name" in delivery &&
-                      delivery.delivered_by_name
-                        ? { id: delivery.delivered_by, label: delivery.delivered_by_name }
-                        : null
-                    }
-                    onChange={setEditDriver}
-                  />
                   <TextField label={t("note")} value={editNote} onChange={setEditNote} />
                   <PrimaryButton onClick={requestSaveEdit} disabled={editBusy || !editDate}>
                     {editBusy ? "…" : t("save")}
@@ -550,43 +519,5 @@ function AdminDeliveries() {
         )}
       </div>
     </main>
-  );
-}
-
-function DriverSelect({
-  label,
-  value,
-  staff,
-  emptyLabel,
-  extra,
-  onChange,
-}: {
-  label: string;
-  value: string;
-  staff: readonly ProductionStaff[];
-  emptyLabel: string;
-  extra?: { id: string; label: string } | null;
-  onChange: (value: string) => void;
-}) {
-  const known = staff.some((person) => person.id === value);
-  return (
-    <label className="block">
-      <span className="eyebrow mb-2 block">{label}</span>
-      <select
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        className="h-13 w-full rounded-2xl border-2 border-border bg-card px-4 text-base outline-none focus:border-primary"
-      >
-        <option value="">{emptyLabel}</option>
-        {extra && !known ? (
-          <option value={extra.id}>{extra.label}</option>
-        ) : null}
-        {staff.map((person) => (
-          <option key={person.id} value={person.id}>
-            {driverOptionLabel(person)}
-          </option>
-        ))}
-      </select>
-    </label>
   );
 }

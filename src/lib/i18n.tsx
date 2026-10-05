@@ -318,6 +318,10 @@ const dict = {
   delivery_settings: { no: "Innstillinger", en: "Settings" },
   delivery_edit: { no: "Rediger", en: "Edit" },
   delivery_edit_confirm: { no: "Er du sikker?", en: "Are you sure?" },
+  delivery_driver_confirm: {
+    no: "Er du sikker på at du vil endre hvem som leverte?",
+    en: "Are you sure you want to change who delivered?",
+  },
   delivery_edit_yes: { no: "Bekreft", en: "Confirm" },
   delivery_updated: { no: "Leveringen er oppdatert.", en: "Delivery updated." },
   delivery_no_products: {

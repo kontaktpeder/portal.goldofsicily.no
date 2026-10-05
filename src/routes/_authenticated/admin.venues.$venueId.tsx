@@ -10,7 +10,8 @@ import { parseGuestPriceOre } from "@/lib/slug";
 import { isUniqueMenuItemConflict, nextAvailableProductId } from "@/lib/venue-menu-item";
 import { formatDate } from "@/lib/sign-out";
 import { errorMessage } from "@/lib/utils";
-import { resetCustomerPassword } from "@/lib/admin.functions";
+import { listProductionStaff, resetCustomerPassword } from "@/lib/admin.functions";
+import { DeliveryDriverEditor } from "@/components/delivery-driver-editor";
 import { useSessionInfo } from "@/hooks/use-session";
 import { PrimaryButton, TextAreaField, TextField } from "@/components/field";
 import { MenuFileUpload } from "@/components/menu-file-upload";
@@ -52,7 +53,13 @@ function CustomerDetail() {
   const { data: session } = useSessionInfo();
   const commercial = Boolean(session?.canManageCommercial);
   const queryClient = useQueryClient();
+  const listStaff = useServerFn(listProductionStaff);
   const [tab, setTab] = useState<Tab>("overview");
+  const { data: productionStaff } = useQuery({
+    queryKey: ["production-staff"],
+    queryFn: () => listStaff(),
+    enabled: tab === "deliveries",
+  });
 
   useEffect(() => {
     if (priceDate && priceNames && commercial) setTab("profile");
@@ -287,6 +294,12 @@ function CustomerDetail() {
                       ? (delivery.delivery_lines as StoredDeliveryLine[])
                       : null
                   }
+                />
+                <DeliveryDriverEditor
+                  deliveryId={delivery.id}
+                  deliveredBy={delivery.delivered_by}
+                  deliveredByName={delivery.delivered_by_name}
+                  staff={productionStaff?.staff ?? []}
                 />
               </article>
             ))

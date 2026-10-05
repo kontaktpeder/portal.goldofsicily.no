@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
+  deliveryDriverPatch,
   deliverySettingsPatch,
   driverOptionLabel,
   isDeliveryDriverSchemaError,
@@ -27,28 +28,18 @@ test("driver option shows the frozen-style name and employee number", () => {
   );
 });
 
-test("delivery settings edit only date, note, and driver", () => {
-  assert.deepEqual(
-    deliverySettingsPatch({
-      deliveredAt: "2026-10-04",
-      note: "  bakdør ",
-      deliveredBy: "user-denis",
-    }),
-    {
-      delivered_at: "2026-10-04",
-      note: "bakdør",
-      delivered_by: "user-denis",
-    },
-  );
-  assert.deepEqual(
-    deliverySettingsPatch({ deliveredAt: "2026-10-04", note: "  ", deliveredBy: "" }),
-    { delivered_at: "2026-10-04", note: null, delivered_by: null },
-  );
-  assert.deepEqual(Object.keys(deliverySettingsPatch({ deliveredAt: "2026-10-04", note: "", deliveredBy: "" })), [
-    "delivered_at",
-    "note",
-    "delivered_by",
-  ]);
+test("delivery settings edit date and note, and the driver is a separate patch", () => {
+  assert.deepEqual(deliverySettingsPatch({ deliveredAt: "2026-10-04", note: "  bakdør " }), {
+    delivered_at: "2026-10-04",
+    note: "bakdør",
+  });
+  assert.deepEqual(deliverySettingsPatch({ deliveredAt: "2026-10-04", note: "  " }), {
+    delivered_at: "2026-10-04",
+    note: null,
+  });
+  assert.deepEqual(deliveryDriverPatch("user-denis"), { delivered_by: "user-denis" });
+  assert.deepEqual(deliveryDriverPatch(""), { delivered_by: null });
+  assert.deepEqual(Object.keys(deliveryDriverPatch("user-denis")), ["delivered_by"]);
 });
 
 test("a missing driver column is retried, a staff rule is not", () => {
@@ -80,8 +71,22 @@ test("the delivery screen confirms settings edits and suggests the signed-in dri
   );
   assert.match(page, /suggestedDeliveredBy/);
   assert.match(page, /deliverySettingsPatch/);
+  assert.match(page, /DeliveryDriverEditor/);
   assert.match(page, /delivery_edit_confirm/);
-  assert.match(page, /duration: Infinity/);
   assert.doesNotMatch(page, /\.update\(\{[^}]*customer_id/);
   assert.doesNotMatch(page, /\.update\(\{[^}]*commercial_route/);
+
+  const editor = readFileSync(
+    new URL("../components/delivery-driver-editor.tsx", import.meta.url),
+    "utf8",
+  );
+  assert.match(editor, /deliveryDriverPatch/);
+  assert.match(editor, /delivery_driver_confirm/);
+  assert.match(editor, /duration: Infinity/);
+
+  const venue = readFileSync(
+    new URL("../routes/_authenticated/admin.venues.$venueId.tsx", import.meta.url),
+    "utf8",
+  );
+  assert.match(venue, /DeliveryDriverEditor/);
 });
