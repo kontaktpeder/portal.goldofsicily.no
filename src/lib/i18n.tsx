@@ -322,6 +322,10 @@ const dict = {
     no: "Er du sikker på at du vil endre hvem som leverte?",
     en: "Are you sure you want to change who delivered?",
   },
+  delivery_edit_with_driver: {
+    no: "Er du sikker? Hvem som leverte endres også.",
+    en: "Are you sure? Who delivered changes as well.",
+  },
   delivery_edit_yes: { no: "Bekreft", en: "Confirm" },
   delivery_updated: { no: "Leveringen er oppdatert.", en: "Delivery updated." },
   delivery_no_products: {
@@ -801,6 +805,7 @@ const dict = {
   lot_delivered_customers: { no: "Levert til kunder", en: "Delivered to customers" },
   lot_total_left: { no: "Totalt igjen", en: "Total left" },
   link_lot: { no: "Koble LOT", en: "Link LOT" },
+  change_lot: { no: "Endre LOT", en: "Change LOT" },
   link_lot_saved: { no: "LOT er koblet til leveringen.", en: "LOT linked to the delivery." },
   villa_stock_pending_sql: {
     no: "Villa-lageret er ikke klart i databasen ennå. Kjør SQL for lagerkilde i Lovable Cloud.",

@@ -13,12 +13,8 @@ import { LotPrerequisitesBanner } from "@/components/lot-prerequisites";
 import { useLotPrerequisites } from "@/hooks/use-lot-prerequisites";
 import { useSessionInfo } from "@/hooks/use-session";
 import { listProductionStaff } from "@/lib/admin.functions";
-import { DeliveryDriverEditor, DriverSelect } from "@/components/delivery-driver-editor";
-import {
-  deliverySettingsPatch,
-  isDeliveryDriverSchemaError,
-  suggestedDeliveredBy,
-} from "@/lib/delivery-driver";
+import { DeliveryRecordEditor, DriverSelect } from "@/components/delivery-driver-editor";
+import { isDeliveryDriverSchemaError, suggestedDeliveredBy } from "@/lib/delivery-driver";
 import {
   deliveryLinesPayload,
   initialDeliveryQtys,
@@ -29,6 +25,8 @@ import {
   type StoredDeliveryLine,
 } from "@/lib/flavors";
 import {
+  assignStockSource,
+  deliveryNeedsStockSourceChoice,
   isGoldLotSchemaError,
   isVillaStockSchemaError,
   toStockLots,
@@ -79,10 +77,6 @@ function AdminDeliveries() {
   const [deliveredBy, setDeliveredBy] = useState("");
   const [driverTouched, setDriverTouched] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editDate, setEditDate] = useState("");
-  const [editNote, setEditNote] = useState("");
-  const [editBusy, setEditBusy] = useState(false);
   const session = useSessionInfo();
   const listStaff = useServerFn(listProductionStaff);
 
@@ -194,18 +188,35 @@ function AdminDeliveries() {
   });
 
   const total = useMemo(() => sumDeliveryQty(flavorQtys), [flavorQtys]);
+  const showStockSource = useMemo(
+    () =>
+      deliveryNeedsStockSourceChoice(
+        stockLots,
+        flavorQtys.map((line) => ({ productId: line.productId, quantity: qty(line.quantity) })),
+      ),
+    [stockLots, flavorQtys],
+  );
+  const effectiveSource: StockSource = showStockSource ? stockSource : "gold";
+  useEffect(() => {
+    if (showStockSource) return;
+    if (stockSource !== "gold") setStockSource("gold");
+    setFlavorQtys((current) => {
+      if (!current.some((line) => line.sourceHandoverId)) return current;
+      return assignStockSource(stockLots, current, "gold", preferredLotId);
+    });
+  }, [showStockSource, stockSource, stockLots, preferredLotId]);
   const stockLines = flavorQtys.map((line) => ({
     productId: line.productId,
     quantity: qty(line.quantity),
     goldLotId: line.goldLotId,
-    sourceHandoverId: line.sourceHandoverId,
+    sourceHandoverId: effectiveSource === "gold" ? "" : line.sourceHandoverId,
   }));
   const stockCheck = useMemo(
     () =>
-      stockSource === "villa"
+      effectiveSource === "villa"
         ? validateVillaStock(stockLines, stockLots)
         : validateDeliveryStock(stockLines, stockLots),
-    [stockLines, stockLots, stockSource],
+    [stockLines, stockLots, effectiveSource],
   );
 
   const canSave =
@@ -216,7 +227,7 @@ function AdminDeliveries() {
     flavorQtys.every(
       (line) =>
         qty(line.quantity) <= 0 ||
-        (Boolean(line.goldLotId) && (stockSource === "gold" || Boolean(line.sourceHandoverId))),
+        (Boolean(line.goldLotId) && (effectiveSource === "gold" || Boolean(line.sourceHandoverId))),
     );
 
   const { data: deliveries } = useQuery({
@@ -347,7 +358,12 @@ function AdminDeliveries() {
       return;
     }
     try {
-      const lines = deliveryLinesPayload(created.id, flavorQtys);
+      const lines = deliveryLinesPayload(
+        created.id,
+        effectiveSource === "gold"
+          ? flavorQtys.map((line) => ({ ...line, sourceHandoverId: "" }))
+          : flavorQtys,
+      );
       if (lines.length > 0) {
         const { error: lineError } = await supabase.from("delivery_lines").insert(lines);
         if (lineError) {
@@ -382,48 +398,6 @@ function AdminDeliveries() {
     setDriverTouched(false);
     setFlavorQtys(products ? initialDeliveryQtys(products) : []);
     await queryClient.invalidateQueries();
-  }
-
-  function startEdit(delivery: { id: string; delivered_at: string; note: string | null }) {
-    setEditingId(delivery.id);
-    setEditDate(delivery.delivered_at.slice(0, 10));
-    setEditNote(delivery.note ?? "");
-  }
-
-  async function saveEdit() {
-    if (!editingId || !editDate) return;
-    setEditBusy(true);
-    const patch = deliverySettingsPatch({
-      deliveredAt: editDate,
-      note: editNote,
-    });
-    const { error } = await supabase.from("deliveries").update(patch).eq("id", editingId);
-    setEditBusy(false);
-    if (error) {
-      toast.error(error.message);
-      return;
-    }
-    toast.success(t("delivery_updated"));
-    setEditingId(null);
-    await queryClient.invalidateQueries();
-  }
-
-  function requestSaveEdit() {
-    if (!editingId || !editDate) return;
-    toast(t("delivery_edit_confirm"), {
-      id: `delivery-edit-${editingId}`,
-      duration: Infinity,
-      action: {
-        label: t("delivery_edit_yes"),
-        onClick: () => {
-          void saveEdit();
-        },
-      },
-      cancel: {
-        label: t("cancel"),
-        onClick: () => {},
-      },
-    });
   }
 
   return (
@@ -469,37 +443,39 @@ function AdminDeliveries() {
           <div>
             <span className="eyebrow mb-1 block">{t("delivery_qty_per_flavor")}</span>
             <p className="mb-3 text-sm text-muted-foreground">{t("delivery_qty_hint")}</p>
-            <div className="mb-4">
-              <span className="eyebrow mb-2 block">{t("stock_source")}</span>
-              <div className="flex gap-2">
-                {(["gold", "villa"] as const).map((value) => (
-                  <button
-                    key={value}
-                    type="button"
-                    onClick={() => {
-                      setStockSource(value);
-                      setFlavorQtys((current) =>
-                        current.map((line) => ({ ...line, goldLotId: "", sourceHandoverId: "" })),
-                      );
-                    }}
-                    className={`rounded-full px-4 py-2 text-sm font-semibold ${
-                      stockSource === value
-                        ? "bg-primary text-primary-foreground"
-                        : "bg-muted text-muted-foreground"
-                    }`}
-                  >
-                    {value === "gold" ? t("stock_from_gold") : t("stock_from_villa")}
-                  </button>
-                ))}
+            {showStockSource ? (
+              <div className="mb-4">
+                <span className="eyebrow mb-2 block">{t("stock_source")}</span>
+                <div className="flex gap-2">
+                  {(["gold", "villa"] as const).map((value) => (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => {
+                        setStockSource(value);
+                        setFlavorQtys((current) =>
+                          assignStockSource(stockLots, current, value, preferredLotId),
+                        );
+                      }}
+                      className={`rounded-full px-4 py-2 text-sm font-semibold ${
+                        effectiveSource === value
+                          ? "bg-primary text-primary-foreground"
+                          : "bg-muted text-muted-foreground"
+                      }`}
+                    >
+                      {value === "gold" ? t("stock_from_gold") : t("stock_from_villa")}
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
+            ) : null}
             {(products ?? []).length === 0 ? (
               <p className="text-sm text-muted-foreground">{t("delivery_no_products")}</p>
             ) : (
               <DeliveryFlavorEditor
                 lines={flavorQtys}
                 lots={stockLots}
-                source={stockSource}
+                source={effectiveSource}
                 preferredLotId={preferredLotId}
                 onChange={setFlavorQtys}
               />
@@ -550,12 +526,6 @@ function AdminDeliveries() {
                   : ` · ${t("route_direct")}`}
                 {delivery.note ? ` · ${delivery.note}` : ""}
               </p>
-              <DeliveryDriverEditor
-                deliveryId={delivery.id}
-                deliveredBy={delivery.delivered_by}
-                deliveredByName={delivery.delivered_by_name}
-                staff={staff}
-              />
               <DeliveryFlavorBreakdown
                 linkLots
                 lines={
@@ -572,31 +542,14 @@ function AdminDeliveries() {
                     : null) ?? null
                 }
               />
-              {editingId === delivery.id ? (
-                <div className="mt-4 space-y-3 border-t border-border pt-4">
-                  <p className="eyebrow">{t("delivery_settings")}</p>
-                  <TextField label={t("date")} value={editDate} onChange={setEditDate} type="date" />
-                  <TextField label={t("note")} value={editNote} onChange={setEditNote} />
-                  <PrimaryButton onClick={requestSaveEdit} disabled={editBusy || !editDate}>
-                    {editBusy ? "…" : t("save")}
-                  </PrimaryButton>
-                  <button
-                    type="button"
-                    onClick={() => setEditingId(null)}
-                    className="w-full py-2 text-sm font-semibold text-muted-foreground"
-                  >
-                    {t("cancel")}
-                  </button>
-                </div>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => startEdit(delivery)}
-                  className="mt-3 text-sm font-semibold text-primary"
-                >
-                  {t("delivery_edit")}
-                </button>
-              )}
+              <DeliveryRecordEditor
+                deliveryId={delivery.id}
+                deliveredAt={delivery.delivered_at}
+                note={delivery.note}
+                deliveredBy={delivery.delivered_by}
+                deliveredByName={delivery.delivered_by_name}
+                staff={staff}
+              />
             </article>
           ))
         )}

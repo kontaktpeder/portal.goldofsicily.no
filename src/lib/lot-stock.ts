@@ -220,6 +220,90 @@ export function villaWithFormReservation(
   }));
 }
 
+/** The Gold/Villa choice stays hidden until a chosen flavor has Villa stock. */
+export function deliveryNeedsStockSourceChoice(
+  lots: readonly StockLot[],
+  lines: readonly { productId: string; quantity: number }[],
+): boolean {
+  return lines.some(
+    (line) =>
+      line.quantity > 0 && villaOptions(lots, line.productId).some((row) => row.remaining > 0),
+  );
+}
+
+type AssignedLine = {
+  productId: string;
+  quantity: number;
+  goldLotId: string;
+  sourceHandoverId?: string;
+};
+
+/** Suggest a LOT again when the stock source changes. Earlier lines reserve what they take. */
+export function assignStockSource<T extends AssignedLine>(
+  lots: StockLot[],
+  lines: readonly T[],
+  source: StockSource,
+  preferredLotId = "",
+): T[] {
+  const draft: DeliveryStockLine[] = lines.map((line) => ({
+    productId: line.productId,
+    quantity: line.quantity,
+    goldLotId: "",
+    sourceHandoverId: "",
+  }));
+  return lines.map((line, index) => {
+    if (line.quantity <= 0) {
+      draft[index] = {
+        productId: line.productId,
+        quantity: 0,
+        goldLotId: "",
+        sourceHandoverId: "",
+      };
+      return { ...line, goldLotId: "", sourceHandoverId: "" };
+    }
+    if (source === "villa") {
+      const picked = suggestVillaHandover(
+        villaWithFormReservation(lots, draft, index),
+        line.productId,
+        line.quantity,
+        "",
+        preferredLotId,
+      );
+      const next = {
+        ...line,
+        goldLotId: picked?.lotId ?? "",
+        sourceHandoverId: picked?.handoverId ?? "",
+      };
+      draft[index] = {
+        productId: line.productId,
+        quantity: line.quantity,
+        goldLotId: next.goldLotId,
+        sourceHandoverId: next.sourceHandoverId,
+      };
+      return next;
+    }
+    const goldLotId = suggestLotId(
+      lotsWithFormReservation(lots, draft, index),
+      line.productId,
+      line.quantity,
+      "",
+      preferredLotId,
+    );
+    draft[index] = {
+      productId: line.productId,
+      quantity: line.quantity,
+      goldLotId,
+      sourceHandoverId: "",
+    };
+    return { ...line, goldLotId, sourceHandoverId: "" };
+  });
+}
+
+/** Hos Villa and Totalt igjen appear only after a Villa transfer exists. */
+export function showVillaStockMetrics(villaHandoverQty: number): boolean {
+  return villaHandoverQty > 0;
+}
+
 export function validateVillaStock(
   lines: DeliveryStockLine[],
   lots: StockLot[],

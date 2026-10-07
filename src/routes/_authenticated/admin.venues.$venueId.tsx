@@ -11,7 +11,7 @@ import { isUniqueMenuItemConflict, nextAvailableProductId } from "@/lib/venue-me
 import { formatDate } from "@/lib/sign-out";
 import { errorMessage } from "@/lib/utils";
 import { listProductionStaff, resetCustomerPassword } from "@/lib/admin.functions";
-import { DeliveryDriverEditor } from "@/components/delivery-driver-editor";
+import { DeliveryRecordEditor } from "@/components/delivery-driver-editor";
 import { useSessionInfo } from "@/hooks/use-session";
 import { PrimaryButton, TextAreaField, TextField } from "@/components/field";
 import { MenuFileUpload } from "@/components/menu-file-upload";
@@ -295,8 +295,10 @@ function CustomerDetail() {
                       : null
                   }
                 />
-                <DeliveryDriverEditor
+                <DeliveryRecordEditor
                   deliveryId={delivery.id}
+                  deliveredAt={delivery.delivered_at}
+                  note={delivery.note}
                   deliveredBy={delivery.delivered_by}
                   deliveredByName={delivery.delivered_by_name}
                   staff={productionStaff?.staff ?? []}
