@@ -9,7 +9,7 @@ import { ProducerPicker } from "@/components/producer-picker";
 import { listProductionStaff } from "@/lib/admin.functions";
 import { useI18n, type TranslationKey } from "@/lib/i18n";
 import { handoverRecipient } from "@/lib/customer-domain";
-import { nowOsloDateTimeLocal, remainingAtGold, sumQuantities } from "@/lib/gold-lot";
+import { nowOsloDateTimeLocal, sumQuantities } from "@/lib/gold-lot";
 import {
   cartonLabelsDocument,
   openLabelPrintWindow,
@@ -23,7 +23,7 @@ import {
   selectedProductionStaff,
 } from "@/lib/lot-producers";
 import { replaceLotProducers } from "@/lib/lot-producers-save";
-import { lotRemaining } from "@/lib/lot-stock";
+import { isVillaStockSchemaError, lotFlowTotals } from "@/lib/lot-stock";
 import {
   cartonInsertRows,
   derivedCartonCount,
@@ -256,12 +256,22 @@ function AdminLotDetail() {
   const { data: deliveries } = useQuery({
     queryKey: ["gold-lot-deliveries", lotId],
     queryFn: async () => {
-      const { data, error: loadError } = await supabase
+      const rich = await supabase
         .from("delivery_lines")
-        .select("quantity, deliveries(delivered_at, customers!deliveries_customer_id_fkey(name))")
+        .select(
+          "quantity, source_handover_id, deliveries(delivered_at, customers!deliveries_customer_id_fkey(name))",
+        )
         .eq("gold_lot_id", lotId);
-      if (loadError) throw loadError;
-      return data ?? [];
+      if (!rich.error) return rich.data ?? [];
+      if (isVillaStockSchemaError(rich.error.message)) {
+        const fallback = await supabase
+          .from("delivery_lines")
+          .select("quantity, deliveries(delivered_at, customers!deliveries_customer_id_fkey(name))")
+          .eq("gold_lot_id", lotId);
+        if (fallback.error) throw fallback.error;
+        return fallback.data ?? [];
+      }
+      throw rich.error;
     },
   });
 
@@ -303,10 +313,25 @@ function AdminLotDetail() {
     return <main className="mx-auto w-full max-w-5xl px-5 py-10" />;
   }
 
-  const handed = sumQuantities((lot.gold_lot_handovers ?? []).map((row) => row.quantity));
-  const used = sumQuantities((deliveries ?? []).map((row) => row.quantity));
-  const remaining = lotRemaining(lot.produced_qty, used);
-  const goldLeft = remainingAtGold(lot.produced_qty, handed);
+  const directQty = sumQuantities(
+    (deliveries ?? []).filter((row) => !row.source_handover_id).map((row) => row.quantity),
+  );
+  const villaDeliveredQty = sumQuantities(
+    (deliveries ?? []).filter((row) => row.source_handover_id).map((row) => row.quantity),
+  );
+  const villaHandoverQty = sumQuantities(
+    (lot.gold_lot_handovers ?? [])
+      .filter((row) => row.ownership_after_handover === "villa")
+      .map((row) => row.quantity),
+  );
+  const flow = lotFlowTotals({
+    producedQty: lot.produced_qty,
+    approvedQty: lot.approved_qty,
+    villaHandoverQty,
+    directDeliveredQty: directQty,
+    villaDeliveredQty,
+  });
+  const goldLeft = flow.atGold;
   const cartonCount =
     packing && packing.cartons.length > 0 ? derivedCartonCount(packing.cartons.map((row) => ({ seq: row.carton_seq }))) : lot.carton_count;
   const productName = lang === "en" ? (lot.products?.name_en ?? "") : (lot.products?.name_no ?? "");
@@ -344,9 +369,10 @@ function AdminLotDetail() {
       </div>
       <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Metric label={t("produced_qty")} value={`${lot.produced_qty} ${t("pcs")}`} />
-        <Metric label={t("lot_used")} value={`${used} ${t("pcs")}`} />
-        <Metric label={t("lot_remaining")} value={`${remaining} ${t("pcs")}`} />
-        <Metric label={t("remaining_gold")} value={`${goldLeft} ${t("pcs")}`} />
+        <Metric label={t("lot_at_gold")} value={`${flow.atGold} ${t("pcs")}`} />
+        <Metric label={t("lot_at_villa")} value={`${flow.atVilla} ${t("pcs")}`} />
+        <Metric label={t("lot_delivered_customers")} value={`${flow.deliveredToCustomers} ${t("pcs")}`} />
+        <Metric label={t("lot_total_left")} value={`${flow.totalLeft} ${t("pcs")}`} />
         <Metric label={t("carton_count")} value={String(cartonCount)} />
         <Metric label={t("lot_status")} value={t(STATUS_KEYS[lot.status] ?? "lot_status_produced")} />
       </div>
@@ -907,6 +933,24 @@ function LotPackingSection({
             {t("print_carton_labels")}
           </PrimaryButton>
         </div>
+        {storedPlan ? (
+          <div className="flex flex-wrap gap-3">
+            <Link
+              to="/admin/deliveries"
+              search={{ lot: lot.id }}
+              className="rounded-full border border-border px-4 py-2 text-sm font-semibold"
+            >
+              {t("deliver_direct")}
+            </Link>
+            <button
+              type="button"
+              onClick={() => document.getElementById("lot-handover")?.scrollIntoView({ behavior: "smooth" })}
+              className="rounded-full border border-border px-4 py-2 text-sm font-semibold"
+            >
+              {t("ops_handover_villa")}
+            </button>
+          </div>
+        ) : null}
       </div>
 
       {storedPlan ? (

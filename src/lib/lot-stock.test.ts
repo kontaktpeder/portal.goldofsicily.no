@@ -1,16 +1,22 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { readFileSync } from "node:fs";
 import {
   allocateFifo,
   canAllocate,
   deliveryLineRequiresLot,
+  goldAvailableQty,
   isOpenLot,
+  lotFlowTotals,
   lotsWithFormReservation,
   newestCoveringLot,
   needsLotSplit,
   suggestLotId,
+  suggestVillaHandover,
   toStockLots,
   validateDeliveryStock,
+  validateVillaStock,
+  villaAvailableQty,
   type StockLot,
 } from "./lot-stock.ts";
 
@@ -101,4 +107,69 @@ test("packed lots stay open for stock until closed or recalled", () => {
   assert.equal(isOpenLot("packed"), true);
   assert.equal(isOpenLot("produced"), true);
   assert.equal(isOpenLot("closed"), false);
+});
+
+test("Gold stock uses approved quantity and ignores Villa-sourced deliveries", () => {
+  assert.equal(
+    goldAvailableQty({
+      producedQty: 400,
+      approvedQty: 380,
+      villaHandoverQty: 100,
+      directDeliveredQty: 50,
+    }),
+    230,
+  );
+  assert.equal(villaAvailableQty(100, 40), 60);
+  assert.deepEqual(
+    lotFlowTotals({
+      producedQty: 400,
+      approvedQty: 380,
+      villaHandoverQty: 100,
+      directDeliveredQty: 50,
+      villaDeliveredQty: 40,
+    }),
+    { atGold: 230, atVilla: 60, deliveredToCustomers: 90, totalLeft: 290 },
+  );
+});
+
+test("Villa suggestion keeps the confirmed handover and shows its LOT", () => {
+  const withVilla: StockLot[] = [
+    {
+      ...lots[1],
+      villaHandovers: [
+        {
+          id: "hand-old",
+          lotId: "new",
+          lotCode: "L-20260908-T-01",
+          productId: "truffle",
+          recipient: "Villa Import",
+          remaining: 80,
+        },
+      ],
+    },
+  ];
+  assert.deepEqual(suggestVillaHandover(withVilla, "truffle", 20, "hand-old", "old"), {
+    handoverId: "hand-old",
+    lotId: "new",
+  });
+  assert.deepEqual(
+    validateVillaStock(
+      [{ productId: "truffle", quantity: 90, goldLotId: "new", sourceHandoverId: "hand-old" }],
+      withVilla,
+    ),
+    { ok: false, reason: "insufficient" },
+  );
+});
+
+test("villa stock sql does not restore the historical gold-lot check", () => {
+  const sql = readFileSync(new URL("../../sql/19_villa_stock_source.sql", import.meta.url), "utf8");
+  const migration = readFileSync(
+    new URL("../../supabase/migrations/20261007140000_villa_stock_source.sql", import.meta.url),
+    "utf8",
+  );
+  assert.equal(sql, migration);
+  assert.match(sql, /source_handover_id/);
+  assert.match(sql, /COALESCE\(approved, produced\)/);
+  assert.match(sql, /ownership_after_handover = 'villa'/);
+  assert.equal(sql.includes("ADD CONSTRAINT delivery_lines_quantity_requires_gold_lot"), false);
 });

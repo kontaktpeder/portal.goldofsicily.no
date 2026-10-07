@@ -6,7 +6,19 @@ export type StockLot = {
   deliveredQty: number;
   remaining: number;
   status: string;
+  villaHandovers?: VillaHandoverStock[];
 };
+
+export type VillaHandoverStock = {
+  id: string;
+  lotId: string;
+  lotCode: string;
+  productId: string;
+  recipient: string;
+  remaining: number;
+};
+
+export type StockSource = "gold" | "villa";
 
 export type LotAllocation = {
   lotId: string;
@@ -18,10 +30,47 @@ export type DeliveryStockLine = {
   productId: string;
   quantity: number;
   goldLotId: string;
+  sourceHandoverId?: string;
 };
 
 export function lotRemaining(producedQty: number, deliveredQty: number): number {
   return Math.max(0, producedQty - deliveredQty);
+}
+
+/** Approved quantity is the pack size. Produced is the fallback before packing. */
+export function stockBaseQty(producedQty: number, approvedQty: number | null | undefined): number {
+  return approvedQty == null ? producedQty : approvedQty;
+}
+
+export function goldAvailableQty(input: {
+  producedQty: number;
+  approvedQty?: number | null;
+  villaHandoverQty: number;
+  directDeliveredQty: number;
+}): number {
+  return Math.max(
+    0,
+    stockBaseQty(input.producedQty, input.approvedQty) -
+      input.villaHandoverQty -
+      input.directDeliveredQty,
+  );
+}
+
+export function villaAvailableQty(handoverQty: number, deliveredFromHandover: number): number {
+  return Math.max(0, handoverQty - deliveredFromHandover);
+}
+
+export function lotFlowTotals(input: {
+  producedQty: number;
+  approvedQty?: number | null;
+  villaHandoverQty: number;
+  directDeliveredQty: number;
+  villaDeliveredQty: number;
+}): { atGold: number; atVilla: number; deliveredToCustomers: number; totalLeft: number } {
+  const atGold = goldAvailableQty(input);
+  const atVilla = villaAvailableQty(input.villaHandoverQty, input.villaDeliveredQty);
+  const deliveredToCustomers = input.directDeliveredQty + input.villaDeliveredQty;
+  return { atGold, atVilla, deliveredToCustomers, totalLeft: atGold + atVilla };
 }
 
 export function isOpenLot(status: string): boolean {
@@ -96,11 +145,37 @@ export function suggestLotId(
   productId: string,
   needed: number,
   currentLotId: string,
+  preferredLotId = "",
 ): string {
   if (needed <= 0) return "";
-  const current = lots.find((lot) => lot.id === currentLotId && lot.productId === productId);
-  if (current && isOpenLot(current.status) && current.remaining >= needed) return currentLotId;
+  const currentId = currentLotId || preferredLotId;
+  const current = lots.find((lot) => lot.id === currentId && lot.productId === productId);
+  if (current && isOpenLot(current.status) && current.remaining >= needed) return currentId;
   return newestCoveringLot(lots, productId, needed)?.id ?? "";
+}
+
+export function villaOptions(lots: readonly StockLot[], productId: string): VillaHandoverStock[] {
+  return lots
+    .filter((lot) => lot.productId === productId && isOpenLot(lot.status))
+    .flatMap((lot) => lot.villaHandovers ?? []);
+}
+
+/** Keeps the handover the user already confirmed when it still covers the quantity. */
+export function suggestVillaHandover(
+  lots: readonly StockLot[],
+  productId: string,
+  needed: number,
+  currentHandoverId: string,
+  preferredLotId = "",
+): { handoverId: string; lotId: string } | null {
+  if (needed <= 0) return null;
+  const options = villaOptions(lots, productId).filter((row) => row.remaining >= needed);
+  const current = options.find((row) => row.id === currentHandoverId);
+  if (current) return { handoverId: current.id, lotId: current.lotId };
+  const preferred = options.find((row) => row.lotId === preferredLotId);
+  if (preferred) return { handoverId: preferred.id, lotId: preferred.lotId };
+  const newest = [...options].sort((a, b) => b.lotCode.localeCompare(a.lotCode))[0];
+  return newest ? { handoverId: newest.id, lotId: newest.lotId } : null;
 }
 
 export function lotsWithFormReservation(
@@ -119,6 +194,49 @@ export function lotsWithFormReservation(
     ...lot,
     remaining: Math.max(0, lot.remaining - (reserved.get(lot.id) ?? 0)),
   }));
+}
+
+export function villaWithFormReservation(
+  lots: StockLot[],
+  lines: DeliveryStockLine[],
+  exceptIndex: number,
+): StockLot[] {
+  const reserved = new Map<string, number>();
+  lines.forEach((line, index) => {
+    if (index === exceptIndex) return;
+    if (line.quantity > 0 && line.sourceHandoverId) {
+      reserved.set(
+        line.sourceHandoverId,
+        (reserved.get(line.sourceHandoverId) ?? 0) + line.quantity,
+      );
+    }
+  });
+  return lots.map((lot) => ({
+    ...lot,
+    villaHandovers: (lot.villaHandovers ?? []).map((handover) => ({
+      ...handover,
+      remaining: Math.max(0, handover.remaining - (reserved.get(handover.id) ?? 0)),
+    })),
+  }));
+}
+
+export function validateVillaStock(
+  lines: DeliveryStockLine[],
+  lots: StockLot[],
+): { ok: true } | { ok: false; reason: "missing_lot" | "insufficient" | "unknown_lot" } {
+  const reserved = new Map<string, number>();
+  for (const line of lines) {
+    if (line.quantity <= 0) continue;
+    if (!line.goldLotId || !line.sourceHandoverId) return { ok: false, reason: "missing_lot" };
+    const handover = lots
+      .flatMap((lot) => lot.villaHandovers ?? [])
+      .find((row) => row.id === line.sourceHandoverId && row.productId === line.productId);
+    if (!handover || handover.lotId !== line.goldLotId) return { ok: false, reason: "unknown_lot" };
+    const used = (reserved.get(handover.id) ?? 0) + line.quantity;
+    if (used > handover.remaining) return { ok: false, reason: "insufficient" };
+    reserved.set(handover.id, used);
+  }
+  return { ok: true };
 }
 
 export function validateDeliveryStock(
@@ -144,22 +262,60 @@ export function toStockLots(
     lot_code: string;
     product_id: string;
     produced_qty: number;
+    approved_qty?: number | null;
     status: string;
-    delivery_lines?: { quantity: number }[] | null;
+    delivery_lines?: { quantity: number; source_handover_id?: string | null }[] | null;
+    gold_lot_handovers?: {
+      id: string;
+      quantity: number;
+      ownership_after_handover: "gold" | "villa";
+      recipient_company: string;
+    }[] | null;
   }>,
 ): StockLot[] {
   return rows.map((row) => {
-    const deliveredQty = (row.delivery_lines ?? []).reduce((sum, line) => sum + line.quantity, 0);
+    const lines = row.delivery_lines ?? [];
+    const directDeliveredQty = lines
+      .filter((line) => !line.source_handover_id)
+      .reduce((sum, line) => sum + line.quantity, 0);
+    const villaHandovers = (row.gold_lot_handovers ?? [])
+      .filter((handover) => handover.ownership_after_handover === "villa")
+      .map((handover) => {
+        const delivered = lines
+          .filter((line) => line.source_handover_id === handover.id)
+          .reduce((sum, line) => sum + line.quantity, 0);
+        return {
+          id: handover.id,
+          lotId: row.id,
+          lotCode: row.lot_code,
+          productId: row.product_id,
+          recipient: handover.recipient_company,
+          remaining: villaAvailableQty(handover.quantity, delivered),
+        };
+      });
+    const villaHandoverQty = (row.gold_lot_handovers ?? [])
+      .filter((handover) => handover.ownership_after_handover === "villa")
+      .reduce((sum, handover) => sum + handover.quantity, 0);
     return {
       id: row.id,
       lotCode: row.lot_code,
       productId: row.product_id,
       producedQty: row.produced_qty,
-      deliveredQty,
-      remaining: lotRemaining(row.produced_qty, deliveredQty),
+      deliveredQty: directDeliveredQty,
+      remaining: goldAvailableQty({
+        producedQty: row.produced_qty,
+        approvedQty: row.approved_qty,
+        villaHandoverQty,
+        directDeliveredQty,
+      }),
       status: row.status,
+      villaHandovers,
     };
   });
+}
+
+export function isVillaStockSchemaError(message: string): boolean {
+  return /source_handover_id/.test(message);
 }
 
 export function isGoldLotSchemaError(

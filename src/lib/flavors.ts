@@ -34,12 +34,15 @@ export type DeliveryFlavorQty = {
   nameEn: string;
   quantity: FlavorQty;
   goldLotId: string;
+  sourceHandoverId?: string;
 };
 
 export type StoredDeliveryLine = {
   product_id: string;
   quantity: number;
   gold_lot_id?: string | null;
+  source_handover_id?: string | null;
+  id?: string;
   products: { name_no: string; name_en: string } | null;
   gold_lots?: { id: string; lot_code: string } | { id: string; lot_code: string }[] | null;
 };
@@ -136,6 +139,7 @@ export function deliveryLinesPayload(deliveryId: string, lines: DeliveryFlavorQt
     product_id: line.productId,
     quantity: qty(line.quantity),
     gold_lot_id: line.goldLotId,
+    ...(line.sourceHandoverId ? { source_handover_id: line.sourceHandoverId } : {}),
   }));
 }
 

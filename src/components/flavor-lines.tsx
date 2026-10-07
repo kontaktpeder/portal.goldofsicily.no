@@ -21,8 +21,12 @@ import {
   newestCoveringLot,
   openLotsForProduct,
   suggestLotId,
+  suggestVillaHandover,
   totalRemaining,
+  villaOptions,
+  villaWithFormReservation,
   type StockLot,
+  type StockSource,
 } from "@/lib/lot-stock";
 import { cn } from "@/lib/utils";
 
@@ -176,10 +180,14 @@ export function FlavorBreakdown({
 export function DeliveryFlavorEditor({
   lines,
   lots,
+  source = "gold",
+  preferredLotId = "",
   onChange,
 }: {
   lines: DeliveryFlavorQty[];
   lots: StockLot[];
+  source?: StockSource;
+  preferredLotId?: string;
   onChange: (lines: DeliveryFlavorQty[]) => void;
 }) {
   const { t, lang } = useI18n();
@@ -265,7 +273,26 @@ export function DeliveryFlavorEditor({
         const productLineCount = lines.filter((item) => item.productId === line.productId).length;
         const flavorName = lang === "en" ? line.nameEn : line.nameNo;
         const remainingTotal = totalRemaining(available, line.productId);
-        const showSelect = uniqueOptions.length > 0 && Boolean(line.goldLotId);
+        const villaChoices =
+          source === "villa"
+            ? villaOptions(
+                villaWithFormReservation(
+                  lots,
+                  lines.map((item) => ({
+                    productId: item.productId,
+                    quantity: qty(item.quantity),
+                    goldLotId: item.goldLotId,
+                    sourceHandoverId: item.sourceHandoverId,
+                  })),
+                  index,
+                ),
+                line.productId,
+              )
+            : [];
+        const showSelect =
+          source === "villa"
+            ? needed > 0 && (villaChoices.length > 0 || Boolean(line.sourceHandoverId))
+            : uniqueOptions.length > 0 && Boolean(line.goldLotId);
 
         return (
           <article
@@ -294,12 +321,50 @@ export function DeliveryFlavorEditor({
                       ? {
                           ...item,
                           quantity,
-                          goldLotId: suggestLotId(
-                            reserved,
-                            item.productId,
-                            nextQty,
-                            item.goldLotId,
-                          ),
+                          goldLotId:
+                            source === "villa"
+                              ? (suggestVillaHandover(
+                                  villaWithFormReservation(
+                                    lots,
+                                    lines.map((row) => ({
+                                      productId: row.productId,
+                                      quantity: qty(row.quantity),
+                                      goldLotId: row.goldLotId,
+                                      sourceHandoverId: row.sourceHandoverId,
+                                    })),
+                                    index,
+                                  ),
+                                  item.productId,
+                                  nextQty,
+                                  item.sourceHandoverId ?? "",
+                                  preferredLotId,
+                                )?.lotId ?? "")
+                              : suggestLotId(
+                                  reserved,
+                                  item.productId,
+                                  nextQty,
+                                  item.goldLotId,
+                                  preferredLotId,
+                                ),
+                          sourceHandoverId:
+                            source === "villa"
+                              ? (suggestVillaHandover(
+                                  villaWithFormReservation(
+                                    lots,
+                                    lines.map((row) => ({
+                                      productId: row.productId,
+                                      quantity: qty(row.quantity),
+                                      goldLotId: row.goldLotId,
+                                      sourceHandoverId: row.sourceHandoverId,
+                                    })),
+                                    index,
+                                  ),
+                                  item.productId,
+                                  nextQty,
+                                  item.sourceHandoverId ?? "",
+                                  preferredLotId,
+                                )?.handoverId ?? "")
+                              : "",
                         }
                       : item,
                   ),
@@ -307,7 +372,11 @@ export function DeliveryFlavorEditor({
               }}
             />
 
-            {needed > 0 && uniqueOptions.length === 0 ? (
+            {needed > 0 && source === "villa" && villaChoices.length === 0 ? (
+              <p className="mt-3 text-sm text-muted-foreground">{t("no_handovers")}</p>
+            ) : null}
+
+            {needed > 0 && source === "gold" && uniqueOptions.length === 0 ? (
               <div className="mt-3 rounded-2xl border border-destructive/30 bg-destructive/5 p-3">
                 <p className="text-sm font-medium">
                   {t("no_active_lot_prefix")} {flavorName}. {t("create_lot_before_delivery")}
@@ -322,7 +391,38 @@ export function DeliveryFlavorEditor({
               </div>
             ) : null}
 
-            {showSelect ? (
+            {showSelect && source === "villa" ? (
+              <label className="mt-3 block">
+                <span className="eyebrow mb-2 block">{t("delivery_lot")}</span>
+                <select
+                  value={line.sourceHandoverId ?? ""}
+                  onChange={(event) => {
+                    const picked = villaChoices.find((row) => row.id === event.target.value);
+                    onChange(
+                      lines.map((item, itemIndex) =>
+                        itemIndex === index
+                          ? {
+                              ...item,
+                              sourceHandoverId: picked?.id ?? "",
+                              goldLotId: picked?.lotId ?? "",
+                            }
+                          : item,
+                      ),
+                    );
+                  }}
+                  className="h-12 w-full rounded-2xl border-2 border-border bg-card px-4 text-sm outline-none focus:border-primary"
+                >
+                  <option value="">—</option>
+                  {villaChoices.map((row) => (
+                    <option key={row.id} value={row.id} disabled={row.remaining <= 0 && row.id !== line.sourceHandoverId}>
+                      {row.lotCode} · {row.recipient} · {row.remaining} {t("lot_available")}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
+
+            {showSelect && source === "gold" ? (
               <label className="mt-3 block">
                 <span className="eyebrow mb-2 block">{t("delivery_lot")}</span>
                 <select
@@ -330,7 +430,9 @@ export function DeliveryFlavorEditor({
                   onChange={(event) =>
                     onChange(
                       lines.map((item, itemIndex) =>
-                        itemIndex === index ? { ...item, goldLotId: event.target.value } : item,
+                        itemIndex === index
+                          ? { ...item, goldLotId: event.target.value, sourceHandoverId: "" }
+                          : item,
                       ),
                     )
                   }
@@ -349,7 +451,7 @@ export function DeliveryFlavorEditor({
               </label>
             ) : null}
 
-            {needed > 0 && splitNeeded ? (
+            {needed > 0 && splitNeeded && source === "gold" ? (
               <div className="mt-3">
                 <p className="text-sm text-muted-foreground">{t("split_lots_hint")}</p>
                 <button
@@ -373,7 +475,7 @@ export function DeliveryFlavorEditor({
               </button>
             ) : null}
 
-            {needed > 0 && remainingTotal < needed && uniqueOptions.length > 0 ? (
+            {needed > 0 && source === "gold" && remainingTotal < needed && uniqueOptions.length > 0 ? (
               <p className="mt-2 text-sm text-destructive">{t("delivery_lot_insufficient")}</p>
             ) : null}
           </article>
