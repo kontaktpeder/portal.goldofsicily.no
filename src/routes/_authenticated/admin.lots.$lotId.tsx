@@ -23,7 +23,7 @@ import {
   selectedProductionStaff,
 } from "@/lib/lot-producers";
 import { replaceLotProducers } from "@/lib/lot-producers-save";
-import { isVillaStockSchemaError, lotFlowTotals } from "@/lib/lot-stock";
+import { isVillaStockSchemaError, lotFlowTotals, showVillaStockMetrics } from "@/lib/lot-stock";
 import {
   cartonInsertRows,
   derivedCartonCount,
@@ -370,9 +370,13 @@ function AdminLotDetail() {
       <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Metric label={t("produced_qty")} value={`${lot.produced_qty} ${t("pcs")}`} />
         <Metric label={t("lot_at_gold")} value={`${flow.atGold} ${t("pcs")}`} />
-        <Metric label={t("lot_at_villa")} value={`${flow.atVilla} ${t("pcs")}`} />
         <Metric label={t("lot_delivered_customers")} value={`${flow.deliveredToCustomers} ${t("pcs")}`} />
-        <Metric label={t("lot_total_left")} value={`${flow.totalLeft} ${t("pcs")}`} />
+        {showVillaStockMetrics(villaHandoverQty) ? (
+          <Metric label={t("lot_at_villa")} value={`${flow.atVilla} ${t("pcs")}`} />
+        ) : null}
+        {showVillaStockMetrics(villaHandoverQty) ? (
+          <Metric label={t("lot_total_left")} value={`${flow.totalLeft} ${t("pcs")}`} />
+        ) : null}
         <Metric label={t("carton_count")} value={String(cartonCount)} />
         <Metric label={t("lot_status")} value={t(STATUS_KEYS[lot.status] ?? "lot_status_produced")} />
       </div>
@@ -942,13 +946,6 @@ function LotPackingSection({
             >
               {t("deliver_direct")}
             </Link>
-            <button
-              type="button"
-              onClick={() => document.getElementById("lot-handover")?.scrollIntoView({ behavior: "smooth" })}
-              className="rounded-full border border-border px-4 py-2 text-sm font-semibold"
-            >
-              {t("ops_handover_villa")}
-            </button>
           </div>
         ) : null}
       </div>

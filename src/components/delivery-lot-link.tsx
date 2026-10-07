@@ -45,9 +45,13 @@ export function DeliveryLotLink({
       <button
         type="button"
         onClick={() => setManualOpen((value) => !(value ?? missingLot))}
-        className="text-sm font-semibold text-primary"
+        className={
+          missingLot
+            ? "text-sm font-semibold text-primary"
+            : "text-sm text-muted-foreground"
+        }
       >
-        {t("link_lot")}
+        {missingLot ? t("link_lot") : t("change_lot")}
       </button>
       {open ? (
         <ul className="mt-3 space-y-3">

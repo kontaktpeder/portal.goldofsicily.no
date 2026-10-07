@@ -11,6 +11,9 @@ import {
   lotsWithFormReservation,
   newestCoveringLot,
   needsLotSplit,
+  assignStockSource,
+  deliveryNeedsStockSourceChoice,
+  showVillaStockMetrics,
   suggestLotId,
   suggestVillaHandover,
   toStockLots,
@@ -159,6 +162,50 @@ test("Villa suggestion keeps the confirmed handover and shows its LOT", () => {
     ),
     { ok: false, reason: "insufficient" },
   );
+});
+
+test("stock source stays hidden until a chosen flavor has Villa stock", () => {
+  const plain = lots;
+  const withVilla: StockLot[] = [
+    {
+      ...lots[1],
+      villaHandovers: [
+        {
+          id: "hand-1",
+          lotId: "new",
+          lotCode: "L-20260908-T-01",
+          productId: "truffle",
+          recipient: "Villa Import",
+          remaining: 80,
+        },
+      ],
+    },
+  ];
+  assert.equal(
+    deliveryNeedsStockSourceChoice(withVilla, [{ productId: "truffle", quantity: 0 }]),
+    false,
+  );
+  assert.equal(
+    deliveryNeedsStockSourceChoice(plain, [{ productId: "truffle", quantity: 10 }]),
+    false,
+  );
+  assert.equal(
+    deliveryNeedsStockSourceChoice(withVilla, [{ productId: "truffle", quantity: 10 }]),
+    true,
+  );
+  assert.equal(showVillaStockMetrics(0), false);
+  assert.equal(showVillaStockMetrics(80), true);
+  const assigned = assignStockSource(
+    withVilla,
+    [{ productId: "truffle", quantity: 10, goldLotId: "", sourceHandoverId: "" }],
+    "villa",
+    "new",
+  );
+  assert.equal(assigned[0]?.sourceHandoverId, "hand-1");
+  assert.equal(assigned[0]?.goldLotId, "new");
+  const backToGold = assignStockSource(withVilla, assigned, "gold", "new");
+  assert.equal(backToGold[0]?.sourceHandoverId, "");
+  assert.equal(backToGold[0]?.goldLotId, "new");
 });
 
 test("villa stock sql does not restore the historical gold-lot check", () => {

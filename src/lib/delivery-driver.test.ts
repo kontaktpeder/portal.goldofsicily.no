@@ -3,6 +3,8 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
   deliveryDriverPatch,
+  deliveryEditConfirm,
+  deliveryEditPatch,
   deliverySettingsPatch,
   driverOptionLabel,
   isDeliveryDriverSchemaError,
@@ -64,15 +66,62 @@ test("driver sql freezes the name and leaves commerce columns alone", () => {
   assert.equal(sql.includes("unit_price_ore"), false);
 });
 
-test("the delivery screen confirms settings edits and suggests the signed-in driver", () => {
+test("an edit writes only the fields that changed", () => {
+  const saved = {
+    deliveredAt: "2026-10-04T12:00:00.000Z",
+    note: "bakdør",
+    deliveredBy: "user-denis",
+  };
+  assert.deepEqual(
+    deliveryEditPatch(saved, { deliveredAt: "2026-10-05", note: "bakdør", deliveredBy: "user-denis" }),
+    { delivered_at: "2026-10-05" },
+  );
+  assert.deepEqual(
+    deliveryEditPatch(saved, { deliveredAt: "2026-10-04", note: "  ", deliveredBy: "user-denis" }),
+    { note: null },
+  );
+  assert.deepEqual(
+    deliveryEditPatch(saved, { deliveredAt: "2026-10-04", note: "bakdør", deliveredBy: "" }),
+    { delivered_by: null },
+  );
+  assert.deepEqual(
+    deliveryEditPatch(saved, { deliveredAt: "2026-10-04", note: " bakdør ", deliveredBy: "user-denis" }),
+    {},
+  );
+  assert.deepEqual(
+    deliveryEditPatch(saved, { deliveredAt: "2026-10-06", note: "kveld", deliveredBy: "user-peder" }),
+    { delivered_at: "2026-10-06", note: "kveld", delivered_by: "user-peder" },
+  );
+  assert.equal(
+    deliveryEditConfirm(
+      deliveryEditPatch(saved, { deliveredAt: "2026-10-05", note: "bakdør", deliveredBy: "user-denis" }),
+    ),
+    "settings",
+  );
+  assert.equal(
+    deliveryEditConfirm(
+      deliveryEditPatch(saved, { deliveredAt: "2026-10-04", note: "bakdør", deliveredBy: "user-peder" }),
+    ),
+    "driver",
+  );
+  assert.equal(
+    deliveryEditConfirm(
+      deliveryEditPatch(saved, { deliveredAt: "2026-10-05", note: "kveld", deliveredBy: "user-peder" }),
+    ),
+    "both",
+  );
+  assert.equal(deliveryEditConfirm({}), "none");
+});
+
+test("the delivery screen confirms one edit and suggests the signed-in driver", () => {
   const page = readFileSync(
     new URL("../routes/_authenticated/admin.deliveries.tsx", import.meta.url),
     "utf8",
   );
   assert.match(page, /suggestedDeliveredBy/);
-  assert.match(page, /deliverySettingsPatch/);
-  assert.match(page, /DeliveryDriverEditor/);
-  assert.match(page, /delivery_edit_confirm/);
+  assert.match(page, /deliveryNeedsStockSourceChoice/);
+  assert.match(page, /DeliveryRecordEditor/);
+  assert.doesNotMatch(page, /DeliveryDriverEditor/);
   assert.doesNotMatch(page, /\.update\(\{[^}]*customer_id/);
   assert.doesNotMatch(page, /\.update\(\{[^}]*commercial_route/);
 
@@ -80,13 +129,27 @@ test("the delivery screen confirms settings edits and suggests the signed-in dri
     new URL("../components/delivery-driver-editor.tsx", import.meta.url),
     "utf8",
   );
-  assert.match(editor, /deliveryDriverPatch/);
-  assert.match(editor, /delivery_driver_confirm/);
+  assert.match(editor, /deliveryEditPatch/);
+  assert.match(editor, /deliveryEditConfirm/);
+  assert.match(editor, /delivery_edit_with_driver/);
   assert.match(editor, /duration: Infinity/);
+  assert.equal(editor.match(/toast\(/g)?.length, 1);
 
   const venue = readFileSync(
     new URL("../routes/_authenticated/admin.venues.$venueId.tsx", import.meta.url),
     "utf8",
   );
-  assert.match(venue, /DeliveryDriverEditor/);
+  assert.match(venue, /DeliveryRecordEditor/);
+  assert.doesNotMatch(venue, /DeliveryDriverEditor/);
+
+  const link = readFileSync(new URL("../components/delivery-lot-link.tsx", import.meta.url), "utf8");
+  assert.match(link, /missingLot \? t\("link_lot"\) : t\("change_lot"\)/);
+
+  const lotPage = readFileSync(
+    new URL("../routes/_authenticated/admin.lots.$lotId.tsx", import.meta.url),
+    "utf8",
+  );
+  assert.match(lotPage, /deliver_direct/);
+  assert.match(lotPage, /showVillaStockMetrics/);
+  assert.doesNotMatch(lotPage, /ops_handover_villa/);
 });

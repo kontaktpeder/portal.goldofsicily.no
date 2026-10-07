@@ -1,62 +1,95 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { PrimaryButton, TextField } from "@/components/field";
 import { supabase } from "@/integrations/supabase/client";
 import { useI18n } from "@/lib/i18n";
 import {
-  deliveryDriverPatch,
+  deliveryEditConfirm,
+  deliveryEditPatch,
   driverOptionLabel,
   isDeliveryDriverSchemaError,
+  type DeliveryEditPatch,
 } from "@/lib/delivery-driver";
 import type { ProductionStaff } from "@/lib/lot-producers";
 
-export function DeliveryDriverEditor({
+export function DeliveryRecordEditor({
   deliveryId,
+  deliveredAt,
+  note,
   deliveredBy,
   deliveredByName,
   staff,
 }: {
   deliveryId: string;
+  deliveredAt: string;
+  note: string | null;
   deliveredBy: string | null;
   deliveredByName: string | null;
   staff: readonly ProductionStaff[];
 }) {
   const { t } = useI18n();
   const queryClient = useQueryClient();
-  const saved = deliveredBy ?? "";
-  const [value, setValue] = useState(saved);
+  const [open, setOpen] = useState(false);
+  const [date, setDate] = useState(deliveredAt.slice(0, 10));
+  const [draftNote, setDraftNote] = useState(note ?? "");
+  const [driver, setDriver] = useState(deliveredBy ?? "");
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    setValue(deliveredBy ?? "");
-  }, [deliveryId, deliveredBy]);
+    if (open) return;
+    setDate(deliveredAt.slice(0, 10));
+    setDraftNote(note ?? "");
+    setDriver(deliveredBy ?? "");
+  }, [deliveryId, deliveredAt, note, deliveredBy, open]);
 
-  const dirty = value !== saved;
+  const patch = deliveryEditPatch(
+    { deliveredAt, note, deliveredBy },
+    { deliveredAt: date, note: draftNote, deliveredBy: driver },
+  );
+  const confirmKind = deliveryEditConfirm(patch);
 
-  async function save() {
+  async function save(next: DeliveryEditPatch) {
     setBusy(true);
-    const { error } = await supabase
-      .from("deliveries")
-      .update(deliveryDriverPatch(value))
-      .eq("id", deliveryId);
+    let driverSkipped = false;
+    let { error } = await supabase.from("deliveries").update(next).eq("id", deliveryId);
+    if (error && next.delivered_by !== undefined && isDeliveryDriverSchemaError(error.message)) {
+      driverSkipped = true;
+      const { delivered_by: _driver, ...rest } = next;
+      if (Object.keys(rest).length === 0) {
+        setBusy(false);
+        toast.warning(t("delivered_by_pending_sql"));
+        return;
+      }
+      const retry = await supabase.from("deliveries").update(rest).eq("id", deliveryId);
+      error = retry.error;
+    }
     setBusy(false);
     if (error) {
-      if (isDeliveryDriverSchemaError(error.message)) toast.warning(t("delivered_by_pending_sql"));
-      else toast.error(error.message);
+      toast.error(error.message);
       return;
     }
-    toast.success(t("delivery_updated"));
+    if (driverSkipped) toast.warning(t("delivered_by_pending_sql"));
+    else toast.success(t("delivery_updated"));
+    setOpen(false);
     await queryClient.invalidateQueries();
   }
 
   function ask() {
-    toast(t("delivery_driver_confirm"), {
-      id: `delivery-driver-${deliveryId}`,
+    if (confirmKind === "none" || !date) return;
+    const message =
+      confirmKind === "driver"
+        ? t("delivery_driver_confirm")
+        : confirmKind === "both"
+          ? t("delivery_edit_with_driver")
+          : t("delivery_edit_confirm");
+    toast(message, {
+      id: `delivery-edit-${deliveryId}`,
       duration: Infinity,
       action: {
         label: t("delivery_edit_yes"),
         onClick: () => {
-          void save();
+          void save(patch);
         },
       },
       cancel: {
@@ -66,26 +99,46 @@ export function DeliveryDriverEditor({
     });
   }
 
+  if (!open) {
+    return (
+      <div className="mt-3">
+        <p className="text-sm text-muted-foreground">
+          {t("delivered_by")}: {deliveredByName ?? t("delivered_by_missing")}
+        </p>
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className="mt-3 text-sm font-semibold text-primary"
+        >
+          {t("delivery_edit")}
+        </button>
+      </div>
+    );
+  }
+
   return (
-    <div className="mt-3">
+    <div className="mt-4 space-y-3 border-t border-border pt-4">
+      <p className="eyebrow">{t("delivery_edit")}</p>
+      <TextField label={t("date")} value={date} onChange={setDate} type="date" />
       <DriverSelect
         label={t("delivered_by")}
-        value={value}
+        value={driver}
         staff={staff}
         emptyLabel={t("delivered_by_none")}
         extra={deliveredBy && deliveredByName ? { id: deliveredBy, label: deliveredByName } : null}
-        onChange={setValue}
+        onChange={setDriver}
       />
-      {dirty ? (
-        <button
-          type="button"
-          onClick={ask}
-          disabled={busy}
-          className="mt-2 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
-        >
-          {busy ? "…" : t("save")}
-        </button>
-      ) : null}
+      <TextField label={t("note")} value={draftNote} onChange={setDraftNote} />
+      <PrimaryButton onClick={ask} disabled={busy || confirmKind === "none" || !date}>
+        {busy ? "…" : t("save")}
+      </PrimaryButton>
+      <button
+        type="button"
+        onClick={() => setOpen(false)}
+        className="w-full py-2 text-sm font-semibold text-muted-foreground"
+      >
+        {t("cancel")}
+      </button>
     </div>
   );
 }
