@@ -28,10 +28,21 @@ import {
   type DeliveryFlavorQty,
   type StoredDeliveryLine,
 } from "@/lib/flavors";
-import { isGoldLotSchemaError, toStockLots, validateDeliveryStock } from "@/lib/lot-stock";
+import {
+  isGoldLotSchemaError,
+  isVillaStockSchemaError,
+  toStockLots,
+  validateDeliveryStock,
+  validateVillaStock,
+  type StockSource,
+} from "@/lib/lot-stock";
+import { DeliveryLotLink } from "@/components/delivery-lot-link";
 import { commercialRouteAtConfirmation, productsMissingPrice, type PriceAgreement } from "@/lib/economy";
 
 export const Route = createFileRoute("/_authenticated/admin/deliveries")({
+  validateSearch: (search: Record<string, unknown>) => ({
+    lot: typeof search.lot === "string" ? search.lot : "",
+  }),
   head: () => ({
     meta: [
       { title: "Deliveries — Gold of Sicily admin" },
@@ -47,14 +58,20 @@ export const Route = createFileRoute("/_authenticated/admin/deliveries")({
 });
 
 const deliverySelect =
-  "*, customers!deliveries_customer_id_fkey(name, type), delivery_lines(product_id, quantity, gold_lot_id, unit_price_ore, product_name_snapshot, products(name_no, name_en), gold_lots(id, lot_code))";
+  "*, customers!deliveries_customer_id_fkey(name, type), delivery_lines(id, product_id, quantity, gold_lot_id, source_handover_id, unit_price_ore, product_name_snapshot, products(name_no, name_en), gold_lots(id, lot_code))";
+const deliverySelectWithoutSource =
+  "*, customers!deliveries_customer_id_fkey(name, type), delivery_lines(id, product_id, quantity, gold_lot_id, unit_price_ore, product_name_snapshot, products(name_no, name_en), gold_lots(id, lot_code))";
+const stockSelect =
+  "id, lot_code, product_id, produced_qty, approved_qty, status, delivery_lines(quantity, source_handover_id), gold_lot_handovers(id, quantity, ownership_after_handover, recipient_company)";
 
 function AdminDeliveries() {
   const { t, lang } = useI18n();
+  const { lot: preferredLotId } = Route.useSearch();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const prereq = useLotPrerequisites();
   const [open, setOpen] = useState(false);
+  const [stockSource, setStockSource] = useState<StockSource>("gold");
   const [customerId, setCustomerId] = useState("");
   const [flavorQtys, setFlavorQtys] = useState<DeliveryFlavorQty[]>([]);
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
@@ -68,6 +85,10 @@ function AdminDeliveries() {
   const [editBusy, setEditBusy] = useState(false);
   const session = useSessionInfo();
   const listStaff = useServerFn(listProductionStaff);
+
+  useEffect(() => {
+    if (preferredLotId) setOpen(true);
+  }, [preferredLotId]);
 
   const { data: productionStaff } = useQuery({
     queryKey: ["production-staff"],
@@ -152,29 +173,39 @@ function AdminDeliveries() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("gold_lots")
-        .select("id, lot_code, product_id, produced_qty, status, delivery_lines(quantity)")
+        .select(stockSelect)
         .order("lot_code", { ascending: false })
         .limit(400);
-      if (error) {
-        if (isGoldLotSchemaError(error)) return [];
-        throw error;
+      if (!error) return toStockLots(data ?? []);
+      if (isVillaStockSchemaError(error.message) || isGoldLotSchemaError(error)) {
+        const fallback = await supabase
+          .from("gold_lots")
+          .select("id, lot_code, product_id, produced_qty, status, delivery_lines(quantity)")
+          .order("lot_code", { ascending: false })
+          .limit(400);
+        if (fallback.error) {
+          if (isGoldLotSchemaError(fallback.error)) return [];
+          throw fallback.error;
+        }
+        return toStockLots(fallback.data ?? []);
       }
-      return toStockLots(data ?? []);
+      throw error;
     },
   });
 
   const total = useMemo(() => sumDeliveryQty(flavorQtys), [flavorQtys]);
+  const stockLines = flavorQtys.map((line) => ({
+    productId: line.productId,
+    quantity: qty(line.quantity),
+    goldLotId: line.goldLotId,
+    sourceHandoverId: line.sourceHandoverId,
+  }));
   const stockCheck = useMemo(
     () =>
-      validateDeliveryStock(
-        flavorQtys.map((line) => ({
-          productId: line.productId,
-          quantity: qty(line.quantity),
-          goldLotId: line.goldLotId,
-        })),
-        stockLots,
-      ),
-    [flavorQtys, stockLots],
+      stockSource === "villa"
+        ? validateVillaStock(stockLines, stockLots)
+        : validateDeliveryStock(stockLines, stockLots),
+    [stockLines, stockLots, stockSource],
   );
 
   const canSave =
@@ -182,7 +213,11 @@ function AdminDeliveries() {
     total > 0 &&
     prereq.ok &&
     stockCheck.ok &&
-    flavorQtys.every((line) => qty(line.quantity) <= 0 || Boolean(line.goldLotId));
+    flavorQtys.every(
+      (line) =>
+        qty(line.quantity) <= 0 ||
+        (Boolean(line.goldLotId) && (stockSource === "gold" || Boolean(line.sourceHandoverId))),
+    );
 
   const { data: deliveries } = useQuery({
     queryKey: ["admin-deliveries"],
@@ -193,6 +228,14 @@ function AdminDeliveries() {
         .order("delivered_at", { ascending: false })
         .limit(200);
       if (error) {
+        if (isVillaStockSchemaError(error.message)) {
+          const retry = await supabase
+            .from("deliveries")
+            .select(deliverySelectWithoutSource)
+            .order("delivered_at", { ascending: false })
+            .limit(200);
+          if (!retry.error) return retry.data ?? [];
+        }
         const fallback = await supabase
           .from("deliveries")
           .select("*, customers!deliveries_customer_id_fkey(name, type)")
@@ -315,6 +358,8 @@ function AdminDeliveries() {
               customer,
               flavorQtys.filter((line) => qty(line.quantity) > 0).map((line) => (lang === "en" ? line.nameEn : line.nameNo)),
             );
+          } else if (isVillaStockSchemaError(lineError.message)) {
+            toast.warning(t("villa_stock_pending_sql"));
           } else {
             toast.error(lineError.message);
           }
@@ -424,10 +469,40 @@ function AdminDeliveries() {
           <div>
             <span className="eyebrow mb-1 block">{t("delivery_qty_per_flavor")}</span>
             <p className="mb-3 text-sm text-muted-foreground">{t("delivery_qty_hint")}</p>
+            <div className="mb-4">
+              <span className="eyebrow mb-2 block">{t("stock_source")}</span>
+              <div className="flex gap-2">
+                {(["gold", "villa"] as const).map((value) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => {
+                      setStockSource(value);
+                      setFlavorQtys((current) =>
+                        current.map((line) => ({ ...line, goldLotId: "", sourceHandoverId: "" })),
+                      );
+                    }}
+                    className={`rounded-full px-4 py-2 text-sm font-semibold ${
+                      stockSource === value
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-muted text-muted-foreground"
+                    }`}
+                  >
+                    {value === "gold" ? t("stock_from_gold") : t("stock_from_villa")}
+                  </button>
+                ))}
+              </div>
+            </div>
             {(products ?? []).length === 0 ? (
               <p className="text-sm text-muted-foreground">{t("delivery_no_products")}</p>
             ) : (
-              <DeliveryFlavorEditor lines={flavorQtys} lots={stockLots} onChange={setFlavorQtys} />
+              <DeliveryFlavorEditor
+                lines={flavorQtys}
+                lots={stockLots}
+                source={stockSource}
+                preferredLotId={preferredLotId}
+                onChange={setFlavorQtys}
+              />
             )}
             <p className="mt-4 text-lg font-semibold tabular-nums">
               {t("total")}: {total}{" "}
@@ -483,6 +558,14 @@ function AdminDeliveries() {
               />
               <DeliveryFlavorBreakdown
                 linkLots
+                lines={
+                  ("delivery_lines" in delivery
+                    ? (delivery.delivery_lines as StoredDeliveryLine[])
+                    : null) ?? null
+                }
+              />
+              <DeliveryLotLink
+                lots={stockLots}
                 lines={
                   ("delivery_lines" in delivery
                     ? (delivery.delivery_lines as StoredDeliveryLine[])

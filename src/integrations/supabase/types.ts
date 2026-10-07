@@ -223,6 +223,7 @@ export type Database = {
           product_id: string
           product_name_snapshot: string
           quantity: number
+          source_handover_id: string | null
           unit_price_ore: number | null
         }
         Insert: {
@@ -233,6 +234,7 @@ export type Database = {
           product_id: string
           product_name_snapshot?: string
           quantity?: number
+          source_handover_id?: string | null
           unit_price_ore?: number | null
         }
         Update: {
@@ -243,6 +245,7 @@ export type Database = {
           product_id?: string
           product_name_snapshot?: string
           quantity?: number
+          source_handover_id?: string | null
           unit_price_ore?: number | null
         }
         Relationships: [
@@ -258,6 +261,13 @@ export type Database = {
             columns: ["gold_lot_id"]
             isOneToOne: false
             referencedRelation: "gold_lots"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "delivery_lines_source_handover_id_fkey"
+            columns: ["source_handover_id"]
+            isOneToOne: false
+            referencedRelation: "gold_lot_handovers"
             referencedColumns: ["id"]
           },
           {
