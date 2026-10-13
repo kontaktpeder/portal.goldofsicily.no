@@ -523,6 +523,34 @@ export const bootstrapFirstAdmin = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+async function assertCommercial(supabase: {
+  rpc: (fn: "can_manage_commercial") => Promise<{ data: unknown; error: { message: string } | null }>;
+}) {
+  const { data, error } = await supabase.rpc("can_manage_commercial");
+  if (error) throw new Error(`Could not verify commercial access: ${error.message}`);
+  if (data !== true) throw new Error("Not authorized");
+}
+
+export const transferInvoiceDraft = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((data: unknown) => z.object({ draftId: z.string().uuid() }).parse(data))
+  .handler(async ({ data, context }) => {
+    await assertCommercial(context.supabase as never);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { transferInvoiceBasis } = await import("@/lib/dnb-job");
+    return transferInvoiceBasis(supabaseAdmin, data.draftId, process.env);
+  });
+
+export const refreshInvoiceDraft = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((data: unknown) => z.object({ draftId: z.string().uuid() }).parse(data))
+  .handler(async ({ data, context }) => {
+    await assertCommercial(context.supabase as never);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { refreshInvoiceBasis } = await import("@/lib/dnb-job");
+    return refreshInvoiceBasis(supabaseAdmin, data.draftId, process.env);
+  });
+
 export const adminExists = createServerFn({ method: "GET" }).handler(async () => {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const { count } = await supabaseAdmin
