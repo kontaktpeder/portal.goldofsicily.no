@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { buildRecallSearchResult, contactTargets } from "./recall.ts";
+import { buildRecallSearchResult, contactTargets, traceLotDistribution } from "./recall.ts";
 
 const truffleLot = {
   id: "lot-truffle",
@@ -100,8 +100,105 @@ test("supplier LOT recall marks the matching ingredient and lists Gold-LOTs", ()
   const result = buildRecallSearchResult("TK882", [truffleLot, ndujaLot]);
   assert.equal(result.kind, "supplier_lot");
   assert.equal(result.matchedSupplierLot, "TK882");
-  assert.equal(result.lots[0]?.ingredients.find((row) => row.supplierLotCode === "TK882")?.matched, true);
+  assert.equal(
+    result.lots[0]?.ingredients.find((row) => row.supplierLotCode === "TK882")?.matched,
+    true,
+  );
   assert.equal(result.lots[1]?.ingredients[0]?.matched, false);
+});
+
+test("villa stock stays untraced until a delivery line names the end recipient and the handover", () => {
+  const open = traceLotDistribution(
+    [
+      {
+        id: "handover-villa",
+        quantity: 300,
+        cartons: 15,
+        handedOverAt: "2026-09-07T16:34:00.000Z",
+        recipientCompany: "Villa Grossista",
+        customerId: "villa",
+        recipientPerson: null,
+        storageLocation: null,
+        ownership: "villa",
+      },
+    ],
+    [],
+  );
+  assert.equal(open.heldAtWholesaler[0]?.remaining, 300);
+  assert.equal(open.endRecipients.length, 0);
+
+  const traced = traceLotDistribution(
+    [
+      {
+        id: "handover-villa",
+        quantity: 300,
+        cartons: 15,
+        handedOverAt: "2026-09-07T16:34:00.000Z",
+        recipientCompany: "Villa Grossista",
+        customerId: "villa",
+        recipientPerson: null,
+        storageLocation: null,
+        ownership: "villa",
+      },
+    ],
+    [
+      {
+        venueName: "Restaurant A",
+        customerId: "restaurant-a",
+        quantity: 200,
+        deliveredAt: "2026-09-09",
+        commercialRoute: "via_wholesaler",
+        wholesalerName: "Villa Grossista",
+        sourceHandoverId: "handover-villa",
+        lotRecorded: true,
+      },
+      {
+        venueName: "Restaurant B",
+        customerId: "restaurant-b",
+        quantity: 40,
+        deliveredAt: "2026-09-10",
+        commercialRoute: "via_wholesaler",
+        wholesalerName: "Villa Grossista",
+        sourceHandoverId: null,
+        lotRecorded: false,
+      },
+    ],
+  );
+  assert.equal(traced.endRecipients[0]?.customerName, "Restaurant A");
+  assert.equal(traced.endRecipients[0]?.wholesalerName, "Villa Grossista");
+  assert.equal(traced.endRecipients[0]?.handoverLinked, true);
+  assert.equal(traced.endRecipients[1]?.handoverLinked, false);
+  assert.equal(traced.endRecipients[1]?.lotRecorded, false);
+  assert.equal(traced.missingLot[0]?.quantity, 40);
+  assert.equal(traced.heldAtWholesaler[0]?.tracedToRecipients, 200);
+  assert.equal(traced.heldAtWholesaler[0]?.remaining, 100);
+  const card = buildRecallSearchResult("L-20260907-T-01", [
+    {
+      ...truffleLot,
+      handovers: [
+        {
+          ...truffleLot.handovers[0]!,
+          id: "handover-villa",
+          customerId: "villa",
+        },
+      ],
+      venueDeliveries: traced.endRecipients.map((row) => ({
+        venueName: row.customerName,
+        customerId: row.customerId,
+        quantity: row.quantity,
+        deliveredAt: row.deliveredAt,
+        commercialRoute: "via_wholesaler" as const,
+        wholesalerName: row.wholesalerName,
+        sourceHandoverId: row.handoverLinked ? "handover-villa" : null,
+        lotRecorded: row.lotRecorded,
+      })),
+    },
+  ]);
+  assert.deepEqual(contactTargets(card.lots[0]!), [
+    "Villa Grossista",
+    "Restaurant A",
+    "Restaurant B",
+  ]);
 });
 
 test("recall lives under LOT and delivery lines keep Gold-LOT as the master ID", () => {
@@ -109,17 +206,33 @@ test("recall lives under LOT and delivery lines keep Gold-LOT as the master ID",
     new URL("../routes/_authenticated/admin.recall.tsx", import.meta.url),
     "utf8",
   );
-  const recallSearch = readFileSync(new URL("../components/recall-search.tsx", import.meta.url), "utf8");
+  const recallSearch = readFileSync(
+    new URL("../components/recall-search.tsx", import.meta.url),
+    "utf8",
+  );
   const deliveries = readFileSync(
     new URL("../routes/_authenticated/admin.deliveries.tsx", import.meta.url),
     "utf8",
   );
-  const lots = readFileSync(new URL("../routes/_authenticated/admin.lots.index.tsx", import.meta.url), "utf8");
-  const flavorLines = readFileSync(new URL("../components/flavor-lines.tsx", import.meta.url), "utf8");
-  const sql = readFileSync(new URL("../../sql/11_delivery_lot_required.sql", import.meta.url), "utf8");
+  const lots = readFileSync(
+    new URL("../routes/_authenticated/admin.lots.index.tsx", import.meta.url),
+    "utf8",
+  );
+  const flavorLines = readFileSync(
+    new URL("../components/flavor-lines.tsx", import.meta.url),
+    "utf8",
+  );
+  const sql = readFileSync(
+    new URL("../../sql/11_delivery_lot_required.sql", import.meta.url),
+    "utf8",
+  );
   assert.match(recallPage, /tab: "recall"/);
   assert.match(recallSearch, /classifyRecallQuery/);
   assert.match(recallSearch, /supplier_lot_code/);
+  assert.match(recallSearch, /source_handover_id/);
+  assert.match(recallSearch, /recall_end_recipients/);
+  assert.match(recallSearch, /recall_held_wholesaler/);
+  assert.match(recallSearch, /gold_lot_id", null/);
   assert.match(deliveries, /gold_lot_id/);
   assert.match(deliveries, /validateDeliveryStock/);
   assert.match(lots, /formatGoldLotCode/);

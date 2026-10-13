@@ -7,6 +7,7 @@ import { useI18n, type TranslationKey } from "@/lib/i18n";
 import { classifyRecallQuery } from "@/lib/gold-lot";
 import { buildRecallSearchResult, contactTargets, type RecallLotInput } from "@/lib/recall";
 import { displayProducedBy, producersFromQuery } from "@/lib/lot-producers";
+import { formatDate } from "@/lib/sign-out";
 
 const STATUS_KEYS: Record<string, TranslationKey> = {
   produced: "lot_status_produced",
@@ -28,6 +29,18 @@ export function RecallSearch({ compact = false }: { compact?: boolean }) {
     enabled: classified.normalized.length > 0,
     queryFn: async () => fetchRecallLots(classified.kind, classified.normalized),
   });
+  const missingLot = useQuery({
+    queryKey: ["recall-missing-lot"],
+    queryFn: async () => {
+      const { count, error } = await supabase
+        .from("delivery_lines")
+        .select("id", { count: "exact", head: true })
+        .gt("quantity", 0)
+        .is("gold_lot_id", null);
+      if (error) throw error;
+      return count ?? 0;
+    },
+  });
 
   const result = useMemo(
     () => (query.trim() ? buildRecallSearchResult(query, data ?? []) : null),
@@ -42,6 +55,10 @@ export function RecallSearch({ compact = false }: { compact?: boolean }) {
           <p className="mt-2 max-w-2xl text-sm text-muted-foreground">{t("recall_intro")}</p>
         </>
       )}
+      <p className="mt-4 text-sm text-muted-foreground">
+        {t("recall_lot_coverage")}{" "}
+        <span className="font-semibold text-foreground">{missingLot.data ?? "…"}</span>
+      </p>
       <form
         className="mt-6 space-y-4"
         onSubmit={(event) => {
@@ -129,19 +146,50 @@ export function RecallSearch({ compact = false }: { compact?: boolean }) {
             </section>
 
             <section>
-              <h2 className="eyebrow">{t("venue_deliveries")}</h2>
-              {lot.handovers.length === 0 && lot.venueDeliveries.length === 0 ? (
-                <p className="mt-2 text-sm text-muted-foreground">{t("no_handovers")}</p>
+              <h2 className="eyebrow">{t("recall_end_recipients")}</h2>
+              {lot.distribution.endRecipients.length === 0 ? (
+                <p className="mt-2 text-sm text-muted-foreground">
+                  {t("recall_no_end_recipients")}
+                </p>
               ) : (
                 <ul className="mt-2 space-y-1.5">
-                  {lot.handovers.map((row, index) => (
-                    <li key={`h-${index}`}>
-                      {row.quantity} {t("pcs")} → {row.recipientCompany}
+                  {lot.distribution.endRecipients.map((row, index) => (
+                    <li key={`end-${index}`}>
+                      {row.quantity} {t("pcs")} →{" "}
+                      {row.customerId ? (
+                        <Link
+                          to="/admin/sales/$customerId"
+                          params={{ customerId: row.customerId }}
+                          className="font-semibold"
+                        >
+                          {row.customerName}
+                        </Link>
+                      ) : (
+                        row.customerName
+                      )}
+                      {row.wholesalerName ? ` · ${t("supplied_via")} ${row.wholesalerName}` : ""}
+                      {row.lotRecorded ? "" : ` · ${t("recall_missing_lot")}`}
+                      {row.wholesalerName && !row.handoverLinked
+                        ? ` · ${t("recall_handover_unlinked")}`
+                        : ""}
                     </li>
                   ))}
-                  {lot.venueDeliveries.map((row, index) => (
-                    <li key={`v-${index}`}>
-                      {row.quantity} {t("pcs")} → {row.venueName}
+                </ul>
+              )}
+            </section>
+
+            <section>
+              <h2 className="eyebrow">{t("recall_held_wholesaler")}</h2>
+              {lot.distribution.heldAtWholesaler.length === 0 ? (
+                <p className="mt-2 text-sm text-muted-foreground">{t("recall_none_held")}</p>
+              ) : (
+                <ul className="mt-2 space-y-1.5">
+                  {lot.distribution.heldAtWholesaler.map((row) => (
+                    <li key={row.handoverId}>
+                      {row.remaining} {t("pcs")} {t("recall_still_at")} {row.name}
+                      {row.tracedToRecipients > 0
+                        ? ` · ${row.tracedToRecipients} ${t("recall_traced_onward")}`
+                        : ""}
                     </li>
                   ))}
                 </ul>
@@ -203,6 +251,11 @@ export function RecallSearch({ compact = false }: { compact?: boolean }) {
   );
 }
 
+function one<T>(value: T | T[] | null | undefined): T | null {
+  if (Array.isArray(value)) return value[0] ?? null;
+  return value ?? null;
+}
+
 async function fetchRecallLots(
   kind: "gold_lot" | "supplier_lot",
   normalized: string,
@@ -211,7 +264,7 @@ async function fetchRecallLots(
     const { data, error } = await supabase
       .from("gold_lots")
       .select(
-        "id, lot_code, production_date, produced_qty, carton_count, produced_by, status, deviation_notes, products(name_no, name_en), gold_lot_ingredients(ingredient_name, supplier_lot_code, quantity, quantity_unit, best_before, ingredient_suppliers(name)), gold_lot_handovers(quantity, cartons, handed_over_at, recipient_company, recipient_person, storage_location, ownership_after_handover), gold_lot_producers(user_id, full_name_snapshot, employee_number_snapshot)",
+        "id, lot_code, production_date, produced_qty, carton_count, produced_by, status, deviation_notes, products(name_no, name_en), gold_lot_ingredients(ingredient_name, supplier_lot_code, quantity, quantity_unit, best_before, ingredient_suppliers(name)), gold_lot_handovers(id, quantity, cartons, handed_over_at, recipient_company, customer_id, recipient_person, storage_location, ownership_after_handover), gold_lot_producers(user_id, full_name_snapshot, employee_number_snapshot)",
       )
       .ilike("lot_code", `${normalized}%`)
       .order("lot_code", { ascending: false })
@@ -231,7 +284,7 @@ async function fetchRecallLots(
   const { data, error } = await supabase
     .from("gold_lots")
     .select(
-        "id, lot_code, production_date, produced_qty, carton_count, produced_by, status, deviation_notes, products(name_no, name_en), gold_lot_ingredients(ingredient_name, supplier_lot_code, quantity, quantity_unit, best_before, ingredient_suppliers(name)), gold_lot_handovers(quantity, cartons, handed_over_at, recipient_company, recipient_person, storage_location, ownership_after_handover), gold_lot_producers(user_id, full_name_snapshot, employee_number_snapshot)",
+      "id, lot_code, production_date, produced_qty, carton_count, produced_by, status, deviation_notes, products(name_no, name_en), gold_lot_ingredients(ingredient_name, supplier_lot_code, quantity, quantity_unit, best_before, ingredient_suppliers(name)), gold_lot_handovers(id, quantity, cartons, handed_over_at, recipient_company, customer_id, recipient_person, storage_location, ownership_after_handover), gold_lot_producers(user_id, full_name_snapshot, employee_number_snapshot)",
     )
     .in("id", lotIds)
     .order("lot_code", { ascending: false });
@@ -268,10 +321,12 @@ type LotQueryRow = {
     | null;
   gold_lot_handovers:
     | {
+        id: string;
         quantity: number;
         cartons: number;
         handed_over_at: string;
         recipient_company: string;
+        customer_id: string | null;
         recipient_person: string | null;
         storage_location: string | null;
         ownership_after_handover: "gold" | "villa";
@@ -283,21 +338,26 @@ async function hydrateLots(rows: LotQueryRow[]): Promise<RecallLotInput[]> {
   const ids = rows.map((row) => row.id);
   const { data: lines } = await supabase
     .from("delivery_lines")
-    .select("gold_lot_id, quantity, deliveries(delivered_at, customers!deliveries_customer_id_fkey(name))")
+    .select(
+      "gold_lot_id, quantity, source_handover_id, deliveries(delivered_at, customer_id, commercial_route, wholesaler_customer_id, customers!deliveries_customer_id_fkey(id, name), wholesaler:customers!deliveries_wholesaler_customer_id_fkey(id, name))",
+    )
     .in("gold_lot_id", ids);
   const byLot = new Map<string, RecallLotInput["venueDeliveries"]>();
   for (const line of lines ?? []) {
     if (!line.gold_lot_id) continue;
-    const delivery = line.deliveries as
-      | { delivered_at: string; customers: { name: string } | null }
-      | { delivered_at: string; customers: { name: string } | null }[]
-      | null;
-    const record = Array.isArray(delivery) ? delivery[0] : delivery;
+    const record = one(line.deliveries);
+    const customer = one(record?.customers);
+    const wholesaler = one(record?.wholesaler);
     const list = byLot.get(line.gold_lot_id) ?? [];
     list.push({
-      venueName: record?.customers?.name ?? "—",
+      venueName: customer?.name ?? "—",
+      customerId: record?.customer_id ?? customer?.id ?? null,
       quantity: line.quantity,
       deliveredAt: record?.delivered_at ?? "",
+      commercialRoute: record?.commercial_route ?? "direct",
+      wholesalerName: wholesaler?.name ?? null,
+      sourceHandoverId: line.source_handover_id,
+      lotRecorded: true,
     });
     byLot.set(line.gold_lot_id, list);
   }
@@ -332,10 +392,12 @@ async function hydrateLots(rows: LotQueryRow[]): Promise<RecallLotInput[]> {
         };
       }),
       handovers: (row.gold_lot_handovers ?? []).map((handover) => ({
+        id: handover.id,
         quantity: handover.quantity,
         cartons: handover.cartons,
         handedOverAt: handover.handed_over_at,
         recipientCompany: handover.recipient_company,
+        customerId: handover.customer_id,
         recipientPerson: handover.recipient_person,
         storageLocation: handover.storage_location,
         ownership: handover.ownership_after_handover,

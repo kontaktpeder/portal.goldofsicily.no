@@ -51,6 +51,13 @@ export type Database = {
           slug: string | null
           updated_at: string
           website_url: string | null
+          segment: Database["public"]["Enums"]["customer_segment"] | null
+          sales_status: Database["public"]["Enums"]["sales_status"] | null
+          sales_owner_id: string | null
+          next_follow_up_on: string | null
+          sales_status_changed_at: string | null
+          commercial_ready_at: string | null
+          delivery_address: string | null
         }
         Insert: {
           active?: boolean
@@ -88,6 +95,13 @@ export type Database = {
           slug?: string | null
           updated_at?: string
           website_url?: string | null
+          segment?: Database["public"]["Enums"]["customer_segment"] | null
+          sales_status?: Database["public"]["Enums"]["sales_status"] | null
+          sales_owner_id?: string | null
+          next_follow_up_on?: string | null
+          sales_status_changed_at?: string | null
+          commercial_ready_at?: string | null
+          delivery_address?: string | null
         }
         Update: {
           active?: boolean
@@ -125,6 +139,13 @@ export type Database = {
           slug?: string | null
           updated_at?: string
           website_url?: string | null
+          segment?: Database["public"]["Enums"]["customer_segment"] | null
+          sales_status?: Database["public"]["Enums"]["sales_status"] | null
+          sales_owner_id?: string | null
+          next_follow_up_on?: string | null
+          sales_status_changed_at?: string | null
+          commercial_ready_at?: string | null
+          delivery_address?: string | null
         }
         Relationships: [
           {
@@ -146,6 +167,106 @@ export type Database = {
             columns: ["billing_legal_entity_id"]
             isOneToOne: false
             referencedRelation: "legal_entities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "customers_sales_owner_id_fkey"
+            columns: ["sales_owner_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      customer_contacts: {
+        Row: {
+          created_at: string
+          customer_id: string | null
+          email: string | null
+          id: string
+          legal_entity_id: string | null
+          name: string
+          phone: string | null
+          role: string | null
+        }
+        Insert: {
+          created_at?: string
+          customer_id?: string | null
+          email?: string | null
+          id?: string
+          legal_entity_id?: string | null
+          name: string
+          phone?: string | null
+          role?: string | null
+        }
+        Update: {
+          created_at?: string
+          customer_id?: string | null
+          email?: string | null
+          id?: string
+          legal_entity_id?: string | null
+          name?: string
+          phone?: string | null
+          role?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "customer_contacts_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "customer_contacts_legal_entity_id_fkey"
+            columns: ["legal_entity_id"]
+            isOneToOne: false
+            referencedRelation: "legal_entities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      crm_activities: {
+        Row: {
+          body: string
+          created_at: string
+          created_by: string | null
+          customer_id: string
+          happened_at: string
+          id: string
+          kind: Database["public"]["Enums"]["crm_activity_kind"]
+        }
+        Insert: {
+          body: string
+          created_at?: string
+          created_by?: string | null
+          customer_id: string
+          happened_at?: string
+          id?: string
+          kind: Database["public"]["Enums"]["crm_activity_kind"]
+        }
+        Update: {
+          body?: string
+          created_at?: string
+          created_by?: string | null
+          customer_id?: string
+          happened_at?: string
+          id?: string
+          kind?: Database["public"]["Enums"]["crm_activity_kind"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crm_activities_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "crm_activities_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
             referencedColumns: ["id"]
           },
         ]
@@ -1318,10 +1439,13 @@ export type Database = {
       gold_lot_event_type: "created" | "packed" | "handover" | "closed" | "recalled"
       gold_lot_status: "produced" | "packed" | "handed_over" | "closed" | "recalled"
       commercial_route: "direct" | "via_wholesaler"
+      crm_activity_kind: "call" | "email" | "meeting" | "tasting" | "note"
+      customer_segment: "restaurant" | "hotel" | "event" | "bar"
       customer_type: "venue" | "wholesaler"
       handover_ownership: "gold" | "villa"
       invoice_draft_status: "draft" | "sent" | "credited" | "cancelled"
       partnership_level: "gold_partner" | "gold_supply"
+      sales_status: "prospect" | "contacted" | "interested" | "tasting" | "pilot_order" | "active_customer" | "waiting" | "not_relevant"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -1454,10 +1578,13 @@ export const Constants = {
       gold_lot_event_type: ["created", "packed", "handover", "closed", "recalled"],
       gold_lot_status: ["produced", "packed", "handed_over", "closed", "recalled"],
       commercial_route: ["direct", "via_wholesaler"],
+      crm_activity_kind: ["call", "email", "meeting", "tasting", "note"],
+      customer_segment: ["restaurant", "hotel", "event", "bar"],
       customer_type: ["venue", "wholesaler"],
       handover_ownership: ["gold", "villa"],
       invoice_draft_status: ["draft", "sent", "credited", "cancelled"],
       partnership_level: ["gold_partner", "gold_supply"],
+      sales_status: ["prospect", "contacted", "interested", "tasting", "pilot_order", "active_customer", "waiting", "not_relevant"],
     },
   },
 } as const

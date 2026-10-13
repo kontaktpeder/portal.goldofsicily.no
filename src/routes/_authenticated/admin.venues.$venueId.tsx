@@ -151,7 +151,18 @@ function CustomerDetail() {
         >
           <ArrowLeft className="size-3.5" /> {t("customers")}
         </Link>
-        <h1 className="mt-3 text-3xl font-semibold">{data?.customer?.name ?? "—"}</h1>
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+          <h1 className="text-3xl font-semibold">{data?.customer?.name ?? "—"}</h1>
+          {commercial ? (
+            <Link
+              to="/admin/sales/$customerId"
+              params={{ customerId: venueId }}
+              className="rounded-full border border-border px-4 py-2 text-sm font-semibold"
+            >
+              {t("sales_open_sales")}
+            </Link>
+          ) : null}
+        </div>
         <p className="mt-1 text-sm text-muted-foreground">
           {agreement ? `${agreement} · ` : ""}
           {suppliedByName ? `${t("supplied_via")} ${suppliedByName}` : t("supplied_direct")} ·{" "}
