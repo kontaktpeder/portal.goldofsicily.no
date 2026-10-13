@@ -1190,6 +1190,14 @@ export type Database = {
           organization_number_snapshot: string
           status: Database["public"]["Enums"]["invoice_draft_status"]
           updated_at: string
+          transfer_status: string
+          transfer_reference: string | null
+          dnb_status: string | null
+          payment_due_on: string | null
+          vat_percent: number | null
+          transfer_error: string | null
+          transfer_attempted_at: string | null
+          transferred_at: string | null
         }
         Insert: {
           accounting_invoice_id?: string | null
@@ -1201,6 +1209,14 @@ export type Database = {
           organization_number_snapshot?: string
           status?: Database["public"]["Enums"]["invoice_draft_status"]
           updated_at?: string
+          transfer_status?: string
+          transfer_reference?: string | null
+          dnb_status?: string | null
+          payment_due_on?: string | null
+          vat_percent?: number | null
+          transfer_error?: string | null
+          transfer_attempted_at?: string | null
+          transferred_at?: string | null
         }
         Update: {
           accounting_invoice_id?: string | null
@@ -1212,6 +1228,14 @@ export type Database = {
           organization_number_snapshot?: string
           status?: Database["public"]["Enums"]["invoice_draft_status"]
           updated_at?: string
+          transfer_status?: string
+          transfer_reference?: string | null
+          dnb_status?: string | null
+          payment_due_on?: string | null
+          vat_percent?: number | null
+          transfer_error?: string | null
+          transfer_attempted_at?: string | null
+          transferred_at?: string | null
         }
         Relationships: [
           {
@@ -1274,6 +1298,41 @@ export type Database = {
           },
         ]
       }
+      invoice_transfer_events: {
+        Row: {
+          id: string
+          invoice_draft_id: string
+          outcome: string
+          external_invoice_id: string | null
+          detail: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          invoice_draft_id: string
+          outcome: string
+          external_invoice_id?: string | null
+          detail?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          invoice_draft_id?: string
+          outcome?: string
+          external_invoice_id?: string | null
+          detail?: string | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "invoice_transfer_events_invoice_draft_id_fkey"
+            columns: ["invoice_draft_id"]
+            isOneToOne: false
+            referencedRelation: "invoice_drafts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
@@ -1290,6 +1349,20 @@ export type Database = {
       is_admin: { Args: never; Returns: boolean }
       can_manage_operations: { Args: never; Returns: boolean }
       can_manage_commercial: { Args: never; Returns: boolean }
+      claim_dnb_transfer: { Args: { p_id: string }; Returns: boolean }
+      record_dnb_transfer: {
+        Args: {
+          p_id: string
+          p_transfer_status: string
+          p_dnb_status: string | null
+          p_accounting_invoice_id: string | null
+          p_accounting_invoice_number: string | null
+          p_transfer_error: string | null
+          p_outcome: string
+          p_detail: string | null
+        }
+        Returns: undefined
+      }
       next_gold_lot_code: {
         Args: { p_lot_letter: string; p_production_date: string }
         Returns: string
