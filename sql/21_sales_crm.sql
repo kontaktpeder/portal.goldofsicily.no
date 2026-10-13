@@ -1,9 +1,10 @@
+-- Kjør i Lovable Cloud → SQL.
 -- Salg på eksisterende kundemodell.
 -- customers er leveringsstedet. legal_entities er den juridiske enheten.
 -- sales_status, commercial_ready_at og innlogging (profiles) er tre separate ting.
 -- En UPDATE som endrer sales_status kan ikke samtidig endre active, avtale,
 -- leveringskanal eller klarsignal.
--- Også: sql/20_sales_crm.sql
+-- Also applied as supabase/migrations/20261013130000_sales_crm.sql.
 
 DO $$
 BEGIN

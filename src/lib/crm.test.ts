@@ -166,7 +166,7 @@ test("the sales profile keeps status, readiness and login apart", () => {
 });
 
 test("the database refuses to couple sales status with operations or readiness", () => {
-  const sql = readFileSync(new URL("../../sql/20_sales_crm.sql", import.meta.url), "utf8");
+  const sql = readFileSync(new URL("../../sql/21_sales_crm.sql", import.meta.url), "utf8");
   assert.match(
     sql,
     /sales_status cannot change together with active, partnership, supply channel or commercial readiness/,
