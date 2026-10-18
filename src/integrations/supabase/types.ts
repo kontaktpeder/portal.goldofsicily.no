@@ -271,6 +271,185 @@ export type Database = {
           },
         ]
       }
+      customer_orders: {
+        Row: {
+          billing_legal_entity_id: string | null
+          billing_legal_name_snapshot: string | null
+          billing_organization_number_snapshot: string | null
+          confirmed_at: string | null
+          confirmed_delivery_on: string | null
+          contact_name: string | null
+          created_at: string
+          desired_delivery_on: string | null
+          deviation_note: string | null
+          due_on: string | null
+          id: string
+          notes: string | null
+          order_number: string
+          ordered_by_customer_id: string
+          owner_id: string | null
+          owner_name_snapshot: string | null
+          ship_to_customer_id: string
+          status: Database["public"]["Enums"]["customer_order_status"]
+          updated_at: string
+        }
+        Insert: {
+          billing_legal_entity_id?: string | null
+          billing_legal_name_snapshot?: string | null
+          billing_organization_number_snapshot?: string | null
+          confirmed_at?: string | null
+          confirmed_delivery_on?: string | null
+          contact_name?: string | null
+          created_at?: string
+          desired_delivery_on?: string | null
+          deviation_note?: string | null
+          due_on?: string | null
+          id?: string
+          notes?: string | null
+          order_number?: string
+          ordered_by_customer_id: string
+          owner_id?: string | null
+          owner_name_snapshot?: string | null
+          ship_to_customer_id: string
+          status?: Database["public"]["Enums"]["customer_order_status"]
+          updated_at?: string
+        }
+        Update: {
+          billing_legal_entity_id?: string | null
+          billing_legal_name_snapshot?: string | null
+          billing_organization_number_snapshot?: string | null
+          confirmed_at?: string | null
+          confirmed_delivery_on?: string | null
+          contact_name?: string | null
+          created_at?: string
+          desired_delivery_on?: string | null
+          deviation_note?: string | null
+          due_on?: string | null
+          id?: string
+          notes?: string | null
+          order_number?: string
+          ordered_by_customer_id?: string
+          owner_id?: string | null
+          owner_name_snapshot?: string | null
+          ship_to_customer_id?: string
+          status?: Database["public"]["Enums"]["customer_order_status"]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "customer_orders_ordered_by_customer_id_fkey"
+            columns: ["ordered_by_customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "customer_orders_ship_to_customer_id_fkey"
+            columns: ["ship_to_customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "customer_orders_billing_legal_entity_id_fkey"
+            columns: ["billing_legal_entity_id"]
+            isOneToOne: false
+            referencedRelation: "legal_entities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "customer_orders_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      customer_order_lines: {
+        Row: {
+          created_at: string
+          id: string
+          order_id: string
+          product_id: string
+          product_name_snapshot: string | null
+          quantity: number
+          unit_price_ore: number | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          order_id: string
+          product_id: string
+          product_name_snapshot?: string | null
+          quantity: number
+          unit_price_ore?: number | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          order_id?: string
+          product_id?: string
+          product_name_snapshot?: string | null
+          quantity?: number
+          unit_price_ore?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "customer_order_lines_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "customer_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "customer_order_lines_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      order_line_fulfillments: {
+        Row: {
+          created_at: string
+          delivery_line_id: string
+          id: string
+          order_line_id: string
+          quantity: number
+        }
+        Insert: {
+          created_at?: string
+          delivery_line_id: string
+          id?: string
+          order_line_id: string
+          quantity: number
+        }
+        Update: {
+          created_at?: string
+          delivery_line_id?: string
+          id?: string
+          order_line_id?: string
+          quantity?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "order_line_fulfillments_order_line_id_fkey"
+            columns: ["order_line_id"]
+            isOneToOne: false
+            referencedRelation: "customer_order_lines"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "order_line_fulfillments_delivery_line_id_fkey"
+            columns: ["delivery_line_id"]
+            isOneToOne: false
+            referencedRelation: "delivery_lines"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       deliveries: {
         Row: {
           commercial_route: Database["public"]["Enums"]["commercial_route"]
@@ -1375,6 +1554,7 @@ export type Database = {
           delivery_line_id: string
           id: string
           invoice_draft_id: string
+          order_line_fulfillment_id: string | null
           product_name_snapshot: string
           quantity: number
           unit_price_ore: number
@@ -1386,6 +1566,7 @@ export type Database = {
           delivery_line_id: string
           id?: string
           invoice_draft_id: string
+          order_line_fulfillment_id?: string | null
           product_name_snapshot?: string
           quantity?: number
           unit_price_ore?: number
@@ -1397,6 +1578,7 @@ export type Database = {
           delivery_line_id?: string
           id?: string
           invoice_draft_id?: string
+          order_line_fulfillment_id?: string | null
           product_name_snapshot?: string
           quantity?: number
           unit_price_ore?: number
@@ -1415,6 +1597,13 @@ export type Database = {
             columns: ["delivery_line_id"]
             isOneToOne: false
             referencedRelation: "delivery_lines"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoice_draft_lines_order_line_fulfillment_id_fkey"
+            columns: ["order_line_fulfillment_id"]
+            isOneToOne: false
+            referencedRelation: "order_line_fulfillments"
             referencedColumns: ["id"]
           },
         ]
@@ -1513,6 +1702,7 @@ export type Database = {
       gold_lot_status: "produced" | "packed" | "handed_over" | "closed" | "recalled"
       commercial_route: "direct" | "via_wholesaler"
       crm_activity_kind: "call" | "email" | "meeting" | "tasting" | "note"
+      customer_order_status: "draft" | "pending_confirmation" | "confirmed" | "cancelled"
       customer_segment: "restaurant" | "hotel" | "event" | "bar"
       customer_type: "venue" | "wholesaler"
       handover_ownership: "gold" | "villa"
@@ -1652,6 +1842,7 @@ export const Constants = {
       gold_lot_status: ["produced", "packed", "handed_over", "closed", "recalled"],
       commercial_route: ["direct", "via_wholesaler"],
       crm_activity_kind: ["call", "email", "meeting", "tasting", "note"],
+      customer_order_status: ["draft", "pending_confirmation", "confirmed", "cancelled"],
       customer_segment: ["restaurant", "hotel", "event", "bar"],
       customer_type: ["venue", "wholesaler"],
       handover_ownership: ["gold", "villa"],

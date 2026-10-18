@@ -9,6 +9,7 @@ import {
   type OpsProduct,
   type VenueNeedReport,
 } from "@/lib/ops-home";
+import { productionNeed } from "@/lib/orders";
 
 type LotQueryRow = {
   id: string;
@@ -33,6 +34,11 @@ type ReportQueryRow = {
       }[]
     | null;
 };
+
+function oneStatus(value: { status: string } | { status: string }[] | null): string | null {
+  if (!value) return null;
+  return Array.isArray(value) ? (value[0]?.status ?? null) : value.status;
+}
 
 function asOne<T>(value: T | T[] | null | undefined): T | null {
   if (!value) return null;
@@ -78,7 +84,7 @@ export function useOpsHome(lang: "no" | "en") {
   return useQuery({
     queryKey: ["ops-home", lang],
     queryFn: async () => {
-      const [productsRes, lotsRes, reportsRes] = await Promise.all([
+      const [productsRes, lotsRes, reportsRes, orderLinesRes] = await Promise.all([
         supabase
           .from("products")
           .select("id, name_no, name_en")
@@ -98,6 +104,11 @@ export function useOpsHome(lang: "no" | "en") {
           )
           .order("created_at", { ascending: false })
           .limit(200),
+        supabase
+          .from("customer_order_lines")
+          .select(
+            "product_id, quantity, order_line_fulfillments(quantity), customer_orders!inner(status)",
+          ),
       ]);
 
       if (productsRes.error) throw productsRes.error;
@@ -114,11 +125,32 @@ export function useOpsHome(lang: "no" | "en") {
         : toNeedReports((reportsRes.data ?? []) as ReportQueryRow[]);
       const stock = flavorStock(products, lots);
       const handoverLots = lotsReadyForHandover(lots);
+      const orderLines = orderLinesRes.error ? [] : (orderLinesRes.data ?? []);
+      const production = productionNeed(
+        orderLines.map((line) => ({
+          productId: line.product_id,
+          ordered: line.quantity,
+          fulfilled: (line.order_line_fulfillments ?? []).reduce(
+            (sum, row) => sum + row.quantity,
+            0,
+          ),
+          confirmed: oneStatus(line.customer_orders) === "confirmed",
+        })),
+        stock,
+      ).map((row) => {
+        const product = products.find((item) => item.id === row.productId);
+        return {
+          ...row,
+          nameNo: product?.nameNo ?? "",
+          nameEn: product?.nameEn ?? "",
+        };
+      });
 
       return {
         stock,
         readyForHandover: handoverLots.length,
         nextNeed: buildNextNeed(reports, stock, lang),
+        production,
         schemaMissing: Boolean(lotsRes.error && isGoldLotSchemaError(lotsRes.error)),
       };
     },

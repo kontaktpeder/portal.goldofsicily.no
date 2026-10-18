@@ -26,6 +26,8 @@ import { Route as AuthenticatedAdminLotsIndexRouteImport } from './routes/_authe
 import { Route as AuthenticatedAdminLotsLotIdRouteImport } from './routes/_authenticated/admin.lots.$lotId'
 import { Route as AuthenticatedAdminSalesIndexRouteImport } from './routes/_authenticated/admin.sales.index'
 import { Route as AuthenticatedAdminSalesCustomerIdRouteImport } from './routes/_authenticated/admin.sales.$customerId'
+import { Route as AuthenticatedAdminOrdersIndexRouteImport } from './routes/_authenticated/admin.orders.index'
+import { Route as AuthenticatedAdminOrdersOrderIdRouteImport } from './routes/_authenticated/admin.orders.$orderId'
 import { Route as AuthenticatedAdminVenuesIndexRouteImport } from './routes/_authenticated/admin.venues.index'
 import { Route as AuthenticatedAdminVenuesVenueIdRouteImport } from './routes/_authenticated/admin.venues.$venueId'
 import { Route as AuthenticatedAdminWholesalersIndexRouteImport } from './routes/_authenticated/admin.wholesalers.index'
@@ -126,6 +128,18 @@ const AuthenticatedAdminSalesCustomerIdRoute =
     path: '/sales/$customerId',
     getParentRoute: () => AuthenticatedAdminRoute,
   } as any)
+const AuthenticatedAdminOrdersIndexRoute =
+  AuthenticatedAdminOrdersIndexRouteImport.update({
+    id: '/orders/',
+    path: '/orders/',
+    getParentRoute: () => AuthenticatedAdminRoute,
+  } as any)
+const AuthenticatedAdminOrdersOrderIdRoute =
+  AuthenticatedAdminOrdersOrderIdRouteImport.update({
+    id: '/orders/$orderId',
+    path: '/orders/$orderId',
+    getParentRoute: () => AuthenticatedAdminRoute,
+  } as any)
 const AuthenticatedAdminVenuesIndexRoute =
   AuthenticatedAdminVenuesIndexRouteImport.update({
     id: '/venues/',
@@ -176,11 +190,13 @@ export interface FileRoutesByFullPath {
   '/admin/': typeof AuthenticatedAdminIndexRoute
   '/admin/lots/$lotId': typeof AuthenticatedAdminLotsLotIdRoute
   '/admin/sales/$customerId': typeof AuthenticatedAdminSalesCustomerIdRoute
+  '/admin/orders/$orderId': typeof AuthenticatedAdminOrdersOrderIdRoute
   '/admin/venues/$venueId': typeof AuthenticatedAdminVenuesVenueIdRoute
   '/admin/wholesalers/$customerId': typeof AuthenticatedAdminWholesalersCustomerIdRoute
   '/api/public/v1/venues': typeof ApiPublicV1VenuesRouteWithChildren
   '/admin/lots/': typeof AuthenticatedAdminLotsIndexRoute
   '/admin/sales/': typeof AuthenticatedAdminSalesIndexRoute
+  '/admin/orders/': typeof AuthenticatedAdminOrdersIndexRoute
   '/admin/venues/': typeof AuthenticatedAdminVenuesIndexRoute
   '/admin/wholesalers/': typeof AuthenticatedAdminWholesalersIndexRoute
   '/api/public/v1/venues/$slug': typeof ApiPublicV1VenuesSlugRoute
@@ -199,11 +215,13 @@ export interface FileRoutesByTo {
   '/admin': typeof AuthenticatedAdminIndexRoute
   '/admin/lots/$lotId': typeof AuthenticatedAdminLotsLotIdRoute
   '/admin/sales/$customerId': typeof AuthenticatedAdminSalesCustomerIdRoute
+  '/admin/orders/$orderId': typeof AuthenticatedAdminOrdersOrderIdRoute
   '/admin/venues/$venueId': typeof AuthenticatedAdminVenuesVenueIdRoute
   '/admin/wholesalers/$customerId': typeof AuthenticatedAdminWholesalersCustomerIdRoute
   '/api/public/v1/venues': typeof ApiPublicV1VenuesRouteWithChildren
   '/admin/lots': typeof AuthenticatedAdminLotsIndexRoute
   '/admin/sales': typeof AuthenticatedAdminSalesIndexRoute
+  '/admin/orders': typeof AuthenticatedAdminOrdersIndexRoute
   '/admin/venues': typeof AuthenticatedAdminVenuesIndexRoute
   '/admin/wholesalers': typeof AuthenticatedAdminWholesalersIndexRoute
   '/api/public/v1/venues/$slug': typeof ApiPublicV1VenuesSlugRoute
@@ -225,11 +243,13 @@ export interface FileRoutesById {
   '/_authenticated/admin/': typeof AuthenticatedAdminIndexRoute
   '/_authenticated/admin/lots/$lotId': typeof AuthenticatedAdminLotsLotIdRoute
   '/_authenticated/admin/sales/$customerId': typeof AuthenticatedAdminSalesCustomerIdRoute
+  '/_authenticated/admin/orders/$orderId': typeof AuthenticatedAdminOrdersOrderIdRoute
   '/_authenticated/admin/venues/$venueId': typeof AuthenticatedAdminVenuesVenueIdRoute
   '/_authenticated/admin/wholesalers/$customerId': typeof AuthenticatedAdminWholesalersCustomerIdRoute
   '/api/public/v1/venues': typeof ApiPublicV1VenuesRouteWithChildren
   '/_authenticated/admin/lots/': typeof AuthenticatedAdminLotsIndexRoute
   '/_authenticated/admin/sales/': typeof AuthenticatedAdminSalesIndexRoute
+  '/_authenticated/admin/orders/': typeof AuthenticatedAdminOrdersIndexRoute
   '/_authenticated/admin/venues/': typeof AuthenticatedAdminVenuesIndexRoute
   '/_authenticated/admin/wholesalers/': typeof AuthenticatedAdminWholesalersIndexRoute
   '/api/public/v1/venues/$slug': typeof ApiPublicV1VenuesSlugRoute
@@ -251,11 +271,13 @@ export interface FileRouteTypes {
     | '/admin/'
     | '/admin/lots/$lotId'
     | '/admin/sales/$customerId'
+    | '/admin/orders/$orderId'
     | '/admin/venues/$venueId'
     | '/admin/wholesalers/$customerId'
     | '/api/public/v1/venues'
     | '/admin/lots/'
     | '/admin/sales/'
+    | '/admin/orders/'
     | '/admin/venues/'
     | '/admin/wholesalers/'
     | '/api/public/v1/venues/$slug'
@@ -274,11 +296,13 @@ export interface FileRouteTypes {
     | '/admin'
     | '/admin/lots/$lotId'
     | '/admin/sales/$customerId'
+    | '/admin/orders/$orderId'
     | '/admin/venues/$venueId'
     | '/admin/wholesalers/$customerId'
     | '/api/public/v1/venues'
     | '/admin/lots'
     | '/admin/sales'
+    | '/admin/orders'
     | '/admin/venues'
     | '/admin/wholesalers'
     | '/api/public/v1/venues/$slug'
@@ -299,11 +323,13 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/'
     | '/_authenticated/admin/lots/$lotId'
     | '/_authenticated/admin/sales/$customerId'
+    | '/_authenticated/admin/orders/$orderId'
     | '/_authenticated/admin/venues/$venueId'
     | '/_authenticated/admin/wholesalers/$customerId'
     | '/api/public/v1/venues'
     | '/_authenticated/admin/lots/'
     | '/_authenticated/admin/sales/'
+    | '/_authenticated/admin/orders/'
     | '/_authenticated/admin/venues/'
     | '/_authenticated/admin/wholesalers/'
     | '/api/public/v1/venues/$slug'
@@ -437,6 +463,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminSalesCustomerIdRouteImport
       parentRoute: typeof AuthenticatedAdminRoute
     }
+    '/_authenticated/admin/orders/': {
+      id: '/_authenticated/admin/orders/'
+      path: '/orders'
+      fullPath: '/admin/orders/'
+      preLoaderRoute: typeof AuthenticatedAdminOrdersIndexRouteImport
+      parentRoute: typeof AuthenticatedAdminRoute
+    }
+    '/_authenticated/admin/orders/$orderId': {
+      id: '/_authenticated/admin/orders/$orderId'
+      path: '/orders/$orderId'
+      fullPath: '/admin/orders/$orderId'
+      preLoaderRoute: typeof AuthenticatedAdminOrdersOrderIdRouteImport
+      parentRoute: typeof AuthenticatedAdminRoute
+    }
     '/_authenticated/admin/venues/': {
       id: '/_authenticated/admin/venues/'
       path: '/venues'
@@ -496,6 +536,8 @@ interface AuthenticatedAdminRouteChildren {
   AuthenticatedAdminWholesalersCustomerIdRoute: typeof AuthenticatedAdminWholesalersCustomerIdRoute
   AuthenticatedAdminLotsIndexRoute: typeof AuthenticatedAdminLotsIndexRoute
   AuthenticatedAdminSalesIndexRoute: typeof AuthenticatedAdminSalesIndexRoute
+  AuthenticatedAdminOrdersIndexRoute: typeof AuthenticatedAdminOrdersIndexRoute
+  AuthenticatedAdminOrdersOrderIdRoute: typeof AuthenticatedAdminOrdersOrderIdRoute
   AuthenticatedAdminVenuesIndexRoute: typeof AuthenticatedAdminVenuesIndexRoute
   AuthenticatedAdminWholesalersIndexRoute: typeof AuthenticatedAdminWholesalersIndexRoute
 }
@@ -516,6 +558,8 @@ const AuthenticatedAdminRouteChildren: AuthenticatedAdminRouteChildren = {
     AuthenticatedAdminWholesalersCustomerIdRoute,
   AuthenticatedAdminLotsIndexRoute: AuthenticatedAdminLotsIndexRoute,
   AuthenticatedAdminSalesIndexRoute: AuthenticatedAdminSalesIndexRoute,
+  AuthenticatedAdminOrdersIndexRoute: AuthenticatedAdminOrdersIndexRoute,
+  AuthenticatedAdminOrdersOrderIdRoute: AuthenticatedAdminOrdersOrderIdRoute,
   AuthenticatedAdminVenuesIndexRoute: AuthenticatedAdminVenuesIndexRoute,
   AuthenticatedAdminWholesalersIndexRoute:
     AuthenticatedAdminWholesalersIndexRoute,

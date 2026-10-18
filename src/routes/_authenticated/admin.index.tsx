@@ -70,6 +70,23 @@ function OpsHome() {
         )}
       </div>
 
+      <h2 className="eyebrow mt-10">{t("orders_production")}</h2>
+      <div className="mt-3 space-y-2">
+        {(data?.production ?? []).length === 0 ? (
+          <p className="text-sm text-muted-foreground">{t("orders_production_empty")}</p>
+        ) : (
+          data?.production.map((row) => (
+            <article key={row.productId} className="surface-card p-5">
+              <p className="font-semibold">{lang === "en" ? row.nameEn : row.nameNo}</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {t("orders_remaining")} {row.remaining} · {t("orders_on_hand")} {row.onHand} ·{" "}
+                {t("orders_shortfall")} {row.shortfall}
+              </p>
+            </article>
+          ))
+        )}
+      </div>
+
       <h2 className="eyebrow mt-10">{t("next_requirement")}</h2>
       <div className="mt-3 space-y-2">
         {(data?.nextNeed ?? []).length === 0 ? (

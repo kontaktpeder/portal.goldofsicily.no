@@ -8,7 +8,8 @@ import { useRequireCommercial } from "@/hooks/use-session";
 import { useI18n } from "@/lib/i18n";
 import { formatDate } from "@/lib/sign-out";
 import { formatPriceNok } from "@/lib/slug";
-import { billingLegalEntityId, isUninvoicedSale, type CommercialRoute } from "@/lib/economy";
+import { billingLegalEntityId, type CommercialRoute } from "@/lib/economy";
+import { legacyInvoicePortions, orderInvoicePortions } from "@/lib/orders";
 import { refreshInvoiceDraft, transferInvoiceDraft } from "@/lib/admin.functions";
 import type { TranslationKey } from "@/lib/i18n";
 import { PrimaryButton } from "@/components/field";
@@ -53,6 +54,8 @@ export const Route = createFileRoute("/_authenticated/admin/invoices")({
 
 type SaleLine = {
   id: string;
+  deliveryLineId: string;
+  fulfillmentId: string | null;
   quantity: number;
   unitPriceOre: number | null;
   productName: string;
@@ -63,6 +66,7 @@ type SaleLine = {
   commercialRoute: CommercialRoute;
   legalEntityId: string | null;
   billingLegalEntityId: string | null;
+  orderNumber: string | null;
 };
 
 function AdminInvoices() {
@@ -78,20 +82,54 @@ function AdminInvoices() {
   const bundle = useQuery({
     queryKey: ["invoice-desk"],
     queryFn: async () => {
-      const [linesRes, allocatedRes, entitiesRes, draftsRes] = await Promise.all([
+      const [linesRes, allocatedRes, fulfillmentRes, entitiesRes, draftsRes] = await Promise.all([
         supabase
           .from("delivery_lines")
           .select(
             "id, quantity, unit_price_ore, product_name_snapshot, deliveries!inner(delivered_at, customer_id, customer_name_snapshot, commercial_route, customers!deliveries_customer_id_fkey(type, legal_entity_id, billing_legal_entity_id))",
           )
           .limit(1000),
-        supabase.from("invoice_draft_lines").select("delivery_line_id").eq("active", true),
-        supabase.from("legal_entities").select("id, legal_name, organization_number, parent_legal_entity_id"),
-        supabase.from("invoice_drafts").select(draftSelect).order("created_at", { ascending: false }).limit(50),
+        supabase
+          .from("invoice_draft_lines")
+          .select("delivery_line_id, order_line_fulfillment_id, quantity")
+          .eq("active", true),
+        supabase
+          .from("order_line_fulfillments")
+          .select(
+            "id, quantity, delivery_line_id, customer_order_lines!order_line_fulfillments_order_line_id_fkey(unit_price_ore, product_name_snapshot, customer_orders!customer_order_lines_order_id_fkey(order_number, billing_legal_entity_id, billing_legal_name_snapshot))",
+          ),
+        supabase
+          .from("legal_entities")
+          .select("id, legal_name, organization_number, parent_legal_entity_id"),
+        supabase
+          .from("invoice_drafts")
+          .select(draftSelect)
+          .order("created_at", { ascending: false })
+          .limit(50),
       ]);
       if (linesRes.error) throw linesRes.error;
-      if (allocatedRes.error) throw allocatedRes.error;
       if (entitiesRes.error) throw entitiesRes.error;
+      let activeInvoices = allocatedRes.data ?? [];
+      if (allocatedRes.error) {
+        if (!/order_line_fulfillment_id/.test(allocatedRes.error.message)) throw allocatedRes.error;
+        const fallback = await supabase
+          .from("invoice_draft_lines")
+          .select("delivery_line_id, quantity")
+          .eq("active", true);
+        if (fallback.error) throw fallback.error;
+        activeInvoices = (fallback.data ?? []).map((row) => ({
+          delivery_line_id: row.delivery_line_id,
+          order_line_fulfillment_id: null,
+          quantity: row.quantity,
+        }));
+      }
+      const fulfillments = fulfillmentRes.error ? [] : (fulfillmentRes.data ?? []);
+      if (
+        fulfillmentRes.error &&
+        !/order_line_fulfillments|customer_orders/.test(fulfillmentRes.error.message)
+      ) {
+        throw fulfillmentRes.error;
+      }
       let drafts = draftsRes.data ?? [];
       let pendingSql = false;
       if (draftsRes.error) {
@@ -103,14 +141,15 @@ function AdminInvoices() {
             .order("created_at", { ascending: false })
             .limit(50);
           if (legacy.error) throw legacy.error;
-          drafts = legacy.data ?? [];
+          drafts = (legacy.data ?? []) as typeof drafts;
         } else {
           throw draftsRes.error;
         }
       }
       return {
         lines: linesRes.data ?? [],
-        allocated: new Set((allocatedRes.data ?? []).map((row) => row.delivery_line_id)),
+        activeInvoices,
+        fulfillments,
         entities: entitiesRes.data ?? [],
         drafts,
         pendingSql,
@@ -125,60 +164,141 @@ function AdminInvoices() {
     id: entity.id,
     parentLegalEntityId: entity.parent_legal_entity_id,
   }));
-  const sales: SaleLine[] = (bundle.data?.lines ?? []).flatMap((row) => {
-    const delivery = Array.isArray(row.deliveries) ? row.deliveries[0] : row.deliveries;
-    if (!delivery || delivery.commercial_route !== "direct") return [];
-    const customer = Array.isArray(delivery.customers) ? delivery.customers[0] : delivery.customers;
+  const catalog = new Map((bundle.data?.lines ?? []).map((row) => [row.id, row]));
+  const activeInvoices = (bundle.data?.activeInvoices ?? []).map((row) => ({
+    deliveryLineId: row.delivery_line_id,
+    fulfillmentId: row.order_line_fulfillment_id,
+    quantity: row.quantity,
+  }));
+  const fulfillmentRows = (bundle.data?.fulfillments ?? []).flatMap((row) => {
+    const orderLine = one(row.customer_order_lines);
+    const sale = one(orderLine?.customer_orders ?? null);
+    if (!orderLine?.unit_price_ore || !sale?.billing_legal_entity_id) return [];
     return [
       {
         id: row.id,
+        deliveryLineId: row.delivery_line_id,
         quantity: row.quantity,
-        unitPriceOre: row.unit_price_ore,
-        productName: row.product_name_snapshot,
-        deliveredAt: delivery.delivered_at,
-        customerId: delivery.customer_id,
-        customerType: customer?.type ?? "venue",
-        customerName: delivery.customer_name_snapshot,
-        commercialRoute: delivery.commercial_route,
-        legalEntityId: customer?.legal_entity_id ?? null,
-        billingLegalEntityId: customer?.billing_legal_entity_id ?? null,
+        unitPriceOre: orderLine.unit_price_ore,
+        billingLegalEntityId: sale.billing_legal_entity_id,
+        orderNumber: sale.order_number,
+        productName: orderLine.product_name_snapshot,
       },
     ];
   });
-  const allocated = bundle.data?.allocated ?? new Set<string>();
-  const missingPrice = sales.filter((line) => line.unitPriceOre == null);
-  const ready = sales.filter((line) =>
-    isUninvoicedSale({
-      commercialRoute: line.commercialRoute,
-      unitPriceOre: line.unitPriceOre,
-      hasActiveAllocation: allocated.has(line.id),
-    }),
-  );
-  const groups = new Map<string, SaleLine[]>();
-  const missingRecipient: SaleLine[] = [];
-  for (const line of ready) {
+  const described = (bundle.data?.lines ?? []).flatMap((row) => {
+    const delivery = one(row.deliveries);
+    if (!delivery) return [];
+    const customer = one(delivery.customers);
     const recipient = billingLegalEntityId(
-      { legalEntityId: line.legalEntityId, billingLegalEntityId: line.billingLegalEntityId },
+      {
+        legalEntityId: customer?.legal_entity_id ?? null,
+        billingLegalEntityId: customer?.billing_legal_entity_id ?? null,
+      },
       links,
     );
-    if (!recipient) {
-      missingRecipient.push(line);
-      continue;
-    }
-    groups.set(recipient, [...(groups.get(recipient) ?? []), line]);
-  }
+    return [
+      {
+        row,
+        delivery,
+        customer,
+        desk: {
+          deliveryLineId: row.id,
+          quantity: row.quantity,
+          unitPriceOre: row.unit_price_ore,
+          commercialRoute: delivery.commercial_route,
+          billingLegalEntityId: recipient,
+        },
+      },
+    ];
+  });
+  const legacyQty = new Map(
+    legacyInvoicePortions(
+      described.map((line) => line.desk),
+      fulfillmentRows,
+      activeInvoices,
+    ).map((portion) => [portion.deliveryLineId, portion.quantity]),
+  );
+  const orderQty = orderInvoicePortions(fulfillmentRows, activeInvoices);
+  const sales: SaleLine[] = described.flatMap((line) => {
+    if (line.delivery.commercial_route !== "direct") return [];
+    return [
+      {
+        id: line.row.id,
+        deliveryLineId: line.row.id,
+        fulfillmentId: null,
+        quantity: line.row.quantity,
+        unitPriceOre: line.row.unit_price_ore,
+        productName: line.row.product_name_snapshot,
+        deliveredAt: line.delivery.delivered_at,
+        customerId: line.delivery.customer_id,
+        customerType: line.customer?.type ?? "venue",
+        customerName: line.delivery.customer_name_snapshot,
+        commercialRoute: line.delivery.commercial_route,
+        legalEntityId: line.customer?.legal_entity_id ?? null,
+        billingLegalEntityId: line.customer?.billing_legal_entity_id ?? null,
+        orderNumber: null,
+      },
+    ];
+  });
+  const missingPrice = sales.filter(
+    (line) => line.unitPriceOre == null && (legacyQty.get(line.deliveryLineId) ?? 0) > 0,
+  );
+  const ready = sales.flatMap((line) => {
+    const quantity = legacyQty.get(line.deliveryLineId);
+    if (!quantity || line.unitPriceOre == null) return [];
+    return [{ ...line, quantity }];
+  });
+  const orderReady: SaleLine[] = orderQty.flatMap((portion) => {
+    const source = catalog.get(portion.deliveryLineId);
+    const delivery = source ? one(source.deliveries) : null;
+    if (!source || !delivery) return [];
+    const meta = fulfillmentRows.find((row) => row.id === portion.id);
+    return [
+      {
+        id: portion.id,
+        deliveryLineId: portion.deliveryLineId,
+        fulfillmentId: portion.id,
+        quantity: portion.quantity,
+        unitPriceOre: portion.unitPriceOre,
+        productName: meta?.productName || source.product_name_snapshot,
+        deliveredAt: delivery.delivered_at,
+        customerId: delivery.customer_id,
+        customerType: "venue",
+        customerName: delivery.customer_name_snapshot,
+        commercialRoute: delivery.commercial_route,
+        legalEntityId: portion.billingLegalEntityId,
+        billingLegalEntityId: portion.billingLegalEntityId,
+        orderNumber: meta?.orderNumber ?? null,
+      },
+    ];
+  });
+  const groups = groupSales([...orderReady, ...ready], links);
+  const missingRecipient = described.flatMap((line) => {
+    if (line.delivery.commercial_route !== "direct" || line.desk.billingLegalEntityId) return [];
+    if ((legacyQty.get(line.row.id) ?? 0) <= 0 && line.row.unit_price_ore != null) return [];
+    if (line.row.unit_price_ore == null) return [];
+    return sales.filter((sale) => sale.deliveryLineId === line.row.id);
+  });
 
   function openPriceAgreement(line: SaleLine) {
     const search = { priceDate: line.deliveredAt.slice(0, 10), priceNames: line.productName };
     if (line.customerType === "wholesaler") {
-      void navigate({ to: "/admin/wholesalers/$customerId", params: { customerId: line.customerId }, search });
+      void navigate({
+        to: "/admin/wholesalers/$customerId",
+        params: { customerId: line.customerId },
+        search,
+      });
       return;
     }
     void navigate({ to: "/admin/venues/$venueId", params: { venueId: line.customerId }, search });
   }
 
   async function freezePrice(line: SaleLine) {
-    const { error } = await supabase.from("delivery_lines").update({ unit_price_ore: 1 }).eq("id", line.id);
+    const { error } = await supabase
+      .from("delivery_lines")
+      .update({ unit_price_ore: 1 })
+      .eq("id", line.id);
     if (error) {
       if (error.message.includes("missing price")) openPriceAgreement(line);
       else toast.error(error.message);
@@ -202,7 +322,8 @@ function AdminInvoices() {
     const { error: lineError } = await supabase.from("invoice_draft_lines").insert(
       lines.map((line) => ({
         invoice_draft_id: draft.id,
-        delivery_line_id: line.id,
+        delivery_line_id: line.deliveryLineId,
+        ...(line.fulfillmentId ? { order_line_fulfillment_id: line.fulfillmentId } : {}),
       })),
     );
     if (lineError) {
@@ -273,14 +394,22 @@ function AdminInvoices() {
           {missingPrice.map((line) => (
             <div key={line.id} className="flex items-center justify-between gap-3 text-sm">
               <span>
-                {line.customerName} · {formatDate(line.deliveredAt, lang)} · {line.productName} · {line.quantity}{" "}
-                {t("pcs")}
+                {line.customerName} · {formatDate(line.deliveredAt, lang)} · {line.productName} ·{" "}
+                {line.quantity} {t("pcs")}
               </span>
               <span className="flex shrink-0 gap-3">
-                <button type="button" className="font-semibold text-primary" onClick={() => openPriceAgreement(line)}>
+                <button
+                  type="button"
+                  className="font-semibold text-primary"
+                  onClick={() => openPriceAgreement(line)}
+                >
                   {t("open_price_agreement")}
                 </button>
-                <button type="button" className="font-semibold text-primary" onClick={() => void freezePrice(line)}>
+                <button
+                  type="button"
+                  className="font-semibold text-primary"
+                  onClick={() => void freezePrice(line)}
+                >
                   {t("freeze_price")}
                 </button>
               </span>
@@ -293,7 +422,8 @@ function AdminInvoices() {
           <h3 className="font-semibold">{t("invoice_recipient_missing")}</h3>
           {missingRecipient.map((line) => (
             <p key={line.id} className="mt-2 text-sm text-muted-foreground">
-              {line.customerName} · {formatDate(line.deliveredAt, lang)} · {line.quantity} {t("pcs")}
+              {line.customerName} · {formatDate(line.deliveredAt, lang)} · {line.quantity}{" "}
+              {t("pcs")}
               {" · "}
               {line.customerType === "wholesaler" ? (
                 <Link
@@ -319,7 +449,10 @@ function AdminInvoices() {
       {[...groups.entries()].map(([legalEntityId, lines]) => {
         const entity = entities.find((row) => row.id === legalEntityId);
         const chosen = lines.filter((line) => !skipped[line.id]);
-        const totalOre = chosen.reduce((sum, line) => sum + line.quantity * (line.unitPriceOre ?? 0), 0);
+        const totalOre = chosen.reduce(
+          (sum, line) => sum + line.quantity * (line.unitPriceOre ?? 0),
+          0,
+        );
         const totalQty = chosen.reduce((sum, line) => sum + line.quantity, 0);
         return (
           <section key={legalEntityId} className="surface-card mt-4 space-y-3 p-5">
@@ -341,6 +474,7 @@ function AdminInvoices() {
                   }
                 />
                 <span>
+                  {line.orderNumber ? `${line.orderNumber} · ` : ""}
                   {line.customerName} · {formatDate(line.deliveredAt, lang)} · {line.quantity} ×{" "}
                   {formatPriceNok(line.unitPriceOre)} kr · {line.productName}
                 </span>
@@ -367,11 +501,16 @@ function AdminInvoices() {
       <h2 className="mt-10 text-xl font-semibold">{t("invoice_drafts")}</h2>
       <div className="mt-4 space-y-3">
         {(bundle.data?.drafts ?? []).map((draft) => {
-          const lines = (draft.invoice_draft_lines ?? []).filter((line) => line.active || draft.status !== "draft");
+          const lines = (draft.invoice_draft_lines ?? []).filter(
+            (line) => line.active || draft.status !== "draft",
+          );
           const total = lines.reduce((sum, line) => sum + line.quantity * line.unit_price_ore, 0);
           const transferStatus = "transfer_status" in draft ? draft.transfer_status : null;
           const dnbStatus = "dnb_status" in draft ? draft.dnb_status : null;
-          const locked = transferStatus === "queued" || transferStatus === "transferred" || transferStatus === "needs_review";
+          const locked =
+            transferStatus === "queued" ||
+            transferStatus === "transferred" ||
+            transferStatus === "needs_review";
           return (
             <article key={draft.id} className="surface-card space-y-2 p-5">
               <p className="font-semibold">
@@ -379,8 +518,12 @@ function AdminInvoices() {
               </p>
               <p className="text-xs text-muted-foreground">
                 {t(statusKey(draft.status))}
-                {transferStatus && transferStatus !== "transferred" ? ` · ${t(transferLabel(transferStatus))}` : ""}
-                {transferStatus === "transferred" && (!dnbStatus || dnbStatus === "draft") ? ` · ${t("dnb_waiting")}` : ""}
+                {transferStatus && transferStatus !== "transferred"
+                  ? ` · ${t(transferLabel(transferStatus))}`
+                  : ""}
+                {transferStatus === "transferred" && (!dnbStatus || dnbStatus === "draft")
+                  ? ` · ${t("dnb_waiting")}`
+                  : ""}
                 {dnbStatus && dnbStatus !== "draft" ? ` · ${t(dnbLabel(dnbStatus))}` : ""}
                 {" · "}
                 {formatDate(draft.created_at, lang)} · {formatPriceNok(total)} kr
@@ -415,7 +558,9 @@ function AdminInvoices() {
                     <span className="mb-1 block text-muted-foreground">{t("dnb_vat")}</span>
                     <select
                       value={draft.vat_percent ?? 15}
-                      onChange={(event) => void saveTerms(draft.id, { vat_percent: Number(event.target.value) })}
+                      onChange={(event) =>
+                        void saveTerms(draft.id, { vat_percent: Number(event.target.value) })
+                      }
                       className="h-10 rounded-xl border border-border bg-card px-3"
                     >
                       <option value={15}>15 %</option>
@@ -427,7 +572,9 @@ function AdminInvoices() {
                     <input
                       type="date"
                       value={draft.payment_due_on ?? ""}
-                      onChange={(event) => void saveTerms(draft.id, { payment_due_on: event.target.value })}
+                      onChange={(event) =>
+                        void saveTerms(draft.id, { payment_due_on: event.target.value })
+                      }
                       className="h-10 rounded-xl border border-border bg-card px-3"
                     />
                   </label>
@@ -435,17 +582,31 @@ function AdminInvoices() {
               ) : null}
               <div className="flex flex-wrap gap-3">
                 {transferStatus && draft.status === "draft" && transferStatus !== "transferred" ? (
-                  <button type="button" disabled={busy} className="text-sm font-semibold text-primary disabled:opacity-60" onClick={() => void runTransfer(draft.id)}>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    className="text-sm font-semibold text-primary disabled:opacity-60"
+                    onClick={() => void runTransfer(draft.id)}
+                  >
                     {t("dnb_transfer")}
                   </button>
                 ) : null}
                 {transferStatus && transferStatus !== "not_transferred" ? (
-                  <button type="button" disabled={busy} className="text-sm font-semibold disabled:opacity-60" onClick={() => void runRefresh(draft.id)}>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    className="text-sm font-semibold disabled:opacity-60"
+                    onClick={() => void runRefresh(draft.id)}
+                  >
                     {t("dnb_refresh")}
                   </button>
                 ) : null}
                 {draft.status === "draft" && !transferStatus ? (
-                  <button type="button" className="text-sm font-semibold" onClick={() => void setStatus(draft.id, "sent")}>
+                  <button
+                    type="button"
+                    className="text-sm font-semibold"
+                    onClick={() => void setStatus(draft.id, "sent")}
+                  >
                     {t("invoice_mark_sent")}
                   </button>
                 ) : null}
@@ -474,4 +635,25 @@ function AdminInvoices() {
       </div>
     </main>
   );
+}
+
+function groupSales(
+  lines: SaleLine[],
+  links: { id: string; parentLegalEntityId: string | null }[],
+): Map<string, SaleLine[]> {
+  const groups = new Map<string, SaleLine[]>();
+  for (const line of lines) {
+    const recipient = billingLegalEntityId(
+      { legalEntityId: line.legalEntityId, billingLegalEntityId: line.billingLegalEntityId },
+      links,
+    );
+    if (!recipient) continue;
+    groups.set(recipient, [...(groups.get(recipient) ?? []), line]);
+  }
+  return groups;
+}
+
+function one<T>(value: T | T[] | null | undefined): T | null {
+  if (!value) return null;
+  return Array.isArray(value) ? (value[0] ?? null) : value;
 }
