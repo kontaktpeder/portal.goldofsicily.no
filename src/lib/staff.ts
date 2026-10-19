@@ -1,7 +1,7 @@
 import { z } from "zod";
-import { canManageOperations } from "./access.ts";
+import { canRegisterOrders } from "./access.ts";
 
-export const STAFF_ROLES = ["admin", "ops"] as const;
+export const STAFF_ROLES = ["admin", "ops", "employee"] as const;
 export type StaffRole = (typeof STAFF_ROLES)[number];
 
 export const staffCreateSchema = z.object({
@@ -37,8 +37,14 @@ export const OPS_INCLUDE_KEYS = [
 
 export const VENUE_INCLUDE_KEYS = ["role_venue_inc_report"] as const;
 
+export const EMPLOYEE_INCLUDE_KEYS = [
+  "role_employee_inc_orders",
+  "role_employee_inc_submit",
+  "role_employee_inc_no_approve",
+] as const;
+
 export function isStaffRole(role: string): role is StaffRole {
-  return role === "admin" || role === "ops";
+  return role === "admin" || role === "ops" || role === "employee";
 }
 
 export type ExistingAccountKind = "none" | "staff" | "other";
@@ -65,11 +71,18 @@ export function staffCreateNeedsPassword(action: ExistingUsernameAction): boolea
 export function staffRoleFromRoles(roles: readonly string[]): StaffRole | null {
   if (roles.includes("admin")) return "admin";
   if (roles.includes("ops")) return "ops";
+  if (roles.includes("employee")) return "employee";
   return null;
 }
 
 export function portalHomePath(roles: readonly string[]): "/admin" | "/report" {
-  return canManageOperations(roles) ? "/admin" : "/report";
+  return canRegisterOrders(roles) ? "/admin" : "/report";
+}
+
+const STAFF_RANK: Record<StaffRole, number> = { admin: 0, ops: 1, employee: 2 };
+
+export function compareStaffRoles(a: StaffRole, b: StaffRole): number {
+  return STAFF_RANK[a] - STAFF_RANK[b];
 }
 
 export function canDemoteAdmin(adminCount: number): boolean {

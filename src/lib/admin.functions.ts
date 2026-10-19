@@ -4,6 +4,7 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { parseLoginIdentifier, normalizeUsername, usernameToEmail } from "@/lib/username";
 import {
   canChangeStaffRole,
+  compareStaffRoles,
   classifyExistingAccount,
   existingUsernameAction,
   isStaffRole,
@@ -11,6 +12,7 @@ import {
   staffCreateSchema,
   staffRoleFromRoles,
   type StaffRole,
+  STAFF_ROLES,
 } from "@/lib/staff";
 
 const createSchema = z.object({
@@ -88,7 +90,9 @@ async function assertAdmin(supabase: {
 }
 
 async function assertOperations(supabase: {
-  rpc: (fn: "can_manage_operations") => Promise<{ data: unknown; error: { message: string } | null }>;
+  rpc: (
+    fn: "can_manage_operations",
+  ) => Promise<{ data: unknown; error: { message: string } | null }>;
 }) {
   const { data, error } = await supabase.rpc("can_manage_operations");
   if (error) {
@@ -244,13 +248,15 @@ export const listStaffAccounts = createServerFn({ method: "POST" })
           fullName: profile.full_name ?? "",
           employeeNumber: profile.employee_number,
           role: role.role,
-          preferredLanguage: profile.preferred_language === "en" ? ("en" as const) : ("no" as const),
+          preferredLanguage:
+            profile.preferred_language === "en" ? ("en" as const) : ("no" as const),
           createdAt: profile.created_at,
         };
       })
       .filter((row): row is NonNullable<typeof row> => row !== null)
       .sort((a, b) => {
-        if (a.role !== b.role) return a.role === "admin" ? -1 : 1;
+        const byRole = compareStaffRoles(a.role, b.role);
+        if (byRole !== 0) return byRole;
         return (a.fullName || a.username).localeCompare(b.fullName || b.username);
       });
 
@@ -444,7 +450,7 @@ export const updateStaffProfile = createServerFn({ method: "POST" })
 export const updateStaffRole = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((data: unknown) =>
-    z.object({ userId: z.string().uuid(), role: z.enum(["admin", "ops"]) }).parse(data),
+    z.object({ userId: z.string().uuid(), role: z.enum(STAFF_ROLES) }).parse(data),
   )
   .handler(async ({ data, context }) => {
     await assertAdmin(context.supabase as never);
@@ -456,7 +462,7 @@ export const updateStaffRole = createServerFn({ method: "POST" })
       .eq("user_id", data.userId);
     if (roleError) throw new Error(roleError.message);
     const roles = (roleRows ?? []).map((row) => row.role);
-    const currentRole = roles.includes("admin") ? "admin" : roles.includes("ops") ? "ops" : null;
+    const currentRole = staffRoleFromRoles(roles);
     if (!currentRole) throw new Error("Not a staff account");
 
     const allowed = canChangeStaffRole({
@@ -472,7 +478,7 @@ export const updateStaffRole = createServerFn({ method: "POST" })
       .from("user_roles")
       .delete()
       .eq("user_id", data.userId)
-      .in("role", ["admin", "ops"]);
+      .in("role", [...STAFF_ROLES]);
     if (deleteError) throw new Error(deleteError.message);
 
     const { error: insertError } = await supabaseAdmin
@@ -524,7 +530,9 @@ export const bootstrapFirstAdmin = createServerFn({ method: "POST" })
   });
 
 async function assertCommercial(supabase: {
-  rpc: (fn: "can_manage_commercial") => Promise<{ data: unknown; error: { message: string } | null }>;
+  rpc: (
+    fn: "can_manage_commercial",
+  ) => Promise<{ data: unknown; error: { message: string } | null }>;
 }) {
   const { data, error } = await supabase.rpc("can_manage_commercial");
   if (error) throw new Error(`Could not verify commercial access: ${error.message}`);

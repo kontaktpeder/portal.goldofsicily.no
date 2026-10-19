@@ -84,7 +84,7 @@ export function useOpsHome(lang: "no" | "en") {
   return useQuery({
     queryKey: ["ops-home", lang],
     queryFn: async () => {
-      const [productsRes, lotsRes, reportsRes, orderLinesRes] = await Promise.all([
+      const [productsRes, lotsRes, reportsRes, orderLinesRes, approvalRes] = await Promise.all([
         supabase
           .from("products")
           .select("id, name_no, name_en")
@@ -109,6 +109,14 @@ export function useOpsHome(lang: "no" | "en") {
           .select(
             "product_id, quantity, order_line_fulfillments(quantity), customer_orders!inner(status)",
           ),
+        supabase
+          .from("customer_orders")
+          .select(
+            "id, order_number, ordered_by:customers!customer_orders_ordered_by_customer_id_fkey(name)",
+          )
+          .eq("status", "pending_confirmation")
+          .order("created_at", { ascending: true })
+          .limit(20),
       ]);
 
       if (productsRes.error) throw productsRes.error;
@@ -146,11 +154,20 @@ export function useOpsHome(lang: "no" | "en") {
         };
       });
 
+      const approval = approvalRes.error
+        ? []
+        : (approvalRes.data ?? []).map((order) => ({
+            id: order.id,
+            orderNumber: order.order_number,
+            ordererName: asOne(order.ordered_by)?.name ?? "—",
+          }));
+
       return {
         stock,
         readyForHandover: handoverLots.length,
         nextNeed: buildNextNeed(reports, stock, lang),
         production,
+        approval,
         schemaMissing: Boolean(lotsRes.error && isGoldLotSchemaError(lotsRes.error)),
       };
     },

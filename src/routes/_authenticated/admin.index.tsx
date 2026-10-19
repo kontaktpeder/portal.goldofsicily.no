@@ -35,6 +35,26 @@ function OpsHome() {
       <p className="mt-2 max-w-2xl text-sm text-muted-foreground">{t("ops_intro")}</p>
       <LotPrerequisitesBanner check={prereq} />
 
+      {(data?.approval.length ?? 0) > 0 ? (
+        <section className="mt-6 space-y-3">
+          <h2 className="eyebrow">{t("orders_queue")}</h2>
+          {data?.approval.map((order) => (
+            <Link
+              key={order.id}
+              to="/admin/orders/$orderId"
+              params={{ orderId: order.id }}
+              className="surface-card flex items-center justify-between gap-3 p-5"
+            >
+              <TaskCopy
+                title={`${order.ordererName} · ${order.orderNumber}`}
+                hint={t("orders_status_pending_confirmation")}
+              />
+              <ChevronRight className="size-5 shrink-0 text-muted-foreground" />
+            </Link>
+          ))}
+        </section>
+      ) : null}
+
       <div className="mt-6 space-y-3">
         <Link
           to="/admin/lots"

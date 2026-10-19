@@ -1,4 +1,10 @@
-export const ORDER_WORKFLOW = ["draft", "pending_confirmation", "confirmed", "cancelled"] as const;
+export const ORDER_WORKFLOW = [
+  "draft",
+  "pending_confirmation",
+  "changes_requested",
+  "confirmed",
+  "cancelled",
+] as const;
 export type OrderWorkflow = (typeof ORDER_WORKFLOW)[number];
 
 export type OrderProgress = OrderWorkflow | "partially_delivered" | "delivered";
@@ -23,6 +29,117 @@ export function orderProgress(
 
 export function canCancelOrder(status: OrderWorkflow, fulfilled: number): boolean {
   return status !== "cancelled" && fulfilled <= 0;
+}
+
+/** One button follows the role. Approval never notifies the customer. */
+export function orderPrimaryAction(canApprove: boolean): "approve" | "submit" {
+  return canApprove ? "approve" : "submit";
+}
+
+export type OrderListBucket = "queue" | "open" | "earlier";
+
+export function orderListBucket(progress: OrderProgress): OrderListBucket {
+  if (progress === "pending_confirmation") return "queue";
+  if (progress === "delivered" || progress === "cancelled") return "earlier";
+  return "open";
+}
+
+const LIST_RANK: Record<OrderProgress, number> = {
+  pending_confirmation: 0,
+  changes_requested: 1,
+  draft: 2,
+  confirmed: 3,
+  partially_delivered: 4,
+  delivered: 5,
+  cancelled: 6,
+};
+
+export function orderListRank(progress: OrderProgress): number {
+  return LIST_RANK[progress];
+}
+
+const MONTHS_NO = [
+  "januar",
+  "februar",
+  "mars",
+  "april",
+  "mai",
+  "juni",
+  "juli",
+  "august",
+  "september",
+  "oktober",
+  "november",
+  "desember",
+] as const;
+
+const MONTHS_EN = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+] as const;
+
+/** Agreed delivery as Denis should read it: 25. oktober. */
+export function formatAgreedDelivery(value: string, lang: "no" | "en"): string {
+  const iso = value.slice(0, 10);
+  const [yearText, monthText, dayText] = iso.split("-");
+  const year = Number(yearText);
+  const month = Number(monthText);
+  const day = Number(dayText);
+  const monthName = (lang === "en" ? MONTHS_EN : MONTHS_NO)[month - 1];
+  if (!year || !monthName || !day) return "—";
+  const thisYear = new Date().getFullYear();
+  if (lang === "en") {
+    return year === thisYear ? `${day} ${monthName}` : `${day} ${monthName} ${year}`;
+  }
+  return year === thisYear ? `${day}. ${monthName}` : `${day}. ${monthName} ${year}`;
+}
+
+export type OrderDeliveryLine = {
+  orderLineId: string;
+  productId: string;
+  quantity: number;
+  goldLotId: string;
+};
+
+/** Delivery from an order fills the site and the order link. Denis only enters quantity and LOT. */
+export function orderDeliveryDraft(input: {
+  shipToCustomerId: string;
+  orderNumber: string;
+  lines: readonly OrderDeliveryLine[];
+}): { customerId: string; note: string; quantity: number; lines: OrderDeliveryLine[] } {
+  const lines = input.lines.filter((line) => line.quantity > 0 && line.goldLotId);
+  return {
+    customerId: input.shipToCustomerId,
+    note: input.orderNumber,
+    quantity: lines.reduce((sum, line) => sum + line.quantity, 0),
+    lines,
+  };
+}
+
+export function isOrderSchemaError(message: string): boolean {
+  return /customer_orders|customer_order_status|approved_name_snapshot|return_note|changes_requested/.test(
+    message,
+  );
+}
+
+export function orderPartyLabel(input: {
+  ordererName: string;
+  shipToName: string;
+  contactName: string | null;
+}): { contact: string | null; site: string | null } {
+  const contact = input.contactName?.trim() || null;
+  const sameSite = input.ordererName.trim() === input.shipToName.trim();
+  return { contact, site: sameSite ? null : input.shipToName };
 }
 
 export type FulfillmentCheck = {

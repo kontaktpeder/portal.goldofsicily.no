@@ -1,7 +1,8 @@
-import { createFileRoute, Link, Outlet, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { LogOut } from "lucide-react";
 import { useSessionInfo } from "@/hooks/use-session";
+import { canRegisterOrders } from "@/lib/access";
 import { useI18n } from "@/lib/i18n";
 import { signOutAndReturn } from "@/lib/sign-out";
 import { LanguageToggle, Wordmark } from "@/components/brand";
@@ -13,15 +14,23 @@ export const Route = createFileRoute("/_authenticated/admin")({
 function AdminLayout() {
   const { t } = useI18n();
   const navigate = useNavigate();
+  const path = useRouterState({ select: (state) => state.location.pathname });
   const { data: info, isLoading } = useSessionInfo();
+  const registrar = canRegisterOrders(info?.roles ?? []);
+  const operations = Boolean(info?.canManageOperations);
 
   useEffect(() => {
-    if (!isLoading && info && !info.canManageOperations) {
+    if (isLoading || !info) return;
+    if (!registrar) {
       void navigate({ to: "/report", replace: true });
+      return;
     }
-  }, [info, isLoading, navigate]);
+    if (!operations && !path.startsWith("/admin/orders")) {
+      void navigate({ to: "/admin/orders", replace: true });
+    }
+  }, [info, isLoading, navigate, operations, path, registrar]);
 
-  if (isLoading || !info?.canManageOperations) {
+  if (isLoading || !info || !registrar || (!operations && !path.startsWith("/admin/orders"))) {
     return <main className="min-h-screen" />;
   }
 
@@ -44,16 +53,16 @@ function AdminLayout() {
           </div>
         </div>
         <nav className="mx-auto flex w-full max-w-5xl gap-1 overflow-x-auto px-4 pb-2">
-          <NavTab to="/admin" label={t("dashboard")} exact />
+          {operations ? <NavTab to="/admin" label={t("dashboard")} exact /> : null}
           {commercial ? <NavTab to="/admin/sales" label={t("nav_sales")} /> : null}
           <NavTab to="/admin/orders" label={t("nav_orders")} />
-          <NavTab to="/admin/deliveries" label={t("deliveries")} />
-          <NavTab to="/admin/lots" label={t("lots")} />
-          <NavTab to="/admin/venues" label={t("nav_venues")} />
+          {operations ? <NavTab to="/admin/deliveries" label={t("deliveries")} /> : null}
+          {operations ? <NavTab to="/admin/lots" label={t("lots")} /> : null}
+          {operations ? <NavTab to="/admin/venues" label={t("nav_venues")} /> : null}
           {commercial ? <NavTab to="/admin/wholesalers" label={t("wholesalers")} /> : null}
           {commercial ? <NavTab to="/admin/invoices" label={t("invoices")} /> : null}
           {commercial ? <NavTab to="/admin/products" label={t("nav_products")} /> : null}
-          <NavTab to="/admin/reports" label={t("reports")} />
+          {operations ? <NavTab to="/admin/reports" label={t("reports")} /> : null}
           {commercial ? <NavTab to="/admin/staff" label={t("staff")} /> : null}
         </nav>
       </header>

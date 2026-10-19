@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Check, Clock, LogOut } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useSessionInfo } from "@/hooks/use-session";
+import { canRegisterOrders } from "@/lib/access";
 import { useI18n } from "@/lib/i18n";
 import { signOutAndReturn } from "@/lib/sign-out";
 import { LanguageToggle, Wordmark } from "@/components/brand";
@@ -14,7 +15,11 @@ import {
   QuestionCard,
   TextAreaField,
 } from "@/components/field";
-import { DeliveryFlavorBreakdown, FlavorReportEditor, FlavorTotals } from "@/components/flavor-lines";
+import {
+  DeliveryFlavorBreakdown,
+  FlavorReportEditor,
+  FlavorTotals,
+} from "@/components/flavor-lines";
 import {
   initialFlavorLines,
   linesPayload,
@@ -66,8 +71,8 @@ function ReportPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (info?.canManageOperations) void navigate({ to: "/admin", replace: true });
-  }, [info?.canManageOperations, navigate]);
+    if (info && canRegisterOrders(info.roles)) void navigate({ to: "/admin", replace: true });
+  }, [info, navigate]);
 
   useEffect(() => {
     if (info && !languageApplied) {

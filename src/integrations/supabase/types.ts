@@ -276,9 +276,13 @@ export type Database = {
           billing_legal_entity_id: string | null
           billing_legal_name_snapshot: string | null
           billing_organization_number_snapshot: string | null
+          approved_at: string | null
+          approved_by: string | null
+          approved_name_snapshot: string | null
           confirmed_at: string | null
           confirmed_delivery_on: string | null
           contact_name: string | null
+          return_note: string | null
           created_at: string
           desired_delivery_on: string | null
           deviation_note: string | null
@@ -294,6 +298,9 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          approved_at?: string | null
+          approved_by?: string | null
+          approved_name_snapshot?: string | null
           billing_legal_entity_id?: string | null
           billing_legal_name_snapshot?: string | null
           billing_organization_number_snapshot?: string | null
@@ -310,11 +317,15 @@ export type Database = {
           ordered_by_customer_id: string
           owner_id?: string | null
           owner_name_snapshot?: string | null
+          return_note?: string | null
           ship_to_customer_id: string
           status?: Database["public"]["Enums"]["customer_order_status"]
           updated_at?: string
         }
         Update: {
+          approved_at?: string | null
+          approved_by?: string | null
+          approved_name_snapshot?: string | null
           billing_legal_entity_id?: string | null
           billing_legal_name_snapshot?: string | null
           billing_organization_number_snapshot?: string | null
@@ -331,6 +342,7 @@ export type Database = {
           ordered_by_customer_id?: string
           owner_id?: string | null
           owner_name_snapshot?: string | null
+          return_note?: string | null
           ship_to_customer_id?: string
           status?: Database["public"]["Enums"]["customer_order_status"]
           updated_at?: string
@@ -1696,13 +1708,13 @@ export type Database = {
       }
     }
     Enums: {
-      app_role: "admin" | "ops" | "venue"
+      app_role: "admin" | "ops" | "employee" | "venue"
       feedback_rating: "positive" | "mixed" | "negative"
       gold_lot_event_type: "created" | "packed" | "handover" | "closed" | "recalled"
       gold_lot_status: "produced" | "packed" | "handed_over" | "closed" | "recalled"
       commercial_route: "direct" | "via_wholesaler"
       crm_activity_kind: "call" | "email" | "meeting" | "tasting" | "note"
-      customer_order_status: "draft" | "pending_confirmation" | "confirmed" | "cancelled"
+      customer_order_status: "draft" | "pending_confirmation" | "changes_requested" | "confirmed" | "cancelled"
       customer_segment: "restaurant" | "hotel" | "event" | "bar"
       customer_type: "venue" | "wholesaler"
       handover_ownership: "gold" | "villa"
@@ -1836,13 +1848,13 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: ["admin", "ops", "venue"],
+      app_role: ["admin", "ops", "employee", "venue"],
       feedback_rating: ["positive", "mixed", "negative"],
       gold_lot_event_type: ["created", "packed", "handover", "closed", "recalled"],
       gold_lot_status: ["produced", "packed", "handed_over", "closed", "recalled"],
       commercial_route: ["direct", "via_wholesaler"],
       crm_activity_kind: ["call", "email", "meeting", "tasting", "note"],
-      customer_order_status: ["draft", "pending_confirmation", "confirmed", "cancelled"],
+      customer_order_status: ["draft", "pending_confirmation", "changes_requested", "confirmed", "cancelled"],
       customer_segment: ["restaurant", "hotel", "event", "bar"],
       customer_type: ["venue", "wholesaler"],
       handover_ownership: ["gold", "villa"],

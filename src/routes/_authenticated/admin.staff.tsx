@@ -16,6 +16,7 @@ import {
 import {
   existingUsernameAction,
   isStaffSchemaError,
+  EMPLOYEE_INCLUDE_KEYS,
   OPS_INCLUDE_KEYS,
   OWNER_INCLUDE_KEYS,
   VENUE_INCLUDE_KEYS,
@@ -123,7 +124,11 @@ function AdminStaff() {
       const lower = message.toLowerCase();
       if (isStaffSchemaError(message)) {
         toast.error(t("staff_schema_missing"));
-      } else if (lower.includes("already") || lower.includes("opptatt") || lower.includes("taken")) {
+      } else if (
+        lower.includes("already") ||
+        lower.includes("opptatt") ||
+        lower.includes("taken")
+      ) {
         toast.error(t("create_customer_username_taken"));
       } else if (lower.includes("employee number") || lower.includes("ansattnummer")) {
         toast.error(t("employee_number_taken"));
@@ -177,7 +182,11 @@ function AdminStaff() {
             ) : null}
           </div>
           <div>
-            <TextField label={t("employee_number")} value={employeeNumber} onChange={setEmployeeNumber} />
+            <TextField
+              label={t("employee_number")}
+              value={employeeNumber}
+              onChange={setEmployeeNumber}
+            />
             <p className="mt-2 text-xs text-muted-foreground">{t("employee_number_hint")}</p>
           </div>
           {usernameAction === "add_name" ? null : (
@@ -191,7 +200,7 @@ function AdminStaff() {
           {usernameAction === "add_name" ? null : (
             <fieldset>
               <legend className="eyebrow mb-3 block">{t("staff_choose_role")}</legend>
-              <div className="grid gap-3 sm:grid-cols-2">
+              <div className="grid gap-3 sm:grid-cols-3">
                 <RoleCard
                   selected={role === "admin"}
                   title={t("role_owner")}
@@ -203,6 +212,12 @@ function AdminStaff() {
                   title={t("role_ops")}
                   includes={OPS_INCLUDE_KEYS}
                   onSelect={() => setRole("ops")}
+                />
+                <RoleCard
+                  selected={role === "employee"}
+                  title={t("role_employee")}
+                  includes={EMPLOYEE_INCLUDE_KEYS}
+                  onSelect={() => setRole("employee")}
                 />
               </div>
               <div className="mt-3 rounded-2xl border border-dashed border-border px-4 py-3">
@@ -276,7 +291,9 @@ function RoleCard({
       }`}
     >
       <p className="text-base font-semibold">{title}</p>
-      <ul className={`mt-2 space-y-1 text-sm ${selected ? "text-primary-foreground/85" : "text-muted-foreground"}`}>
+      <ul
+        className={`mt-2 space-y-1 text-sm ${selected ? "text-primary-foreground/85" : "text-muted-foreground"}`}
+      >
         {includes.map((key) => (
           <li key={key}>· {t(key)}</li>
         ))}
@@ -332,7 +349,10 @@ function StaffRow({
       onChanged();
     } catch (error) {
       const message = errorMessage(error, t("staff_failed"));
-      if (message.toLowerCase().includes("employee number") || message.toLowerCase().includes("duplicate")) {
+      if (
+        message.toLowerCase().includes("employee number") ||
+        message.toLowerCase().includes("duplicate")
+      ) {
         toast.error(t("employee_number_taken"));
       } else {
         toast.error(message);
@@ -390,7 +410,7 @@ function StaffRow({
           <p className="text-xs text-muted-foreground">
             {person.username}
             {person.employeeNumber ? ` · ${person.employeeNumber}` : ""}
-            {` · ${person.role === "admin" ? t("role_owner") : t("role_ops")}`}
+            {` · ${person.role === "admin" ? t("role_owner") : person.role === "ops" ? t("role_ops") : t("role_employee")}`}
             {isYou ? ` · ${t("this_is_you")}` : ""}
           </p>
           {person.fullName.trim() ? null : (
@@ -401,13 +421,17 @@ function StaffRow({
       <div className="grid gap-3 sm:grid-cols-2">
         <TextField label={t("full_name")} value={fullName} onChange={setFullName} />
         <div>
-          <TextField label={t("employee_number")} value={employeeNumber} onChange={setEmployeeNumber} />
+          <TextField
+            label={t("employee_number")}
+            value={employeeNumber}
+            onChange={setEmployeeNumber}
+          />
         </div>
       </div>
       <PrimaryButton onClick={() => void saveName()} disabled={busy}>
         {person.fullName.trim() ? t("save") : t("staff_add_name")}
       </PrimaryButton>
-      <div className="grid gap-2 sm:grid-cols-2">
+      <div className="grid gap-2 sm:grid-cols-3">
         <button
           type="button"
           disabled={busy}
@@ -431,6 +455,18 @@ function StaffRow({
           }`}
         >
           <span className="font-semibold">{t("role_ops")}</span>
+        </button>
+        <button
+          type="button"
+          disabled={busy || lastOwner}
+          onClick={() => void saveRole("employee")}
+          className={`rounded-2xl border-2 px-3 py-3 text-left text-sm disabled:opacity-50 ${
+            person.role === "employee"
+              ? "border-primary bg-primary text-primary-foreground"
+              : "border-border text-muted-foreground"
+          }`}
+        >
+          <span className="font-semibold">{t("role_employee")}</span>
         </button>
       </div>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end">

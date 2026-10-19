@@ -6,10 +6,20 @@ import { ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 import { PrimaryButton, TextField } from "@/components/field";
 import { supabase } from "@/integrations/supabase/client";
-import { listStaffAccounts } from "@/lib/admin.functions";
+import { listProductionStaff } from "@/lib/admin.functions";
 import { useSessionInfo } from "@/hooks/use-session";
+import { canApproveOrders, canRegisterOrders } from "@/lib/access";
 import { useI18n, type TranslationKey } from "@/lib/i18n";
-import { orderProgress, type OrderProgress, type OrderWorkflow } from "@/lib/orders";
+import {
+  isOrderSchemaError,
+  orderListBucket,
+  orderListRank,
+  orderPartyLabel,
+  orderPrimaryAction,
+  orderProgress,
+  type OrderProgress,
+  type OrderWorkflow,
+} from "@/lib/orders";
 import { errorMessage } from "@/lib/utils";
 
 const fieldClass =
@@ -18,6 +28,7 @@ const fieldClass =
 const PROGRESS_KEY: Record<OrderProgress, TranslationKey> = {
   draft: "orders_status_draft",
   pending_confirmation: "orders_status_pending_confirmation",
+  changes_requested: "orders_status_changes_requested",
   confirmed: "orders_status_confirmed",
   partially_delivered: "orders_status_partially_delivered",
   delivered: "orders_status_delivered",
@@ -28,29 +39,36 @@ export const Route = createFileRoute("/_authenticated/admin/orders/")({
   head: () => ({
     meta: [
       { title: "Ordrer — Gold of Sicily" },
-      { name: "description", content: "Register and confirm customer orders." },
+      { name: "description", content: "Open orders, approval and delivery." },
     ],
   }),
   component: OrdersPage,
 });
 
-type DraftLine = { productId: string; quantity: string };
+type ProductRow = { id: string; name_no: string; name_en: string };
 
 function OrdersPage() {
   const { t, lang } = useI18n();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const session = useSessionInfo();
-  const commercial = Boolean(session.data?.canManageCommercial);
-  const staffFn = useServerFn(listStaffAccounts);
+  const roles = session.data?.roles ?? [];
+  const registrar = canRegisterOrders(roles);
+  const approver = canApproveOrders(roles);
+  const action = orderPrimaryAction(approver);
+  const staffFn = useServerFn(listProductionStaff);
+  const [openForm, setOpenForm] = useState(false);
   const [orderedBy, setOrderedBy] = useState("");
+  const [otherSite, setOtherSite] = useState(false);
   const [shipTo, setShipTo] = useState("");
   const [contact, setContact] = useState("");
   const [desiredOn, setDesiredOn] = useState("");
+  const [agreedOn, setAgreedOn] = useState("");
+  const [agreedTouched, setAgreedTouched] = useState(false);
   const [ownerId, setOwnerId] = useState("");
   const [dueOn, setDueOn] = useState("");
   const [notes, setNotes] = useState("");
-  const [lines, setLines] = useState<DraftLine[]>([{ productId: "", quantity: "" }]);
+  const [quantities, setQuantities] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
 
   const orders = useQuery({
@@ -59,13 +77,12 @@ function OrdersPage() {
       const { data, error } = await supabase
         .from("customer_orders")
         .select(
-          "id, order_number, status, desired_delivery_on, confirmed_delivery_on, owner_name_snapshot, ordered_by:customers!customer_orders_ordered_by_customer_id_fkey(name), ship_to:customers!customer_orders_ship_to_customer_id_fkey(name), customer_order_lines(quantity, order_line_fulfillments(quantity))",
+          "id, order_number, status, contact_name, desired_delivery_on, confirmed_delivery_on, owner_name_snapshot, ordered_by:customers!customer_orders_ordered_by_customer_id_fkey(name), ship_to:customers!customer_orders_ship_to_customer_id_fkey(name), customer_order_lines(quantity, order_line_fulfillments(quantity))",
         )
         .order("created_at", { ascending: false })
         .limit(200);
       if (error) {
-        if (/customer_orders|customer_order_status/.test(error.message))
-          return { pendingSql: true as const, rows: [] };
+        if (isOrderSchemaError(error.message)) return { pendingSql: true as const, rows: [] };
         throw error;
       }
       return { pendingSql: false as const, rows: data ?? [] };
@@ -74,7 +91,7 @@ function OrdersPage() {
 
   const customers = useQuery({
     queryKey: ["order-customers"],
-    enabled: commercial,
+    enabled: registrar && openForm,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("customers")
@@ -87,7 +104,7 @@ function OrdersPage() {
 
   const products = useQuery({
     queryKey: ["order-products"],
-    enabled: commercial,
+    enabled: registrar && openForm,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("products")
@@ -95,38 +112,49 @@ function OrdersPage() {
         .eq("active", true)
         .order("sort_order");
       if (error) throw error;
-      return data ?? [];
+      return (data ?? []) as ProductRow[];
     },
   });
 
   const staff = useQuery({
-    queryKey: ["order-staff"],
-    enabled: commercial,
+    queryKey: ["order-production-staff"],
+    enabled: approver && openForm,
     queryFn: () => staffFn(),
   });
 
+  function chooseDesired(value: string) {
+    setDesiredOn(value);
+    if (!agreedTouched) setAgreedOn(value);
+  }
+
   async function save(event: FormEvent) {
     event.preventDefault();
-    if (!commercial) return;
+    if (!registrar) return;
     const prepared = new Map<string, number>();
-    for (const line of lines) {
-      const quantity = Number.parseInt(line.quantity, 10);
-      if (!line.productId || !Number.isInteger(quantity) || quantity <= 0) continue;
-      prepared.set(line.productId, (prepared.get(line.productId) ?? 0) + quantity);
+    for (const [productId, raw] of Object.entries(quantities)) {
+      const quantity = Number.parseInt(raw, 10);
+      if (!Number.isInteger(quantity) || quantity <= 0) continue;
+      prepared.set(productId, quantity);
     }
-    if (!orderedBy || !shipTo || prepared.size === 0) {
+    const site = otherSite ? shipTo : orderedBy;
+    if (!orderedBy || !site || prepared.size === 0) {
       toast.error(t("delivery_missing"));
       return;
     }
+    if (action === "approve" && !(agreedOn || desiredOn)) {
+      toast.error(t("orders_confirmed_date"));
+      return;
+    }
     setBusy(true);
+    const userId = session.data?.session?.user.id ?? null;
     const { data: created, error } = await supabase
       .from("customer_orders")
       .insert({
         ordered_by_customer_id: orderedBy,
-        ship_to_customer_id: shipTo,
+        ship_to_customer_id: site,
         contact_name: contact.trim() || null,
         desired_delivery_on: desiredOn || null,
-        owner_id: ownerId || null,
+        owner_id: ownerId || userId,
         due_on: dueOn || null,
         notes: notes.trim() || null,
         status: "draft",
@@ -145,28 +173,67 @@ function OrdersPage() {
         quantity,
       })),
     );
-    setBusy(false);
     if (lineError) {
       await supabase.from("customer_orders").delete().eq("id", created.id);
+      setBusy(false);
       toast.error(lineError.message);
       return;
     }
-    toast.success(t("orders_saved"));
+    const patch =
+      action === "approve"
+        ? {
+            status: "confirmed" as const,
+            confirmed_delivery_on: agreedOn || desiredOn,
+            owner_id: ownerId || userId,
+          }
+        : { status: "pending_confirmation" as const };
+    const { error: statusError } = await supabase
+      .from("customer_orders")
+      .update(patch)
+      .eq("id", created.id);
+    setBusy(false);
+    if (statusError) {
+      toast.error(
+        statusError.message.includes("missing price")
+          ? t("orders_price_missing")
+          : statusError.message,
+      );
+    } else {
+      toast.success(action === "approve" ? t("orders_confirmed") : t("orders_submitted"));
+    }
     await queryClient.invalidateQueries({ queryKey: ["customer-orders"] });
     void navigate({ to: "/admin/orders/$orderId", params: { orderId: created.id } });
   }
 
-  const rows = orders.data?.rows ?? [];
+  const rows = [...(orders.data?.rows ?? [])].sort((a, b) => {
+    const progressA = progressOf(a);
+    const progressB = progressOf(b);
+    return orderListRank(progressA) - orderListRank(progressB);
+  });
+  const queue = rows.filter((row) => orderListBucket(progressOf(row)) === "queue");
+  const open = rows.filter((row) => orderListBucket(progressOf(row)) === "open");
+  const earlier = rows.filter((row) => orderListBucket(progressOf(row)) === "earlier");
 
   return (
     <main className="mx-auto w-full max-w-5xl px-5 pb-16">
-      <h1 className="pt-8 text-3xl font-semibold">{t("orders_title")}</h1>
+      <div className="flex flex-wrap items-end justify-between gap-3 pt-8">
+        <h1 className="text-3xl font-semibold">{t("orders_title")}</h1>
+        {registrar ? (
+          <button
+            type="button"
+            className="rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground"
+            onClick={() => setOpenForm((current) => !current)}
+          >
+            {t("orders_new")}
+          </button>
+        ) : null}
+      </div>
       <p className="mt-2 max-w-2xl text-sm text-muted-foreground">{t("orders_intro")}</p>
       {orders.data?.pendingSql ? (
         <p className="mt-4 text-sm text-muted-foreground">{t("orders_pending_sql")}</p>
       ) : null}
 
-      {commercial ? (
+      {registrar && openForm ? (
         <form onSubmit={(event) => void save(event)} className="surface-card mt-6 space-y-4 p-5">
           <h2 className="text-lg font-semibold">{t("orders_new")}</h2>
           <div className="grid gap-4 sm:grid-cols-2">
@@ -185,6 +252,34 @@ function OrdersPage() {
                 ))}
               </select>
             </label>
+            <TextField label={t("orders_contact")} value={contact} onChange={setContact} />
+            <TextField
+              label={t("orders_desired_date")}
+              type="date"
+              value={desiredOn}
+              onChange={chooseDesired}
+            />
+            {action === "approve" ? (
+              <TextField
+                label={t("orders_confirmed_date")}
+                type="date"
+                value={agreedOn}
+                onChange={(value) => {
+                  setAgreedTouched(true);
+                  setAgreedOn(value);
+                }}
+              />
+            ) : null}
+          </div>
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={otherSite}
+              onChange={(event) => setOtherSite(event.target.checked)}
+            />
+            {t("orders_different_site")}
+          </label>
+          {otherSite ? (
             <label className="block">
               <span className="eyebrow mb-2 block">{t("orders_ship_to")}</span>
               <select
@@ -200,84 +295,115 @@ function OrdersPage() {
                 ))}
               </select>
             </label>
-            <TextField label={t("orders_contact")} value={contact} onChange={setContact} />
-            <TextField
-              label={t("orders_desired_date")}
-              type="date"
-              value={desiredOn}
-              onChange={setDesiredOn}
-            />
-            <label className="block">
-              <span className="eyebrow mb-2 block">{t("orders_owner")}</span>
-              <select
-                className={fieldClass}
-                value={ownerId}
-                onChange={(event) => setOwnerId(event.target.value)}
-              >
-                <option value="" />
-                {(staff.data?.staff ?? []).map((person) => (
-                  <option key={person.id} value={person.id}>
-                    {person.fullName || person.username}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <TextField label={t("orders_due")} type="date" value={dueOn} onChange={setDueOn} />
-          </div>
-          <TextField label={t("orders_notes")} value={notes} onChange={setNotes} />
+          ) : null}
           <div className="space-y-3">
-            <p className="eyebrow">{t("orders_lines")}</p>
-            {lines.map((line, index) => (
-              <div key={index} className="grid gap-3 sm:grid-cols-[1fr_8rem]">
-                <select
-                  className={fieldClass}
-                  value={line.productId}
-                  onChange={(event) =>
-                    setLines((current) =>
-                      current.map((row, rowIndex) =>
-                        rowIndex === index ? { ...row, productId: event.target.value } : row,
-                      ),
-                    )
-                  }
-                >
-                  <option value="" />
-                  {(products.data ?? []).map((product) => (
-                    <option key={product.id} value={product.id}>
-                      {lang === "en" ? product.name_en : product.name_no}
-                    </option>
-                  ))}
-                </select>
+            {(products.data ?? []).map((product) => (
+              <label key={product.id} className="grid items-center gap-3 sm:grid-cols-[1fr_8rem]">
+                <span className="font-medium">
+                  {lang === "en" ? product.name_en : product.name_no}
+                </span>
                 <input
                   className={fieldClass}
                   inputMode="numeric"
-                  value={line.quantity}
+                  aria-label={lang === "en" ? product.name_en : product.name_no}
+                  value={quantities[product.id] ?? ""}
                   onChange={(event) =>
-                    setLines((current) =>
-                      current.map((row, rowIndex) =>
-                        rowIndex === index ? { ...row, quantity: event.target.value } : row,
-                      ),
-                    )
+                    setQuantities((current) => ({ ...current, [product.id]: event.target.value }))
                   }
                 />
-              </div>
+              </label>
             ))}
-            <button
-              type="button"
-              className="text-sm font-semibold"
-              onClick={() => setLines((current) => [...current, { productId: "", quantity: "" }])}
-            >
-              {t("orders_add_line")}
-            </button>
           </div>
+          <details className="rounded-2xl border border-border px-4 py-3">
+            <summary className="cursor-pointer text-sm font-semibold">{t("orders_more")}</summary>
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+              {approver ? (
+                <label className="block">
+                  <span className="eyebrow mb-2 block">{t("orders_owner")}</span>
+                  <select
+                    className={fieldClass}
+                    value={ownerId}
+                    onChange={(event) => setOwnerId(event.target.value)}
+                  >
+                    <option value="" />
+                    {(staff.data?.staff ?? []).map((person) => (
+                      <option key={person.id} value={person.id}>
+                        {person.fullName || person.username}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
+              <TextField label={t("orders_due")} type="date" value={dueOn} onChange={setDueOn} />
+            </div>
+            <div className="mt-4">
+              <TextField label={t("orders_notes")} value={notes} onChange={setNotes} />
+            </div>
+          </details>
           <PrimaryButton type="submit" disabled={busy}>
-            {t("orders_save")}
+            {action === "approve" ? t("orders_confirm") : t("orders_send_confirm")}
           </PrimaryButton>
+          <p className="text-sm text-muted-foreground">{t("orders_internal")}</p>
         </form>
       ) : null}
 
-      <div className="mt-8 space-y-3">
-        {rows.length === 0 ? (
-          <p className="text-sm text-muted-foreground">{t("orders_empty")}</p>
+      <OrderGroup title={t("orders_queue")} rows={queue} empty={null} />
+      <OrderGroup
+        title={t("orders_open")}
+        rows={open}
+        empty={rows.length === 0 ? t("orders_empty") : null}
+      />
+      {earlier.length > 0 ? (
+        <details className="mt-8">
+          <summary className="cursor-pointer text-sm font-semibold text-muted-foreground">
+            {t("orders_earlier")}
+          </summary>
+          <OrderGroup title="" rows={earlier} empty={null} />
+        </details>
+      ) : null}
+    </main>
+  );
+}
+
+type OrderListRow = {
+  id: string;
+  order_number: string;
+  status: string;
+  contact_name: string | null;
+  owner_name_snapshot: string | null;
+  ordered_by: { name: string } | { name: string }[] | null;
+  ship_to: { name: string } | { name: string }[] | null;
+  customer_order_lines:
+    { quantity: number; order_line_fulfillments: { quantity: number }[] | null }[] | null;
+};
+
+function progressOf(order: OrderListRow): OrderProgress {
+  const ordered = (order.customer_order_lines ?? []).reduce((sum, line) => sum + line.quantity, 0);
+  const fulfilled = (order.customer_order_lines ?? []).reduce(
+    (sum, line) =>
+      sum + (line.order_line_fulfillments ?? []).reduce((inner, row) => inner + row.quantity, 0),
+    0,
+  );
+  return orderProgress(order.status as OrderWorkflow, ordered, fulfilled);
+}
+
+function OrderGroup({
+  title,
+  rows,
+  empty,
+}: {
+  title: string;
+  rows: OrderListRow[];
+  empty: string | null;
+}) {
+  const { t } = useI18n();
+  if (rows.length === 0 && !empty) return null;
+  return (
+    <section className="mt-8">
+      {title ? <h2 className="eyebrow">{title}</h2> : null}
+      <div className="mt-3 space-y-3">
+        {rows.length === 0 && empty ? (
+          <p className="text-sm text-muted-foreground">{empty}</p>
         ) : null}
         {rows.map((order) => {
           const ordered = (order.customer_order_lines ?? []).reduce(
@@ -290,9 +416,14 @@ function OrdersPage() {
               (line.order_line_fulfillments ?? []).reduce((inner, row) => inner + row.quantity, 0),
             0,
           );
-          const progress = orderProgress(order.status as OrderWorkflow, ordered, fulfilled);
-          const orderer = one(order.ordered_by);
-          const site = one(order.ship_to);
+          const progress = progressOf(order);
+          const orderer = one(order.ordered_by)?.name ?? "—";
+          const site = one(order.ship_to)?.name ?? "—";
+          const party = orderPartyLabel({
+            ordererName: orderer,
+            shipToName: site,
+            contactName: order.contact_name,
+          });
           return (
             <Link
               key={order.id}
@@ -302,11 +433,13 @@ function OrdersPage() {
             >
               <div>
                 <p className="font-semibold">
-                  {order.order_number} · {orderer?.name ?? "—"}
+                  {orderer} · {order.order_number}
                 </p>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  {t(PROGRESS_KEY[progress])} · {site?.name ?? "—"} · {t("orders_remaining")}{" "}
-                  {Math.max(0, ordered - fulfilled)}
+                  {t(PROGRESS_KEY[progress])}
+                  {party.contact ? ` · ${t("orders_contact_line")}: ${party.contact}` : ""}
+                  {party.site ? ` · ${party.site}` : ""}
+                  {` · ${t("orders_remaining")} ${Math.max(0, ordered - fulfilled)}`}
                   {order.owner_name_snapshot ? ` · ${order.owner_name_snapshot}` : ""}
                 </p>
               </div>
@@ -315,7 +448,7 @@ function OrdersPage() {
           );
         })}
       </div>
-    </main>
+    </section>
   );
 }
 

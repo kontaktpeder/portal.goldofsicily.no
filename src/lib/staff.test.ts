@@ -9,6 +9,7 @@ import {
   existingUsernameAction,
   isStaffRole,
   isStaffSchemaError,
+  EMPLOYEE_INCLUDE_KEYS,
   OPS_INCLUDE_KEYS,
   OWNER_INCLUDE_KEYS,
   portalHomePath,
@@ -30,31 +31,45 @@ test("staff create payload accepts eier and drift, not sted", () => {
     "GOS-004",
   );
   assert.equal(
-    staffCreateSchema.parse({ fullName: "Peder Holm", username: "peder", password: "secret1", role: "admin" })
-      .role,
+    staffCreateSchema.parse({
+      fullName: "Peder Holm",
+      username: "peder",
+      password: "secret1",
+      role: "admin",
+    }).role,
     "admin",
   );
   assert.equal(
     staffCreateSchema.parse({ fullName: "Denis Rossi", username: "denis", role: "ops" }).password,
     "",
   );
-  assert.throws(() => staffCreateSchema.parse({ username: "bar", password: "secret1", role: "venue" }));
   assert.throws(() =>
-    staffCreateSchema.parse({ fullName: "   ", username: "denis", password: "secret1", role: "ops" }),
+    staffCreateSchema.parse({ username: "bar", password: "secret1", role: "venue" }),
+  );
+  assert.throws(() =>
+    staffCreateSchema.parse({
+      fullName: "   ",
+      username: "denis",
+      password: "secret1",
+      role: "ops",
+    }),
   );
 });
 
 test("role cards list what each access level includes", () => {
   assert.equal(OWNER_INCLUDE_KEYS.length, 4);
   assert.equal(OPS_INCLUDE_KEYS.length, 4);
+  assert.equal(EMPLOYEE_INCLUDE_KEYS.length, 3);
   assert.equal(VENUE_INCLUDE_KEYS.length, 1);
   assert.ok(OWNER_INCLUDE_KEYS.includes("role_owner_inc_access"));
   assert.ok(OPS_INCLUDE_KEYS.includes("role_ops_inc_lots"));
+  assert.ok(EMPLOYEE_INCLUDE_KEYS.includes("role_employee_inc_no_approve"));
 });
 
-test("drift logs into ops home, sted into the shift report", () => {
+test("drift logs into ops home, an employee into orders, sted into the shift report", () => {
   assert.equal(portalHomePath(["ops"]), "/admin");
   assert.equal(portalHomePath(["admin"]), "/admin");
+  assert.equal(portalHomePath(["employee"]), "/admin");
   assert.equal(portalHomePath(["venue"]), "/report");
   assert.equal(canManageOperations(["ops"]), true);
   assert.equal(canManageCommercial(["ops"]), false);
@@ -72,10 +87,12 @@ test("the last eier cannot be demoted to drift", () => {
   });
 });
 
-test("staffRoleFromRoles prefers eier over drift", () => {
+test("staffRoleFromRoles prefers eier over drift over ansatt", () => {
   assert.equal(staffRoleFromRoles(["ops", "admin"]), "admin");
+  assert.equal(staffRoleFromRoles(["employee", "ops"]), "ops");
+  assert.equal(staffRoleFromRoles(["employee"]), "employee");
   assert.equal(isStaffRole("venue"), false);
-  assert.equal(isStaffRole("ops"), true);
+  assert.equal(isStaffRole("employee"), true);
 });
 
 test("missing ops enum is detected from postgres errors", () => {
@@ -108,6 +125,7 @@ test("existing Gold staff get a name on their row instead of username taken", ()
   assert.equal(classifyExistingAccount({ exists: false }), "none");
   assert.equal(classifyExistingAccount({ exists: true, roles: ["admin"] }), "staff");
   assert.equal(classifyExistingAccount({ exists: true, roles: ["ops"] }), "staff");
+  assert.equal(classifyExistingAccount({ exists: true, roles: ["employee"] }), "staff");
   assert.equal(classifyExistingAccount({ exists: true, roles: ["venue"] }), "other");
   assert.equal(existingUsernameAction("none"), "create");
   assert.equal(existingUsernameAction("staff"), "add_name");
@@ -115,7 +133,8 @@ test("existing Gold staff get a name on their row instead of username taken", ()
   assert.equal(staffCreateNeedsPassword("create"), true);
   assert.equal(staffCreateNeedsPassword("add_name"), false);
   const create = readFileSync(new URL("./admin.functions.ts", import.meta.url), "utf8");
-  const handler = create.split("export const createStaffAccount")[1]?.split("export const")[0] ?? "";
+  const handler =
+    create.split("export const createStaffAccount")[1]?.split("export const")[0] ?? "";
   assert.match(handler, /existingUsernameAction/);
   assert.match(handler, /full_name: data\.fullName/);
   assert.match(handler, /existing: true/);
