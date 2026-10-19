@@ -1,8 +1,10 @@
 import { createFileRoute, Link, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
 import { useEffect } from "react";
 import { LogOut } from "lucide-react";
 import { useSessionInfo } from "@/hooks/use-session";
-import { canRegisterOrders } from "@/lib/access";
+import { supabase } from "@/integrations/supabase/client";
+import { canApproveOrders, canRegisterOrders } from "@/lib/access";
 import { useI18n } from "@/lib/i18n";
 import { signOutAndReturn } from "@/lib/sign-out";
 import { LanguageToggle, Wordmark } from "@/components/brand";
@@ -17,6 +19,7 @@ function AdminLayout() {
   const path = useRouterState({ select: (state) => state.location.pathname });
   const { data: info, isLoading } = useSessionInfo();
   const registrar = canRegisterOrders(info?.roles ?? []);
+  const approver = canApproveOrders(info?.roles ?? []);
   const operations = Boolean(info?.canManageOperations);
 
   useEffect(() => {
@@ -66,9 +69,56 @@ function AdminLayout() {
           {commercial ? <NavTab to="/admin/staff" label={t("staff")} /> : null}
         </nav>
       </header>
+      {approver ? <ApprovalNotice /> : null}
       <Outlet />
     </div>
   );
+}
+
+function ApprovalNotice() {
+  const { t } = useI18n();
+  const notices = useQuery({
+    queryKey: ["order-approval-notices"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("customer_orders")
+        .select(
+          "id, order_number, ordered_by:customers!customer_orders_ordered_by_customer_id_fkey(name)",
+        )
+        .eq("status", "pending_confirmation")
+        .order("created_at", { ascending: true })
+        .limit(8);
+      if (error) return [];
+      return data ?? [];
+    },
+  });
+  const rows = notices.data ?? [];
+  if (rows.length === 0) return null;
+  return (
+    <div className="border-b border-border bg-card">
+      <div className="mx-auto flex w-full max-w-5xl flex-col gap-2 px-5 py-3">
+        <p className="text-sm font-semibold">{t("orders_notice")}</p>
+        {rows.map((order) => {
+          const name = one(order.ordered_by)?.name ?? "—";
+          return (
+            <Link
+              key={order.id}
+              to="/admin/orders/$orderId"
+              params={{ orderId: order.id }}
+              className="text-sm font-semibold underline"
+            >
+              {name} · {order.order_number}
+            </Link>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function one<T>(value: T | T[] | null): T | null {
+  if (!value) return null;
+  return Array.isArray(value) ? (value[0] ?? null) : value;
 }
 
 function NavTab({

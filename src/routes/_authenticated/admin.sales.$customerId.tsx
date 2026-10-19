@@ -91,13 +91,25 @@ function SalesProfile() {
       const customerRes = await supabase
         .from("customers")
         .select(
-          "id, name, type, segment, city, location, address, delivery_address, notes, active, partnership_level, supplied_by_customer_id, sales_status, sales_owner_id, next_follow_up_on, sales_status_changed_at, commercial_ready_at, legal_entity_id, billing_legal_entity_id, contact_name, email, phone, supplier:customers!customers_supplied_by_customer_id_fkey(name)",
+          "id, name, type, segment, city, location, address, delivery_address, notes, active, partnership_level, supplied_by_customer_id, sales_status, sales_owner_id, next_follow_up_on, sales_status_changed_at, commercial_ready_at, legal_entity_id, billing_legal_entity_id, contact_name, email, phone",
         )
         .eq("id", customerId)
         .maybeSingle();
       if (customerRes.error) throw customerRes.error;
-      const customer = customerRes.data;
-      if (!customer) return null;
+      const loaded = customerRes.data;
+      if (!loaded) return null;
+      const supplierRes = loaded.supplied_by_customer_id
+        ? await supabase
+            .from("customers")
+            .select("name")
+            .eq("id", loaded.supplied_by_customer_id)
+            .maybeSingle()
+        : null;
+      if (supplierRes?.error) throw supplierRes.error;
+      const customer = {
+        ...loaded,
+        supplier: supplierRes?.data ? { name: supplierRes.data.name } : null,
+      };
 
       const entityIds = [customer.legal_entity_id, customer.billing_legal_entity_id].filter(
         (id): id is string => Boolean(id),

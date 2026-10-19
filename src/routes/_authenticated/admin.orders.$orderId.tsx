@@ -1,33 +1,45 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { PrimaryButton, TextAreaField, TextField } from "@/components/field";
 import { supabase } from "@/integrations/supabase/client";
 import { listProductionStaff } from "@/lib/admin.functions";
 import { useSessionInfo } from "@/hooks/use-session";
-import { canApproveOrders, canManageOperations, canRegisterOrders } from "@/lib/access";
-import { deliveryLinesPayload } from "@/lib/flavors";
+import {
+  canApproveOrders,
+  canManageCommercial,
+  canManageOperations,
+  canRegisterOrders,
+} from "@/lib/access";
 import { useI18n, type TranslationKey } from "@/lib/i18n";
 import {
   assignStockSource,
+  deliveryNeedsStockSourceChoice,
   isGoldLotSchemaError,
-  isOpenLot,
   isVillaStockSchemaError,
+  openLotsForProduct,
   suggestLotId,
+  suggestVillaHandover,
   toStockLots,
   validateDeliveryStock,
+  validateVillaStock,
+  villaOptions,
+  type StockSource,
 } from "@/lib/lot-stock";
 import {
   canCancelOrder,
+  deliveryErrorKind,
   formatAgreedDelivery,
+  fulfillmentBlock,
   isOrderSchemaError,
-  orderDeliveryDraft,
+  linkableQuantity,
   orderPartyLabel,
   orderPrimaryAction,
   orderProgress,
   remainingQuantity,
+  suggestedDeliveryQuantity,
   type OrderProgress,
   type OrderWorkflow,
 } from "@/lib/orders";
@@ -69,7 +81,7 @@ function OrderPage() {
   const approver = canApproveOrders(roles);
   const registrar = canRegisterOrders(roles);
   const operations = canManageOperations(roles);
-  const commercial = Boolean(session.data?.canManageCommercial);
+  const commercial = canManageCommercial(roles);
   const action = orderPrimaryAction(approver);
   const staffFn = useServerFn(listProductionStaff);
   const [busy, setBusy] = useState(false);
@@ -81,8 +93,18 @@ function OrderPage() {
   const [lineQty, setLineQty] = useState<Record<string, string>>({});
   const [loadedFor, setLoadedFor] = useState<string | null>(null);
   const [delivering, setDelivering] = useState(false);
+  const [deliverOn, setDeliverOn] = useState("");
   const [deliverQty, setDeliverQty] = useState<Record<string, string>>({});
   const [deliverLot, setDeliverLot] = useState<Record<string, string>>({});
+  const [deliverHandover, setDeliverHandover] = useState<Record<string, string>>({});
+  const [stockSource, setStockSource] = useState<StockSource>("gold");
+  const [linkLineId, setLinkLineId] = useState("");
+  const [linkQty, setLinkQty] = useState("");
+  const [linkConfirmed, setLinkConfirmed] = useState(false);
+  const [repairOpen, setRepairOpen] = useState(false);
+  const savingDelivery = useRef(false);
+  const deliveryKey = useRef<string | null>(null);
+  const suggestedOnce = useRef(false);
 
   const order = useQuery({
     queryKey: ["customer-order", orderId],
@@ -93,7 +115,9 @@ function OrderPage() {
         "id, order_number, status, contact_name, desired_delivery_on, confirmed_delivery_on, billing_legal_name_snapshot, billing_organization_number_snapshot, owner_id, owner_name_snapshot, due_on, deviation_note, notes, ordered_by_customer_id, ship_to_customer_id";
       const rich = await supabase
         .from("customer_orders")
-        .select(`${base}, return_note, approved_at, approved_name_snapshot, ${embedded}`)
+        .select(
+          `${base}, return_note, approved_at, approved_name_snapshot, submitted_at, submitted_name_snapshot, ${embedded}`,
+        )
         .eq("id", orderId)
         .maybeSingle();
       if (!rich.error) return { pendingSql: false as const, row: rich.data };
@@ -107,7 +131,14 @@ function OrderPage() {
       return {
         pendingSql: true as const,
         row: plain.data
-          ? { ...plain.data, return_note: null, approved_at: null, approved_name_snapshot: null }
+          ? {
+              ...plain.data,
+              return_note: null,
+              approved_at: null,
+              approved_name_snapshot: null,
+              submitted_at: null,
+              submitted_name_snapshot: null,
+            }
           : null,
       };
     },
@@ -134,7 +165,9 @@ function OrderPage() {
       if (lineIds.length === 0) return [];
       const { data, error } = await supabase
         .from("order_line_fulfillments")
-        .select("id, order_line_id, delivery_line_id, quantity")
+        .select(
+          "id, order_line_id, delivery_line_id, quantity, delivery_lines(id, quantity, product_name_snapshot, gold_lots(lot_code), deliveries(id, delivered_at, note))",
+        )
         .in("order_line_id", lineIds);
       if (error) throw error;
       return data ?? [];
@@ -174,6 +207,25 @@ function OrderPage() {
     setLineQty(nextQty);
   }
 
+  const repairs = useQuery({
+    queryKey: ["order-delivery-repairs", orderId, row?.ship_to_customer_id],
+    enabled: repairOpen && commercial && Boolean(row?.ship_to_customer_id),
+    queryFn: async () => {
+      const siteId = row?.ship_to_customer_id;
+      if (!siteId) return [];
+      const { data, error } = await supabase
+        .from("deliveries")
+        .select(
+          "id, delivered_at, customer_name_snapshot, delivery_lines(id, product_id, quantity, product_name_snapshot, gold_lots(lot_code), order_line_fulfillments(quantity), invoice_draft_lines(quantity, active, order_line_fulfillment_id))",
+        )
+        .eq("customer_id", siteId)
+        .order("delivered_at", { ascending: false })
+        .limit(40);
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
   const stock = useQuery({
     queryKey: ["order-delivery-lots"],
     enabled: delivering && operations,
@@ -207,6 +259,45 @@ function OrderPage() {
   const progress = row ? orderProgress(row.status, orderedQty, fulfilledQty) : "draft";
   const editable = row?.status === "draft" || row?.status === "changes_requested";
   const stockLots = stock.data ?? [];
+  const seedLines = useRef(orderLines);
+  const seedLinked = useRef(linked);
+  const seedLots = useRef(stockLots);
+  seedLines.current = orderLines;
+  seedLinked.current = linked;
+  seedLots.current = stockLots;
+  const showStockSource = deliveryNeedsStockSourceChoice(
+    stockLots,
+    orderLines.map((line) => ({
+      productId: line.product_id,
+      quantity: Number.parseInt(deliverQty[line.product_id] ?? "", 10) || 0,
+    })),
+  );
+  const effectiveSource: StockSource = showStockSource ? stockSource : "gold";
+
+  useEffect(() => {
+    if (!delivering || suggestedOnce.current || !stock.isSuccess) return;
+    suggestedOnce.current = true;
+    const linesNow = seedLines.current;
+    const linkedNow = seedLinked.current;
+    const lotsNow = seedLots.current;
+    setDeliverQty((current) => {
+      const next = { ...current };
+      for (const line of linesNow) {
+        if (next[line.product_id]) continue;
+        const done = linkedNow
+          .filter((item) => item.order_line_id === line.id)
+          .reduce((sum, item) => sum + item.quantity, 0);
+        const left = remainingQuantity(line.quantity, done);
+        const available = openLotsForProduct(lotsNow, line.product_id).reduce(
+          (max, lot) => Math.max(max, lot.remaining),
+          0,
+        );
+        const suggested = suggestedDeliveryQuantity(left, available);
+        if (suggested > 0) next[line.product_id] = String(suggested);
+      }
+      return next;
+    });
+  }, [delivering, stock.isSuccess]);
 
   async function refresh() {
     await queryClient.invalidateQueries({ queryKey: ["customer-order", orderId] });
@@ -215,6 +306,8 @@ function OrderPage() {
     await queryClient.invalidateQueries({ queryKey: ["customer-orders"] });
     await queryClient.invalidateQueries({ queryKey: ["invoice-desk"] });
     await queryClient.invalidateQueries({ queryKey: ["ops-home"] });
+    await queryClient.invalidateQueries({ queryKey: ["order-approval-notices"] });
+    await queryClient.invalidateQueries({ queryKey: ["admin-deliveries"] });
   }
 
   async function setStatus(
@@ -238,13 +331,7 @@ function OrderPage() {
     const { error } = await supabase.from("customer_orders").update(patch).eq("id", row.id);
     setBusy(false);
     if (error) {
-      toast.error(
-        error.message.includes("missing price")
-          ? t("orders_price_missing")
-          : error.message.includes("return note")
-            ? t("orders_return_hint")
-            : error.message,
-      );
+      toast.error(explainStatusError(error.message));
       return;
     }
     toast.success(
@@ -305,7 +392,7 @@ function OrderPage() {
     await refresh();
   }
 
-  async function saveProblem() {
+  async function saveFollowUp() {
     if (!row || !registrar) return;
     setBusy(true);
     const { error } = await supabase
@@ -313,157 +400,183 @@ function OrderPage() {
       .update({
         owner_id: ownerId || row.owner_id,
         due_on: dueOn || null,
-        deviation_note: deviation.trim() || null,
       })
       .eq("id", row.id);
     setBusy(false);
     if (error) {
-      toast.error(errorMessage(error, t("invoice_failed")));
+      toast.error(errorMessage(error, t("orders_save_failed")));
+      return;
+    }
+    toast.success(t("orders_saved"));
+    await refresh();
+  }
+
+  async function saveProblem() {
+    if (!row || !registrar) return;
+    setBusy(true);
+    const { error } = await supabase
+      .from("customer_orders")
+      .update({ deviation_note: deviation.trim() || null })
+      .eq("id", row.id);
+    setBusy(false);
+    if (error) {
+      toast.error(errorMessage(error, t("orders_save_failed")));
       return;
     }
     toast.success(deviation.trim() ? t("orders_problem_saved") : t("orders_saved"));
     await refresh();
   }
 
+  function explainStatusError(message: string) {
+    if (message.includes("missing price")) return t("orders_price_missing");
+    if (message.includes("return note")) return t("orders_return_hint");
+    if (message.includes("only a production lead")) return t("orders_forbidden");
+    if (message.includes("already approved")) return t("orders_already");
+    if (message.includes("confirmed delivery date")) return t("orders_confirmed_date");
+    if (isOrderSchemaError(message)) return t("orders_pending_sql");
+    return t("orders_save_failed");
+  }
+
+  function explainDeliveryError(message: string) {
+    const kind = deliveryErrorKind(message);
+    if (kind === "schema") return t("orders_pending_sql");
+    if (kind === "stock") return t("orders_stock_short");
+    if (kind === "lot") return t("delivery_lot_required");
+    if (kind === "site") return t("orders_site_mismatch");
+    if (kind === "quantity") return t("orders_remaining");
+    return message || t("orders_save_failed");
+  }
+
   async function saveDelivery() {
-    if (!row || row.status !== "confirmed" || !operations) return;
-    const drafts = orderLines
-      .map((line) => {
-        const quantity = Number.parseInt(deliverQty[line.product_id] ?? "", 10);
-        return {
+    if (savingDelivery.current || !row || row.status !== "confirmed" || !operations) return;
+    savingDelivery.current = true;
+    setBusy(true);
+    try {
+      const drafts = orderLines
+        .map((line) => ({
           productId: line.product_id,
-          quantity: Number.isInteger(quantity) ? quantity : 0,
+          quantity: Number.parseInt(deliverQty[line.product_id] ?? "", 10) || 0,
           goldLotId: deliverLot[line.product_id] ?? "",
-          nameNo: line.product_name_snapshot ?? line.product_id,
-          nameEn: line.product_name_snapshot ?? line.product_id,
-        };
-      })
-      .filter((line) => line.quantity > 0);
-    if (drafts.length === 0) {
-      toast.error(t("delivery_missing"));
-      return;
-    }
-    const reserved = assignStockSource(
-      stockLots,
-      drafts.map((line) => ({ ...line, goldLotId: line.goldLotId })),
-      "gold",
-    );
-    const withLots = drafts.map((line) => {
-      const chosen =
-        line.goldLotId ||
-        reserved.find((item) => item.productId === line.productId)?.goldLotId ||
-        "";
-      return { ...line, goldLotId: chosen, sourceHandoverId: "" };
-    });
-    const stockCheck = validateDeliveryStock(withLots, stockLots);
-    if (!stockCheck.ok) {
-      toast.error(
-        stockCheck.reason === "missing_lot"
-          ? t("delivery_lot_required")
-          : t("delivery_lot_insufficient"),
-      );
-      return;
-    }
-    for (const line of withLots) {
-      const orderLine = orderLines.find((item) => item.product_id === line.productId);
-      if (!orderLine) continue;
-      const done = linked
-        .filter((item) => item.order_line_id === orderLine.id)
-        .reduce((sum, item) => sum + item.quantity, 0);
-      if (done + line.quantity > orderLine.quantity) {
-        toast.error(t("orders_remaining"));
+          sourceHandoverId: deliverHandover[line.product_id] ?? "",
+        }))
+        .filter((line) => line.quantity > 0);
+      if (drafts.length === 0 || !deliverOn) {
+        toast.error(t("delivery_missing"));
         return;
       }
-    }
-    const draft = orderDeliveryDraft({
-      shipToCustomerId: row.ship_to_customer_id,
-      orderNumber: row.order_number,
-      lines: withLots.flatMap((line) => {
-        const orderLine = orderLines.find((item) => item.product_id === line.productId);
-        if (!orderLine) return [];
-        return [
-          {
-            orderLineId: orderLine.id,
-            productId: line.productId,
-            quantity: line.quantity,
-            goldLotId: line.goldLotId,
-          },
-        ];
-      }),
-    });
-    setBusy(true);
-    const now = new Date();
-    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-    const inserted = await supabase
-      .from("deliveries")
-      .insert({
-        customer_id: draft.customerId,
-        quantity: draft.quantity,
-        delivered_at: today,
-        note: draft.note,
-      })
-      .select("id")
-      .single();
-    if (inserted.error || !inserted.data) {
-      setBusy(false);
-      toast.error(inserted.error?.message ?? t("invoice_failed"));
-      return;
-    }
-    let payload: ReturnType<typeof deliveryLinesPayload>;
-    try {
-      payload = deliveryLinesPayload(
-        inserted.data.id,
-        withLots.map((line) => ({
-          rowId: line.productId,
-          productId: line.productId,
-          nameNo: line.nameNo,
-          nameEn: line.nameEn,
+      const reserved = assignStockSource(stockLots, drafts, effectiveSource);
+      const withLots = drafts.map((line) => {
+        const picked = reserved.find((item) => item.productId === line.productId);
+        return {
+          product_id: line.productId,
           quantity: line.quantity,
-          goldLotId: line.goldLotId,
-        })),
-      );
-    } catch (payloadError) {
-      await supabase.from("deliveries").delete().eq("id", inserted.data.id);
+          gold_lot_id: line.goldLotId || picked?.goldLotId || "",
+          source_handover_id:
+            effectiveSource === "villa"
+              ? line.sourceHandoverId || picked?.sourceHandoverId || ""
+              : "",
+        };
+      });
+      const stockLines = withLots.map((line) => ({
+        productId: line.product_id,
+        quantity: line.quantity,
+        goldLotId: line.gold_lot_id,
+        sourceHandoverId: line.source_handover_id,
+      }));
+      const stockCheck =
+        effectiveSource === "villa"
+          ? validateVillaStock(stockLines, stockLots)
+          : validateDeliveryStock(stockLines, stockLots);
+      if (!stockCheck.ok) {
+        toast.error(
+          stockCheck.reason === "insufficient"
+            ? t("orders_stock_short")
+            : t("delivery_lot_required"),
+        );
+        return;
+      }
+      for (const line of withLots) {
+        const orderLine = orderLines.find((item) => item.product_id === line.product_id);
+        if (!orderLine) {
+          toast.error(t("orders_save_failed"));
+          return;
+        }
+        const done = linked
+          .filter((item) => item.order_line_id === orderLine.id)
+          .reduce((sum, item) => sum + item.quantity, 0);
+        if (done + line.quantity > orderLine.quantity) {
+          toast.error(t("orders_remaining"));
+          return;
+        }
+      }
+      if (!deliveryKey.current) deliveryKey.current = crypto.randomUUID();
+      const saved = await supabase.rpc("register_order_delivery", {
+        p_order_id: row.id,
+        p_delivered_on: deliverOn,
+        p_idempotency_key: deliveryKey.current,
+        p_lines: withLots,
+      });
+      if (saved.error || !saved.data) {
+        toast.error(explainDeliveryError(saved.error?.message ?? ""));
+        return;
+      }
+      deliveryKey.current = null;
+      suggestedOnce.current = false;
+      setDelivering(false);
+      setDeliverQty({});
+      setDeliverLot({});
+      setDeliverHandover({});
+      toast.success(t("orders_delivery_saved"));
+      await refresh();
+    } finally {
+      savingDelivery.current = false;
       setBusy(false);
-      toast.error(
-        payloadError instanceof Error ? payloadError.message : t("delivery_lot_required"),
-      );
+    }
+  }
+
+  async function linkExisting(candidate: LinkCandidate) {
+    if (!row || !commercial || !linkConfirmed) return;
+    const quantity = Number.parseInt(linkQty, 10);
+    const orderLine = orderLines.find((line) => line.product_id === candidate.productId);
+    if (!orderLine || !Number.isInteger(quantity)) {
+      toast.error(t("orders_link_qty"));
       return;
     }
-    const lineInsert = await supabase
-      .from("delivery_lines")
-      .insert(payload)
-      .select("id, product_id, quantity");
-    if (lineInsert.error || !lineInsert.data) {
-      await supabase.from("deliveries").delete().eq("id", inserted.data.id);
-      setBusy(false);
-      toast.error(lineInsert.error?.message ?? t("delivery_lot_required"));
-      return;
-    }
-    const links = lineInsert.data.flatMap((deliveryLine) => {
-      const planned = draft.lines.find((item) => item.productId === deliveryLine.product_id);
-      if (!planned) return [];
-      return [
-        {
-          order_line_id: planned.orderLineId,
-          delivery_line_id: deliveryLine.id,
-          quantity: deliveryLine.quantity,
-        },
-      ];
+    const done = linked
+      .filter((item) => item.order_line_id === orderLine.id)
+      .reduce((sum, item) => sum + item.quantity, 0);
+    const block = fulfillmentBlock({
+      orderStatus: row.status,
+      ordered: orderLine.quantity,
+      alreadyFulfilled: done,
+      delivered: candidate.deliveredQty,
+      alreadyOnDelivery: candidate.deliveredQty - candidate.freeQty,
+      legacyInvoiced: 0,
+      quantity,
+      sameProduct: true,
+      sameSite: true,
     });
-    const linkInsert = await supabase.from("order_line_fulfillments").insert(links);
-    if (linkInsert.error) {
-      await supabase.from("delivery_lines").delete().eq("delivery_id", inserted.data.id);
-      await supabase.from("deliveries").delete().eq("id", inserted.data.id);
-      setBusy(false);
-      toast.error(linkInsert.error.message);
+    if (block || quantity > candidate.freeQty) {
+      toast.error(
+        block?.includes("does not match") ? t("orders_site_mismatch") : t("orders_remaining"),
+      );
       return;
     }
+    setBusy(true);
+    const { error } = await supabase.from("order_line_fulfillments").insert({
+      order_line_id: orderLine.id,
+      delivery_line_id: candidate.deliveryLineId,
+      quantity,
+    });
     setBusy(false);
-    setDelivering(false);
-    setDeliverQty({});
-    setDeliverLot({});
-    toast.success(t("orders_delivery_saved"));
+    if (error) {
+      toast.error(explainDeliveryError(error.message));
+      return;
+    }
+    setLinkLineId("");
+    setLinkQty("");
+    setLinkConfirmed(false);
+    toast.success(t("orders_link_saved"));
     await refresh();
   }
 
@@ -550,6 +663,12 @@ function OrderPage() {
         {t("orders_owner_title")}: <strong>{row.owner_name_snapshot ?? "—"}</strong>
       </p>
       <p className="mt-1 text-sm text-muted-foreground">{t(PROGRESS_KEY[progress])}</p>
+      {row.submitted_name_snapshot ? (
+        <p className="mt-1 text-sm text-muted-foreground">
+          {t("orders_submitted_by")}: {row.submitted_name_snapshot}
+          {row.submitted_at ? ` · ${formatAgreedDelivery(row.submitted_at, lang)}` : ""}
+        </p>
+      ) : null}
       {row.approved_name_snapshot ? (
         <p className="mt-1 text-sm text-muted-foreground">
           {t("orders_approved_by")}: {row.approved_name_snapshot}
@@ -688,132 +807,181 @@ function OrderPage() {
       {canDeliver ? (
         <section className="mt-8 space-y-4">
           {delivering ? (
-            <div className="surface-card space-y-4 p-5">
-              {orderLines.map((line) => {
+            <DeliveryForm
+              siteName={siteName}
+              deliverOn={deliverOn}
+              onDeliverOn={setDeliverOn}
+              lines={orderLines.map((line) => {
                 const done = linked
                   .filter((item) => item.order_line_id === line.id)
                   .reduce((sum, item) => sum + item.quantity, 0);
-                const left = remainingQuantity(line.quantity, done);
-                if (left <= 0) return null;
                 const product = one(line.products);
-                const name =
-                  line.product_name_snapshot ||
-                  (lang === "en" ? product?.name_en : product?.name_no) ||
-                  "—";
-                const typed = Number.parseInt(deliverQty[line.product_id] ?? "", 10);
-                const needed = Number.isInteger(typed) ? typed : 0;
-                const suggested = suggestLotId(
-                  stockLots,
-                  line.product_id,
-                  needed,
-                  deliverLot[line.product_id] ?? "",
-                );
-                const chosen = deliverLot[line.product_id] || suggested;
-                const options = stockLots.filter(
-                  (lot) =>
-                    lot.productId === line.product_id && isOpenLot(lot.status) && lot.remaining > 0,
-                );
-                return (
-                  <div key={line.id} className="grid gap-3 sm:grid-cols-[1fr_8rem_1fr]">
-                    <p className="font-medium">{name}</p>
-                    <input
-                      className={fieldClass}
-                      inputMode="numeric"
-                      aria-label={`${name} ${t("orders_deliver_qty")}`}
-                      placeholder={String(left)}
-                      value={deliverQty[line.product_id] ?? ""}
-                      onChange={(event) =>
-                        setDeliverQty((current) => ({
-                          ...current,
-                          [line.product_id]: event.target.value,
-                        }))
-                      }
-                    />
-                    <label className="block">
-                      <span className="eyebrow mb-2 block">{t("orders_lot")}</span>
-                      <select
-                        className={fieldClass}
-                        value={chosen}
-                        onChange={(event) =>
-                          setDeliverLot((current) => ({
-                            ...current,
-                            [line.product_id]: event.target.value,
-                          }))
-                        }
-                      >
-                        <option value="" />
-                        {options.map((lot) => (
-                          <option key={lot.id} value={lot.id}>
-                            {lot.lotCode} · {lot.remaining}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                  </div>
-                );
+                return {
+                  id: line.id,
+                  productId: line.product_id,
+                  name:
+                    line.product_name_snapshot ||
+                    (lang === "en" ? product?.name_en : product?.name_no) ||
+                    "—",
+                  left: remainingQuantity(line.quantity, done),
+                };
               })}
-              <PrimaryButton type="button" disabled={busy} onClick={() => void saveDelivery()}>
-                {t("orders_save_delivery")}
-              </PrimaryButton>
-            </div>
+              stockLots={stockLots}
+              source={effectiveSource}
+              showSource={showStockSource}
+              onSource={(value) => {
+                setStockSource(value);
+                const drafts = orderLines.map((line) => ({
+                  productId: line.product_id,
+                  quantity: Number.parseInt(deliverQty[line.product_id] ?? "", 10) || 0,
+                  goldLotId: "",
+                  sourceHandoverId: "",
+                }));
+                const assigned = assignStockSource(stockLots, drafts, value);
+                setDeliverLot((current) => {
+                  const next = { ...current };
+                  for (const line of assigned) next[line.productId] = line.goldLotId;
+                  return next;
+                });
+                setDeliverHandover((current) => {
+                  const next = { ...current };
+                  for (const line of assigned) next[line.productId] = line.sourceHandoverId ?? "";
+                  return next;
+                });
+              }}
+              qty={deliverQty}
+              lot={deliverLot}
+              handover={deliverHandover}
+              onQty={(productId, value) =>
+                setDeliverQty((current) => ({ ...current, [productId]: value }))
+              }
+              onLot={(productId, value) =>
+                setDeliverLot((current) => ({ ...current, [productId]: value }))
+              }
+              onHandover={(productId, lotId, handoverId) => {
+                setDeliverLot((current) => ({ ...current, [productId]: lotId }));
+                setDeliverHandover((current) => ({ ...current, [productId]: handoverId }));
+              }}
+              busy={busy}
+              onSave={() => void saveDelivery()}
+            />
           ) : (
-            <PrimaryButton type="button" disabled={busy} onClick={() => setDelivering(true)}>
+            <PrimaryButton
+              type="button"
+              disabled={busy}
+              onClick={() => {
+                const now = new Date();
+                setDeliverOn(
+                  `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`,
+                );
+                if (!deliveryKey.current) deliveryKey.current = crypto.randomUUID();
+                setDelivering(true);
+              }}
+            >
               {t("register_delivery")}
             </PrimaryButton>
           )}
         </section>
       ) : null}
 
+      <DeliveryHistory rows={linked} showDeliveriesLink={operations} />
+
       {registrar ? (
-        <details className="mt-8 rounded-2xl border border-border px-4 py-3">
-          <summary className="cursor-pointer text-sm font-semibold">{t("orders_more")}</summary>
-          <div className="mt-4 space-y-4">
-            <p className="text-sm font-semibold">{t("orders_owner_title")}</p>
-            {approver ? (
-              <label className="block">
-                <span className="eyebrow mb-2 block">{t("orders_owner")}</span>
-                <select
-                  className={fieldClass}
-                  value={ownerId}
-                  onChange={(event) => setOwnerId(event.target.value)}
-                >
-                  <option value="" />
-                  {(staff.data?.staff ?? []).map((person) => (
-                    <option key={person.id} value={person.id}>
-                      {person.fullName || person.username}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            ) : (
-              <p className="text-sm">{row.owner_name_snapshot ?? "—"}</p>
-            )}
-            <TextField label={t("orders_due")} type="date" value={dueOn} onChange={setDueOn} />
-            {row.notes ? <p className="text-sm text-muted-foreground">{row.notes}</p> : null}
-            <div>
-              <p className="eyebrow mb-2">{t("orders_deviation")}</p>
-              <TextAreaField value={deviation} onChange={setDeviation} />
-            </div>
-            <div className="flex flex-wrap gap-2">
+        <section className="mt-8 space-y-4 rounded-2xl border border-border px-4 py-4">
+          <h2 className="text-sm font-semibold">{t("orders_work")}</h2>
+          {approver ? (
+            <label className="block">
+              <span className="eyebrow mb-2 block">{t("orders_owner")}</span>
+              <select
+                className={fieldClass}
+                value={ownerId}
+                onChange={(event) => setOwnerId(event.target.value)}
+              >
+                <option value="" />
+                {(staff.data?.staff ?? []).map((person) => (
+                  <option key={person.id} value={person.id}>
+                    {person.fullName || person.username}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : (
+            <p className="text-sm">
+              {t("orders_owner")}: {row.owner_name_snapshot ?? "—"}
+            </p>
+          )}
+          <TextField label={t("orders_due")} type="date" value={dueOn} onChange={setDueOn} />
+          {row.notes ? <p className="text-sm text-muted-foreground">{row.notes}</p> : null}
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              className="rounded-full border border-border px-4 py-2 text-sm font-semibold"
+              disabled={busy}
+              onClick={() => void saveFollowUp()}
+            >
+              {t("orders_save")}
+            </button>
+            {canCancelOrder(row.status, fulfilledQty) ? (
               <button
                 type="button"
                 className="rounded-full border border-border px-4 py-2 text-sm font-semibold"
                 disabled={busy}
-                onClick={() => void saveProblem()}
+                onClick={() => void setStatus("cancelled")}
               >
-                {t("orders_deviation")}
+                {t("orders_cancel")}
               </button>
-              {canCancelOrder(row.status, fulfilledQty) ? (
-                <button
-                  type="button"
-                  className="rounded-full border border-border px-4 py-2 text-sm font-semibold"
-                  disabled={busy}
-                  onClick={() => void setStatus("cancelled")}
-                >
-                  {t("orders_cancel")}
-                </button>
-              ) : null}
+            ) : null}
+          </div>
+        </section>
+      ) : null}
+
+      {registrar ? (
+        <section className="mt-4 space-y-3 rounded-2xl border border-border px-4 py-4">
+          <h2 className="text-sm font-semibold">{t("orders_deviation")}</h2>
+          <p className="text-sm text-muted-foreground">{t("orders_problem_hint")}</p>
+          <TextAreaField value={deviation} onChange={setDeviation} />
+          <button
+            type="button"
+            className="rounded-full border border-border px-4 py-2 text-sm font-semibold"
+            disabled={busy}
+            onClick={() => void saveProblem()}
+          >
+            {t("orders_deviation")}
+          </button>
+        </section>
+      ) : null}
+
+      {commercial && row.status === "confirmed" ? (
+        <details
+          className="mt-4 rounded-2xl border border-border px-4 py-3"
+          onToggle={(event) => setRepairOpen(event.currentTarget.open)}
+        >
+          <summary className="cursor-pointer text-sm font-semibold">{t("orders_choices")}</summary>
+          <div className="mt-4 space-y-4">
+            <div>
+              <p className="text-sm font-semibold">{t("orders_link_admin")}</p>
+              <p className="mt-1 text-sm text-muted-foreground">{t("orders_link_help")}</p>
             </div>
+            {repairs.isError ? (
+              <p className="text-sm text-destructive">{t("orders_save_failed")}</p>
+            ) : (
+              <RepairList
+                rows={repairs.isLoading ? [] : (repairs.data ?? [])}
+                orderProductIds={new Set(orderLines.map((line) => line.product_id))}
+                selectedId={linkLineId}
+                quantity={linkQty}
+                confirmed={linkConfirmed}
+                busy={busy}
+                onSelect={(id) => {
+                  setLinkLineId(id);
+                  setLinkQty("");
+                  setLinkConfirmed(false);
+                }}
+                onQuantity={setLinkQty}
+                onConfirmed={setLinkConfirmed}
+                onSave={(candidate) => void linkExisting(candidate)}
+              />
+            )}
           </div>
         </details>
       ) : null}
@@ -858,7 +1026,387 @@ function OrderPage() {
   );
 }
 
-function one<T>(value: T | T[] | null): T | null {
+type LinkCandidate = {
+  deliveryLineId: string;
+  deliveredOn: string;
+  recipientName: string;
+  productId: string;
+  productName: string;
+  lotCode: string;
+  deliveredQty: number;
+  freeQty: number;
+};
+
+type RepairDelivery = {
+  id: string;
+  delivered_at: string;
+  customer_name_snapshot: string;
+  delivery_lines:
+    | {
+        id: string;
+        product_id: string;
+        quantity: number;
+        product_name_snapshot: string;
+        gold_lots: { lot_code: string } | { lot_code: string }[] | null;
+        order_line_fulfillments: { quantity: number }[] | null;
+        invoice_draft_lines:
+          { quantity: number; active: boolean; order_line_fulfillment_id: string | null }[] | null;
+      }[]
+    | null;
+};
+
+function toLinkCandidates(
+  rows: RepairDelivery[],
+  orderProductIds: ReadonlySet<string>,
+): LinkCandidate[] {
+  return rows.flatMap((delivery) =>
+    (delivery.delivery_lines ?? []).flatMap((line) => {
+      if (!orderProductIds.has(line.product_id)) return [];
+      const linkedQty = (line.order_line_fulfillments ?? []).reduce(
+        (sum, row) => sum + row.quantity,
+        0,
+      );
+      const legacy = (line.invoice_draft_lines ?? [])
+        .filter((row) => row.active && !row.order_line_fulfillment_id)
+        .reduce((sum, row) => sum + row.quantity, 0);
+      const freeQty = linkableQuantity(line.quantity, linkedQty, legacy);
+      if (freeQty <= 0) return [];
+      return [
+        {
+          deliveryLineId: line.id,
+          deliveredOn: delivery.delivered_at,
+          recipientName: delivery.customer_name_snapshot,
+          productId: line.product_id,
+          productName: line.product_name_snapshot,
+          lotCode: one(line.gold_lots)?.lot_code ?? "—",
+          deliveredQty: line.quantity,
+          freeQty,
+        },
+      ];
+    }),
+  );
+}
+
+function DeliveryHistory({
+  rows,
+  showDeliveriesLink,
+}: {
+  showDeliveriesLink: boolean;
+  rows: {
+    id: string;
+    quantity: number;
+    delivery_lines:
+      | {
+          product_name_snapshot: string;
+          gold_lots: { lot_code: string } | { lot_code: string }[] | null;
+          deliveries:
+            | { id: string; delivered_at: string; note: string | null }
+            | { id: string; delivered_at: string; note: string | null }[]
+            | null;
+        }
+      | {
+          product_name_snapshot: string;
+          gold_lots: { lot_code: string } | { lot_code: string }[] | null;
+          deliveries:
+            | { id: string; delivered_at: string; note: string | null }
+            | { id: string; delivered_at: string; note: string | null }[]
+            | null;
+        }[]
+      | null;
+  }[];
+}) {
+  const { t, lang } = useI18n();
+  const grouped = new Map<
+    string,
+    { deliveredAt: string; lines: { name: string; lot: string; quantity: number }[] }
+  >();
+  for (const row of rows) {
+    const line = one(row.delivery_lines);
+    const delivery = line ? one(line.deliveries) : null;
+    if (!line || !delivery) continue;
+    const current = grouped.get(delivery.id) ?? { deliveredAt: delivery.delivered_at, lines: [] };
+    current.lines.push({
+      name: line.product_name_snapshot,
+      lot: one(line.gold_lots)?.lot_code ?? "—",
+      quantity: row.quantity,
+    });
+    grouped.set(delivery.id, current);
+  }
+  const history = [...grouped.entries()];
+  return (
+    <section className="mt-8">
+      <h2 className="text-sm font-semibold">{t("orders_history")}</h2>
+      {history.length === 0 ? (
+        <p className="mt-2 text-sm text-muted-foreground">{t("orders_history_empty")}</p>
+      ) : (
+        <div className="mt-3 space-y-3">
+          {history.map(([id, delivery]) => (
+            <article key={id} className="rounded-2xl border border-border px-4 py-3 text-sm">
+              <p className="font-semibold">{formatAgreedDelivery(delivery.deliveredAt, lang)}</p>
+              {delivery.lines.map((line) => (
+                <p key={`${id}-${line.lot}-${line.name}`} className="mt-1 text-muted-foreground">
+                  {line.name} · {line.lot} · {line.quantity} {t("pcs")}
+                </p>
+              ))}
+              {showDeliveriesLink ? (
+                <Link
+                  to="/admin/deliveries"
+                  search={{ lot: "" }}
+                  className="mt-2 inline-block font-semibold"
+                >
+                  {t("deliveries")}
+                </Link>
+              ) : null}
+            </article>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function DeliveryForm({
+  siteName,
+  deliverOn,
+  onDeliverOn,
+  lines,
+  stockLots,
+  source,
+  showSource,
+  onSource,
+  qty,
+  lot,
+  handover,
+  onQty,
+  onLot,
+  onHandover,
+  busy,
+  onSave,
+}: {
+  siteName: string;
+  deliverOn: string;
+  onDeliverOn: (value: string) => void;
+  lines: { id: string; productId: string; name: string; left: number }[];
+  stockLots: ReturnType<typeof toStockLots>;
+  source: StockSource;
+  showSource: boolean;
+  onSource: (value: StockSource) => void;
+  qty: Record<string, string>;
+  lot: Record<string, string>;
+  handover: Record<string, string>;
+  onQty: (productId: string, value: string) => void;
+  onLot: (productId: string, value: string) => void;
+  onHandover: (productId: string, lotId: string, handoverId: string) => void;
+  busy: boolean;
+  onSave: () => void;
+}) {
+  const { t } = useI18n();
+  return (
+    <div className="surface-card space-y-4 p-5">
+      <p className="text-sm">
+        {t("orders_delivers_to")}: <strong>{siteName}</strong>
+      </p>
+      <TextField label={t("date")} type="date" value={deliverOn} onChange={onDeliverOn} />
+      {showSource ? (
+        <div>
+          <span className="eyebrow mb-2 block">{t("stock_source")}</span>
+          <div className="flex gap-2">
+            {(["gold", "villa"] as const).map((value) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => onSource(value)}
+                className={`rounded-full px-4 py-2 text-sm font-semibold ${
+                  source === value
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-muted text-muted-foreground"
+                }`}
+              >
+                {value === "gold" ? t("stock_from_gold") : t("stock_from_villa")}
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
+      {lines.map((line) => {
+        if (line.left <= 0) return null;
+        const typed = Number.parseInt(qty[line.productId] ?? "", 10);
+        const needed = Number.isInteger(typed) ? typed : 0;
+        const available =
+          source === "villa"
+            ? villaOptions(stockLots, line.productId).reduce(
+                (max, item) => Math.max(max, item.remaining),
+                0,
+              )
+            : openLotsForProduct(stockLots, line.productId).reduce(
+                (max, item) => Math.max(max, item.remaining),
+                0,
+              );
+        const suggested = suggestedDeliveryQuantity(line.left, available);
+        const short = needed > 0 && needed > available;
+        const villaPick =
+          source === "villa"
+            ? suggestVillaHandover(
+                stockLots,
+                line.productId,
+                needed,
+                handover[line.productId] ?? "",
+              )
+            : null;
+        const goldPick = suggestLotId(stockLots, line.productId, needed, lot[line.productId] ?? "");
+        const chosenLot =
+          source === "villa"
+            ? (villaPick?.lotId ?? lot[line.productId] ?? "")
+            : lot[line.productId] || goldPick;
+        const options = openLotsForProduct(stockLots, line.productId);
+        const villaChoices = villaOptions(stockLots, line.productId).filter(
+          (item) => item.remaining > 0,
+        );
+        return (
+          <div key={line.id} className="space-y-2">
+            <div className="grid gap-3 sm:grid-cols-[1fr_8rem_auto_1fr]">
+              <p className="font-medium">
+                {line.name}
+                <span className="mt-1 block text-sm font-normal text-muted-foreground">
+                  {t("orders_remaining")} {line.left} {t("pcs")}
+                  {suggested > 0 ? ` · ${t("orders_suggested")} ${suggested}` : ""}
+                </span>
+              </p>
+              <input
+                className={fieldClass}
+                inputMode="numeric"
+                aria-label={`${line.name} ${t("orders_deliver_qty")}`}
+                value={qty[line.productId] ?? ""}
+                onChange={(event) => onQty(line.productId, event.target.value)}
+              />
+              <span className="self-center text-sm text-muted-foreground">{t("pcs")}</span>
+              {source === "villa" ? (
+                <label className="block">
+                  <span className="eyebrow mb-2 block">{t("orders_lot")}</span>
+                  <select
+                    className={fieldClass}
+                    value={handover[line.productId] || villaPick?.handoverId || ""}
+                    onChange={(event) => {
+                      const picked = villaChoices.find((item) => item.id === event.target.value);
+                      onHandover(line.productId, picked?.lotId ?? "", event.target.value);
+                    }}
+                  >
+                    <option value="" />
+                    {villaChoices.map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.lotCode} · {item.remaining}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : (
+                <label className="block">
+                  <span className="eyebrow mb-2 block">{t("orders_lot")}</span>
+                  <select
+                    className={fieldClass}
+                    value={chosenLot}
+                    onChange={(event) => onLot(line.productId, event.target.value)}
+                  >
+                    <option value="" />
+                    {options.map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.lotCode} · {item.remaining}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+            </div>
+            {short ? <p className="text-sm text-destructive">{t("orders_stock_short")}</p> : null}
+          </div>
+        );
+      })}
+      <PrimaryButton type="button" disabled={busy} onClick={onSave}>
+        {t("orders_save_delivery")}
+      </PrimaryButton>
+    </div>
+  );
+}
+
+function RepairList({
+  rows,
+  orderProductIds,
+  selectedId,
+  quantity,
+  confirmed,
+  busy,
+  onSelect,
+  onQuantity,
+  onConfirmed,
+  onSave,
+}: {
+  rows: RepairDelivery[];
+  orderProductIds: ReadonlySet<string>;
+  selectedId: string;
+  quantity: string;
+  confirmed: boolean;
+  busy: boolean;
+  onSelect: (id: string) => void;
+  onQuantity: (value: string) => void;
+  onConfirmed: (value: boolean) => void;
+  onSave: (candidate: LinkCandidate) => void;
+}) {
+  const { t, lang } = useI18n();
+  const candidates = toLinkCandidates(rows, orderProductIds);
+  const selected = candidates.find((row) => row.deliveryLineId === selectedId) ?? null;
+  if (candidates.length === 0) {
+    return <p className="text-sm text-muted-foreground">{t("orders_link_empty")}</p>;
+  }
+  return (
+    <div className="space-y-3">
+      {candidates.map((row) => (
+        <label
+          key={row.deliveryLineId}
+          className="block rounded-2xl border border-border p-3 text-sm"
+        >
+          <span className="flex items-start gap-2">
+            <input
+              type="radio"
+              name="repair-delivery"
+              checked={selectedId === row.deliveryLineId}
+              onChange={() => onSelect(row.deliveryLineId)}
+            />
+            <span>
+              {formatAgreedDelivery(row.deliveredOn, lang)} · {row.recipientName}
+              <span className="mt-1 block text-muted-foreground">
+                {row.productName} · {row.lotCode} · {t("orders_delivered_qty")} {row.deliveredQty}{" "}
+                {t("pcs")} · {t("orders_link_free")} {row.freeQty} {t("pcs")}
+              </span>
+            </span>
+          </span>
+        </label>
+      ))}
+      {selected ? (
+        <div className="space-y-3">
+          <TextField label={t("orders_link_qty")} value={quantity} onChange={onQuantity} />
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={confirmed}
+              onChange={(event) => onConfirmed(event.target.checked)}
+            />
+            {t("orders_link_confirm")}
+          </label>
+          <button
+            type="button"
+            className="rounded-full border border-border px-4 py-2 text-sm font-semibold"
+            disabled={busy || !confirmed || quantity.trim() === ""}
+            onClick={() => onSave(selected)}
+          >
+            {t("orders_link")}
+          </button>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function one<T>(value: T | T[] | null | undefined): T | null {
   if (!value) return null;
   return Array.isArray(value) ? (value[0] ?? null) : value;
 }

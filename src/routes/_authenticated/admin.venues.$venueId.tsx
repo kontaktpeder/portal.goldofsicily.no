@@ -71,7 +71,7 @@ function CustomerDetail() {
       const [customer, reports, deliveriesRes, profile, menu, products, wholesalers] = await Promise.all([
         supabase
           .from("customers")
-          .select("*, supplier:customers!customers_supplied_by_customer_id_fkey(id, name)")
+          .select("*")
           .eq("id", venueId)
           .eq("type", "venue")
           .maybeSingle(),
@@ -110,8 +110,14 @@ function CustomerDetail() {
             .order("delivered_at", { ascending: false })
             .limit(100)
         : deliveriesRes;
+      const supplierId = customer.data?.supplied_by_customer_id ?? null;
+      const supplierRes = supplierId
+        ? await supabase.from("customers").select("id, name").eq("id", supplierId).maybeSingle()
+        : null;
       return {
-        customer: customer.data,
+        customer: customer.data
+          ? { ...customer.data, supplier: supplierRes?.data ?? null }
+          : null,
         reports: reports.data ?? [],
         deliveries: deliveries.data ?? [],
         profile: profile.data,

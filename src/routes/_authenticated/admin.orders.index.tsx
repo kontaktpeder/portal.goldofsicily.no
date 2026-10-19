@@ -11,10 +11,10 @@ import { useSessionInfo } from "@/hooks/use-session";
 import { canApproveOrders, canRegisterOrders } from "@/lib/access";
 import { useI18n, type TranslationKey } from "@/lib/i18n";
 import {
+  formatAgreedDelivery,
   isOrderSchemaError,
   orderListBucket,
   orderListRank,
-  orderPartyLabel,
   orderPrimaryAction,
   orderProgress,
   type OrderProgress,
@@ -59,8 +59,6 @@ function OrdersPage() {
   const staffFn = useServerFn(listProductionStaff);
   const [openForm, setOpenForm] = useState(false);
   const [orderedBy, setOrderedBy] = useState("");
-  const [otherSite, setOtherSite] = useState(false);
-  const [shipTo, setShipTo] = useState("");
   const [contact, setContact] = useState("");
   const [desiredOn, setDesiredOn] = useState("");
   const [agreedOn, setAgreedOn] = useState("");
@@ -136,8 +134,7 @@ function OrdersPage() {
       if (!Number.isInteger(quantity) || quantity <= 0) continue;
       prepared.set(productId, quantity);
     }
-    const site = otherSite ? shipTo : orderedBy;
-    if (!orderedBy || !site || prepared.size === 0) {
+    if (!orderedBy || prepared.size === 0) {
       toast.error(t("delivery_missing"));
       return;
     }
@@ -151,7 +148,7 @@ function OrdersPage() {
       .from("customer_orders")
       .insert({
         ordered_by_customer_id: orderedBy,
-        ship_to_customer_id: site,
+        ship_to_customer_id: orderedBy,
         contact_name: contact.trim() || null,
         desired_delivery_on: desiredOn || null,
         owner_id: ownerId || userId,
@@ -163,7 +160,7 @@ function OrdersPage() {
       .single();
     if (error || !created) {
       setBusy(false);
-      toast.error(errorMessage(error, t("invoice_failed")));
+      toast.error(errorMessage(error, t("orders_save_failed")));
       return;
     }
     const { error: lineError } = await supabase.from("customer_order_lines").insert(
@@ -196,12 +193,18 @@ function OrdersPage() {
       toast.error(
         statusError.message.includes("missing price")
           ? t("orders_price_missing")
-          : statusError.message,
+          : statusError.message.includes("only a production lead")
+            ? t("orders_forbidden")
+            : isOrderSchemaError(statusError.message)
+              ? t("orders_pending_sql")
+              : t("orders_save_failed"),
       );
     } else {
       toast.success(action === "approve" ? t("orders_confirmed") : t("orders_submitted"));
     }
     await queryClient.invalidateQueries({ queryKey: ["customer-orders"] });
+    await queryClient.invalidateQueries({ queryKey: ["order-approval-notices"] });
+    await queryClient.invalidateQueries({ queryKey: ["ops-home"] });
     void navigate({ to: "/admin/orders/$orderId", params: { orderId: created.id } });
   }
 
@@ -211,8 +214,10 @@ function OrdersPage() {
     return orderListRank(progressA) - orderListRank(progressB);
   });
   const queue = rows.filter((row) => orderListBucket(progressOf(row)) === "queue");
-  const open = rows.filter((row) => orderListBucket(progressOf(row)) === "open");
+  const deliver = rows.filter((row) => orderListBucket(progressOf(row)) === "deliver");
+  const working = rows.filter((row) => orderListBucket(progressOf(row)) === "working");
   const earlier = rows.filter((row) => orderListBucket(progressOf(row)) === "earlier");
+  const chosen = (customers.data ?? []).find((customer) => customer.id === orderedBy) ?? null;
 
   return (
     <main className="mx-auto w-full max-w-5xl px-5 pb-16">
@@ -271,34 +276,17 @@ function OrdersPage() {
               />
             ) : null}
           </div>
-          <label className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={otherSite}
-              onChange={(event) => setOtherSite(event.target.checked)}
-            />
-            {t("orders_different_site")}
-          </label>
-          {otherSite ? (
-            <label className="block">
-              <span className="eyebrow mb-2 block">{t("orders_ship_to")}</span>
-              <select
-                className={fieldClass}
-                value={shipTo}
-                onChange={(event) => setShipTo(event.target.value)}
-              >
-                <option value="" />
-                {(customers.data ?? []).map((customer) => (
-                  <option key={customer.id} value={customer.id}>
-                    {customer.name}
-                  </option>
-                ))}
-              </select>
-            </label>
+          {chosen ? (
+            <p className="text-sm">
+              {t("orders_delivers_to")}: <strong>{chosen.name}</strong>
+            </p>
           ) : null}
           <div className="space-y-3">
             {(products.data ?? []).map((product) => (
-              <label key={product.id} className="grid items-center gap-3 sm:grid-cols-[1fr_8rem]">
+              <label
+                key={product.id}
+                className="grid items-center gap-3 sm:grid-cols-[1fr_8rem_auto]"
+              >
                 <span className="font-medium">
                   {lang === "en" ? product.name_en : product.name_no}
                 </span>
@@ -311,6 +299,7 @@ function OrdersPage() {
                     setQuantities((current) => ({ ...current, [product.id]: event.target.value }))
                   }
                 />
+                <span className="text-sm text-muted-foreground">{t("pcs")}</span>
               </label>
             ))}
           </div>
@@ -349,10 +338,11 @@ function OrdersPage() {
 
       <OrderGroup title={t("orders_queue")} rows={queue} empty={null} />
       <OrderGroup
-        title={t("orders_open")}
-        rows={open}
+        title={t("orders_to_deliver")}
+        rows={deliver}
         empty={rows.length === 0 ? t("orders_empty") : null}
       />
+      <OrderGroup title={t("orders_working")} rows={working} empty={null} />
       {earlier.length > 0 ? (
         <details className="mt-8">
           <summary className="cursor-pointer text-sm font-semibold text-muted-foreground">
@@ -370,6 +360,8 @@ type OrderListRow = {
   order_number: string;
   status: string;
   contact_name: string | null;
+  desired_delivery_on: string | null;
+  confirmed_delivery_on: string | null;
   owner_name_snapshot: string | null;
   ordered_by: { name: string } | { name: string }[] | null;
   ship_to: { name: string } | { name: string }[] | null;
@@ -396,7 +388,7 @@ function OrderGroup({
   rows: OrderListRow[];
   empty: string | null;
 }) {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   if (rows.length === 0 && !empty) return null;
   return (
     <section className="mt-8">
@@ -418,12 +410,7 @@ function OrderGroup({
           );
           const progress = progressOf(order);
           const orderer = one(order.ordered_by)?.name ?? "—";
-          const site = one(order.ship_to)?.name ?? "—";
-          const party = orderPartyLabel({
-            ordererName: orderer,
-            shipToName: site,
-            contactName: order.contact_name,
-          });
+          const when = order.confirmed_delivery_on || order.desired_delivery_on;
           return (
             <Link
               key={order.id}
@@ -431,15 +418,14 @@ function OrderGroup({
               params={{ orderId: order.id }}
               className="surface-card flex items-center justify-between gap-3 p-5"
             >
-              <div>
+              <div className="min-w-0">
                 <p className="font-semibold">
                   {orderer} · {order.order_number}
                 </p>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  {t(PROGRESS_KEY[progress])}
-                  {party.contact ? ` · ${t("orders_contact_line")}: ${party.contact}` : ""}
-                  {party.site ? ` · ${party.site}` : ""}
-                  {` · ${t("orders_remaining")} ${Math.max(0, ordered - fulfilled)}`}
+                  {when ? formatAgreedDelivery(when, lang) : "—"}
+                  {` · ${t(PROGRESS_KEY[progress])}`}
+                  {` · ${t("orders_remaining")} ${Math.max(0, ordered - fulfilled)} ${t("pcs")}`}
                   {order.owner_name_snapshot ? ` · ${order.owner_name_snapshot}` : ""}
                 </p>
               </div>

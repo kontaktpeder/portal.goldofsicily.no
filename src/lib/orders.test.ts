@@ -9,6 +9,8 @@ import {
   isOrderSchemaError,
   legacyInvoicePortions,
   orderInvoicePortions,
+  deliveryErrorKind,
+  linkableQuantity,
   orderListBucket,
   orderListRank,
   orderPartyLabel,
@@ -16,6 +18,7 @@ import {
   orderProgress,
   productionNeed,
   remainingQuantity,
+  suggestedDeliveryQuantity,
   type ActiveInvoiceSlice,
   type DeskDelivery,
   type DeskFulfillment,
@@ -221,12 +224,93 @@ test("the role decides the one next action, and open orders come before history"
   assert.equal(orderPrimaryAction(true), "approve");
   assert.equal(orderPrimaryAction(false), "submit");
   assert.equal(orderListBucket("pending_confirmation"), "queue");
-  assert.equal(orderListBucket("changes_requested"), "open");
+  assert.equal(orderListBucket("confirmed"), "deliver");
+  assert.equal(orderListBucket("partially_delivered"), "deliver");
+  assert.equal(orderListBucket("changes_requested"), "working");
+  assert.equal(orderListBucket("draft"), "working");
   assert.equal(orderListBucket("delivered"), "earlier");
   assert.ok(orderListRank("pending_confirmation") < orderListRank("draft"));
   assert.ok(orderListRank("partially_delivered") < orderListRank("delivered"));
   assert.equal(formatAgreedDelivery("2026-10-25", "no"), "25. oktober");
   assert.equal(orderProgress("changes_requested", 10, 0), "changes_requested");
+});
+
+test("two partial deliveries of 5 per flavor leave 10, then mark the order delivered", () => {
+  const ordered = 10 + 10;
+  const first = 5 + 5;
+  assert.equal(remainingQuantity(ordered, first), 10);
+  assert.equal(orderProgress("confirmed", ordered, first), "partially_delivered");
+  assert.equal(orderListBucket("partially_delivered"), "deliver");
+  assert.equal(orderProgress("confirmed", ordered, ordered), "delivered");
+  assert.equal(orderListBucket("delivered"), "earlier");
+  assert.equal(suggestedDeliveryQuantity(10, 8), 8);
+  assert.equal(suggestedDeliveryQuantity(10, 0), 0);
+  assert.equal(suggestedDeliveryQuantity(0, 5), 0);
+  assert.equal(linkableQuantity(10, 4, 2), 4);
+  assert.equal(
+    fulfillmentBlock({
+      orderStatus: "confirmed",
+      ordered: 10,
+      alreadyFulfilled: 0,
+      delivered: 10,
+      alreadyOnDelivery: 0,
+      legacyInvoiced: 0,
+      quantity: 10,
+      sameProduct: true,
+      sameSite: false,
+    }),
+    "delivery site does not match the order",
+  );
+});
+
+test("stock, schema and a wrong recipient become understandable delivery errors", () => {
+  assert.equal(deliveryErrorKind("Gold-LOT har ikke nok tilgjengelig beholdning"), "stock");
+  assert.equal(
+    deliveryErrorKind("Could not find the function public.register_order_delivery"),
+    "schema",
+  );
+  assert.equal(deliveryErrorKind("delivery site does not match the order"), "site");
+  assert.equal(deliveryErrorKind("fulfillment exceeds ordered quantity"), "quantity");
+});
+
+test("two partial fulfillments invoice the frozen price once each", () => {
+  const portions: DeskFulfillment[] = [
+    {
+      id: "first-five",
+      deliveryLineId: "delivery-a",
+      quantity: 5,
+      unitPriceOre: 2500,
+      billingLegalEntityId: "villa-entity",
+    },
+    {
+      id: "second-five",
+      deliveryLineId: "delivery-b",
+      quantity: 5,
+      unitPriceOre: 2500,
+      billingLegalEntityId: "villa-entity",
+    },
+  ];
+  const open = orderInvoicePortions(portions, []);
+  assert.equal(open.length, 2);
+  assert.equal(
+    open.reduce((sum, row) => sum + row.quantity * row.unitPriceOre, 0),
+    25000,
+  );
+  const afterFirst: ActiveInvoiceSlice[] = [
+    { deliveryLineId: "delivery-a", fulfillmentId: "first-five", quantity: 5 },
+  ];
+  const rest = orderInvoicePortions(portions, afterFirst);
+  assert.deepEqual(
+    rest.map((row) => row.id),
+    ["second-five"],
+  );
+  assert.deepEqual(
+    orderInvoicePortions(portions, [
+      ...afterFirst,
+      { deliveryLineId: "delivery-b", fulfillmentId: "second-five", quantity: 5 },
+    ]),
+    [],
+  );
 });
 
 test("a delivery registered on the order keeps the site and the order lines", () => {
@@ -261,6 +345,30 @@ test("approval is stored by the database and an employee cannot confirm", () => 
   assert.match(sql, /role::text IN \('admin', 'ops', 'employee'\)/);
   assert.doesNotMatch(sql, /net\.http|unimicro|send.?mail/i);
   assert.equal(isOrderSchemaError("column approved_name_snapshot does not exist"), true);
+});
+
+test("delivery from an order is one transaction and an employee still cannot confirm", () => {
+  const sql = readFileSync(new URL("../../sql/24_order_delivery.sql", import.meta.url), "utf8");
+  const migration = readFileSync(
+    new URL("../../supabase/migrations/20261019140000_order_delivery.sql", import.meta.url),
+    "utf8",
+  );
+  assert.equal(
+    sql.slice(sql.indexOf("ALTER TABLE")),
+    migration.slice(migration.indexOf("ALTER TABLE")),
+  );
+  assert.match(sql, /only a production lead or admin can approve an order/);
+  assert.match(sql, /NEW\.submitted_by := auth\.uid\(\)/);
+  assert.match(sql, /NEW\.submitted_at := now\(\)/);
+  assert.match(sql, /this order is already approved/);
+  assert.match(sql, /FOR UPDATE/);
+  assert.match(sql, /sale\.ship_to_customer_id/);
+  assert.match(sql, /INSERT INTO public\.order_delivery_requests/);
+  assert.match(sql, /CREATE OR REPLACE FUNCTION public\.register_order_delivery/);
+  assert.match(sql, /customers_supplied_by_customer_id_fkey not added/);
+  assert.doesNotMatch(sql, /UPDATE public\.customers/);
+  assert.doesNotMatch(sql, /net\.http|unimicro|send.?mail/i);
+  assert.equal(isOrderSchemaError("function register_order_delivery does not exist"), true);
 });
 
 test("the database freezes the recipient and guards quantities", () => {

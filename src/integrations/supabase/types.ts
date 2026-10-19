@@ -279,6 +279,9 @@ export type Database = {
           approved_at: string | null
           approved_by: string | null
           approved_name_snapshot: string | null
+          submitted_at: string | null
+          submitted_by: string | null
+          submitted_name_snapshot: string | null
           confirmed_at: string | null
           confirmed_delivery_on: string | null
           contact_name: string | null
@@ -301,6 +304,9 @@ export type Database = {
           approved_at?: string | null
           approved_by?: string | null
           approved_name_snapshot?: string | null
+          submitted_at?: string | null
+          submitted_by?: string | null
+          submitted_name_snapshot?: string | null
           billing_legal_entity_id?: string | null
           billing_legal_name_snapshot?: string | null
           billing_organization_number_snapshot?: string | null
@@ -326,6 +332,9 @@ export type Database = {
           approved_at?: string | null
           approved_by?: string | null
           approved_name_snapshot?: string | null
+          submitted_at?: string | null
+          submitted_by?: string | null
+          submitted_name_snapshot?: string | null
           billing_legal_entity_id?: string | null
           billing_legal_name_snapshot?: string | null
           billing_organization_number_snapshot?: string | null
@@ -1690,6 +1699,15 @@ export type Database = {
         Returns: string
       }
       slugify_name: { Args: { input: string }; Returns: string }
+      register_order_delivery: {
+        Args: {
+          p_order_id: string
+          p_delivered_on: string
+          p_idempotency_key: string
+          p_lines: Json
+        }
+        Returns: string
+      }
       submit_shift_report: {
         Args: {
           p_actual_quantity_received?: number | null

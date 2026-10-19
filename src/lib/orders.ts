@@ -36,12 +36,14 @@ export function orderPrimaryAction(canApprove: boolean): "approve" | "submit" {
   return canApprove ? "approve" : "submit";
 }
 
-export type OrderListBucket = "queue" | "open" | "earlier";
+export type OrderListBucket = "queue" | "deliver" | "working" | "earlier";
 
+/** Waiting, still to deliver, drafts under work, then finished orders. */
 export function orderListBucket(progress: OrderProgress): OrderListBucket {
   if (progress === "pending_confirmation") return "queue";
+  if (progress === "confirmed" || progress === "partially_delivered") return "deliver";
   if (progress === "delivered" || progress === "cancelled") return "earlier";
-  return "open";
+  return "working";
 }
 
 const LIST_RANK: Record<OrderProgress, number> = {
@@ -127,9 +129,41 @@ export function orderDeliveryDraft(input: {
 }
 
 export function isOrderSchemaError(message: string): boolean {
-  return /customer_orders|customer_order_status|approved_name_snapshot|return_note|changes_requested/.test(
+  return /customer_orders|customer_order_status|approved_name_snapshot|submitted_name_snapshot|return_note|changes_requested|register_order_delivery|order_delivery_requests/.test(
     message,
   );
+}
+
+/** A suggestion only. Denis still types the quantity that was actually handed over. */
+export function suggestedDeliveryQuantity(remaining: number, lotAvailable: number): number {
+  if (remaining <= 0 || lotAvailable <= 0) return 0;
+  return Math.min(Math.floor(remaining), Math.floor(lotAvailable));
+}
+
+/** Free quantity on an existing delivery line, after links and a legacy invoice. */
+export function linkableQuantity(
+  delivered: number,
+  alreadyLinked: number,
+  legacyInvoiced: number,
+): number {
+  return Math.max(0, delivered - alreadyLinked - legacyInvoiced);
+}
+
+export type DeliveryErrorKind = "schema" | "stock" | "lot" | "site" | "quantity" | "other";
+
+export function deliveryErrorKind(message: string): DeliveryErrorKind {
+  if (
+    /register_order_delivery|order_delivery_requests|submitted_name_snapshot|schema cache|PGRST202/i.test(
+      message,
+    )
+  ) {
+    return "schema";
+  }
+  if (/does not match the order/i.test(message)) return "site";
+  if (/ikke nok|not enough|insufficient|villa stock is short/i.test(message)) return "stock";
+  if (/gold_lot|requires gold_lot|ikke åpen|not open/i.test(message)) return "lot";
+  if (/exceeds|overlaps|quantity is missing|already approved/i.test(message)) return "quantity";
+  return "other";
 }
 
 export function orderPartyLabel(input: {
