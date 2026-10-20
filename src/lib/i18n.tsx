@@ -945,8 +945,32 @@ const dict = {
     en: "The orderer has no price on the confirmed date.",
   },
   orders_pending_sql: {
-    no: "Kjør sql/26_order_advance.sql i Lovable Cloud. sql/22, sql/23, sql/24 og sql/25 må være kjørt først.",
-    en: "Run sql/26_order_advance.sql in Lovable Cloud. sql/22, sql/23, sql/24 and sql/25 must already be applied.",
+    no: "Kjør sql/27_advance_dnb_check.sql i Lovable Cloud etter sql/26. sql/22 til sql/26 må være kjørt først.",
+    en: "Run sql/27_advance_dnb_check.sql in Lovable Cloud after sql/26. sql/22 through sql/26 must already be applied.",
+  },
+  orders_payment_unchecked: { no: "Betaling ikke kontrollert", en: "Payment not checked" },
+  orders_advance_planned: { no: "Planlagt avregning", en: "Planned offset" },
+  orders_advance_confirmed: { no: "Bekreftet i DNB", en: "Confirmed in DNB" },
+  orders_advance_unconfirmed: {
+    no: "Avregning ikke kontrollert i DNB",
+    en: "Offset not checked in DNB",
+  },
+  orders_advance_not_applied: {
+    no: "Avregning ikke bekreftet i DNB",
+    en: "Offset not confirmed in DNB",
+  },
+  orders_advance_surplus: {
+    no: "Overskytende forskudd må håndteres i DNB",
+    en: "Surplus advance must be handled in DNB",
+  },
+  orders_previously_invoiced: { no: "Tidligere fakturert", en: "Previously invoiced" },
+  orders_dnb_company: {
+    no: "Åpne selskapet {name} i DNB. Lenken velger dokumentet, ikke selskapet.",
+    en: "Open the company {name} in DNB. The link chooses the document, not the company.",
+  },
+  orders_dnb_company_unknown: {
+    no: "Lenken kan ikke velge selskap. Åpne selskapet som er koblet til portalen, og deretter dokumentet.",
+    en: "The link cannot choose the company. Open the company connected to the portal, then the document.",
   },
   orders_goods: { no: "Varer", en: "Goods" },
   orders_settlement: { no: "Oppgjør", en: "Settlement" },

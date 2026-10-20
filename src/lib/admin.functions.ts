@@ -559,6 +559,31 @@ export const refreshInvoiceDraft = createServerFn({ method: "POST" })
     return refreshInvoiceBasis(supabaseAdmin, data.draftId, process.env);
   });
 
+export const syncOrderAdvance = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((data: unknown) =>
+    z
+      .object({
+        orderId: z.string().uuid(),
+        settlementDraftId: z.string().uuid().nullable(),
+      })
+      .parse(data),
+  )
+  .handler(async ({ data, context }) => {
+    await assertOperations(context.supabase as never);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { syncOrderAdvance: sync } = await import("@/lib/dnb-advance-sync");
+    return sync(supabaseAdmin, data.orderId, data.settlementDraftId, process.env);
+  });
+
+export const dnbCompanyName = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    await assertOperations(context.supabase as never);
+    const { readDnbCompanyName } = await import("@/lib/dnb-advance-sync");
+    return { name: await readDnbCompanyName(process.env) };
+  });
+
 export const adminExists = createServerFn({ method: "GET" }).handler(async () => {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const { count } = await supabaseAdmin

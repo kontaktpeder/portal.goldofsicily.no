@@ -3,12 +3,15 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
   agreedAdvanceOre,
+  finalOffsetPlan,
   goodsDnbFigures,
   offsetAmount,
   orderBasisOre,
   orderWorkActions,
   receivedAdvance,
+  settlementClaims,
   settlementView,
+  type SettlementView,
 } from "./order-advance.ts";
 
 const BASIS = 15_450_000;
@@ -16,38 +19,80 @@ const ADVANCE = 7_725_000;
 const VAT = 1_942_500;
 const TOTAL = 17_392_500;
 const REMAINING = 9_667_500;
+const PARTIAL = 10_000_000;
+const FINAL = 5_450_000;
 
-test("the Villa advance is half the ex-VAT basis and is not treated as paid", () => {
+function view(overrides: Partial<Parameters<typeof settlementView>[0]> = {}): SettlementView {
+  return settlementView({
+    percent: 50,
+    basisOre: BASIS,
+    agreedOre: ADVANCE,
+    claimedOre: ADVANCE,
+    paymentChecked: false,
+    payments: [],
+    dnbReceivedOre: null,
+    dnbRestOre: null,
+    finalClaimOre: null,
+    alreadyPlannedOre: 0,
+    storedSurplusOre: null,
+    confirmedOre: null,
+    previouslyInvoicedOre: 0,
+    vatOre: null,
+    totalOre: null,
+    remainingOre: null,
+    ...overrides,
+  });
+}
+
+test("an unchecked advance is unknown, not unpaid", () => {
   assert.equal(agreedAdvanceOre(BASIS, 50), ADVANCE);
   assert.equal(orderBasisOre([{ quantity: 6180, unitPriceOre: 2500 }]), BASIS);
   assert.equal(orderBasisOre([{ quantity: 6180, unitPriceOre: null }]), null);
   assert.equal(agreedAdvanceOre(BASIS, 0), 0);
   assert.equal(agreedAdvanceOre(BASIS, 101), 0);
 
-  const open = settlementView({
-    percent: 50,
-    basisOre: BASIS,
-    agreedOre: ADVANCE,
-    claimedOre: ADVANCE,
-    payments: [],
-    dnbReceivedOre: null,
-    dnbRestOre: null,
-    offsetOre: 0,
-    vatOre: null,
-    totalOre: null,
-    remainingOre: null,
-  });
-  assert.equal(open.receivedOre, 0);
-  assert.equal(open.receivedFrom, "none");
-  assert.equal(open.outstandingOre, ADVANCE);
+  const open = view();
+  assert.equal(open.receivedOre, null);
+  assert.equal(open.receivedFrom, "unchecked");
+  assert.equal(open.outstandingOre, null);
+  assert.equal(open.plannedOre, null);
   assert.equal(open.claimedOre, ADVANCE);
   assert.equal(open.vatOre, null);
   assert.equal(open.totalOre, null);
   assert.equal(open.remainingOre, null);
 });
 
+test("zero is only used after DNB has reported a number", () => {
+  const unpaid = view({
+    paymentChecked: true,
+    dnbReceivedOre: 0,
+    dnbRestOre: ADVANCE,
+  });
+  assert.equal(unpaid.receivedOre, 0);
+  assert.equal(unpaid.receivedFrom, "dnb");
+  assert.equal(unpaid.outstandingOre, ADVANCE);
+
+  const settled = view({
+    paymentChecked: true,
+    dnbReceivedOre: ADVANCE,
+    dnbRestOre: 0,
+    finalClaimOre: FINAL,
+    vatOre: VAT,
+    totalOre: TOTAL,
+    remainingOre: REMAINING,
+  });
+  assert.equal(settled.outstandingOre, 0);
+  assert.equal(settled.receivedOre, ADVANCE);
+  assert.equal(settled.plannedOre, FINAL);
+  assert.equal(settled.surplusOre, ADVANCE - FINAL);
+  assert.equal(settled.vatOre, VAT);
+  assert.equal(settled.totalOre, TOTAL);
+  assert.equal(settled.remainingOre, REMAINING);
+});
+
 test("payments arrive in several rows and a DNB balance is not added on top", () => {
   const received = receivedAdvance({
+    paymentChecked: true,
     payments: [
       { amountOre: 4_000_000, paidOn: "2026-09-20" },
       { amountOre: 3_725_000, paidOn: "2026-09-28" },
@@ -57,27 +102,22 @@ test("payments arrive in several rows and a DNB balance is not added on top", ()
   assert.equal(received.amountOre, ADVANCE);
   assert.equal(received.from, "payments");
 
-  const fromBalance = receivedAdvance({ payments: [], dnbReceivedOre: ADVANCE });
+  const fromBalance = receivedAdvance({
+    paymentChecked: true,
+    payments: [],
+    dnbReceivedOre: ADVANCE,
+  });
   assert.equal(fromBalance.amountOre, ADVANCE);
   assert.equal(fromBalance.from, "dnb");
 
-  const settled = settlementView({
-    percent: 50,
-    basisOre: BASIS,
-    agreedOre: ADVANCE,
-    claimedOre: ADVANCE,
+  const unchecked = receivedAdvance({
+    paymentChecked: false,
     payments: [],
-    dnbReceivedOre: null,
-    dnbRestOre: 0,
-    offsetOre: ADVANCE,
-    vatOre: VAT,
-    totalOre: TOTAL,
-    remainingOre: REMAINING,
+    dnbReceivedOre: 0,
   });
-  assert.equal(settled.outstandingOre, 0);
-  assert.equal(settled.vatOre, VAT);
-  assert.equal(settled.totalOre, TOTAL);
-  assert.equal(settled.remainingOre, REMAINING);
+  assert.equal(unchecked.amountOre, null);
+  assert.equal(unchecked.from, "unchecked");
+
   assert.deepEqual(goodsDnbFigures([]), { vatOre: null, totalOre: null, remainingOre: null });
   assert.deepEqual(goodsDnbFigures([{ dnbVatOre: VAT, dnbTotalOre: null, dnbRestOre: null }]), {
     vatOre: VAT,
@@ -91,6 +131,46 @@ test("payments arrive in several rows and a DNB balance is not added on top", ()
     ]),
     { vatOre: null, totalOre: null, remainingOre: null },
   );
+});
+
+test("a final settlement keeps earlier goods out and does not spend the surplus twice", () => {
+  const lines = [
+    { fulfillmentId: "partial", quantity: 4000, unitPriceOre: 2500, active: true },
+    { fulfillmentId: "final", quantity: 2180, unitPriceOre: 2500, active: true },
+  ];
+  const claims = settlementClaims(lines, ["final"]);
+  assert.equal(claims.previouslyInvoicedOre, PARTIAL);
+  assert.equal(claims.finalClaimOre, FINAL);
+
+  const first = finalOffsetPlan({
+    paymentChecked: true,
+    receivedOre: ADVANCE,
+    finalClaimOre: claims.finalClaimOre,
+    alreadyPlannedOre: 0,
+    storedSurplusOre: null,
+  });
+  assert.equal(first.plannedOre, FINAL);
+  assert.equal(first.surplusOre, 2_275_000);
+
+  const again = finalOffsetPlan({
+    paymentChecked: true,
+    receivedOre: ADVANCE,
+    finalClaimOre: FINAL,
+    alreadyPlannedOre: FINAL,
+    storedSurplusOre: 2_275_000,
+  });
+  assert.equal(again.plannedOre, 0);
+  assert.equal(again.surplusOre, 2_275_000);
+
+  const beforeFinal = finalOffsetPlan({
+    paymentChecked: true,
+    receivedOre: ADVANCE,
+    finalClaimOre: null,
+    alreadyPlannedOre: 0,
+    storedSurplusOre: null,
+  });
+  assert.equal(beforeFinal.plannedOre, null);
+  assert.equal(beforeFinal.surplusOre, null);
 });
 
 test("an offset cannot use a claim that has not been paid, and cannot be applied twice", () => {
@@ -112,13 +192,14 @@ test("an offset cannot use a claim that has not been paid, and cannot be applied
   );
 });
 
-test("delivery stays available before the advance is paid, and partial invoicing stays available", () => {
+test("delivery stays available before the advance is checked, and partial invoicing stays available", () => {
   const confirmed = orderWorkActions({
     confirmed: true,
     remaining: 6180,
     ordered: 6180,
     hasAdvanceAgreement: true,
     claimPrepared: false,
+    paymentChecked: false,
     advanceInvoiceId: null,
     advanceOutstandingOre: null,
     uninvoicedDelivered: 0,
@@ -130,12 +211,30 @@ test("delivery stays available before the advance is paid, and partial invoicing
   assert.equal(confirmed.final, null);
   assert.equal(confirmed.partial, null);
 
+  const unknown = orderWorkActions({
+    confirmed: true,
+    remaining: 6180,
+    ordered: 6180,
+    hasAdvanceAgreement: true,
+    claimPrepared: true,
+    paymentChecked: false,
+    advanceInvoiceId: "dnb-1",
+    advanceOutstandingOre: null,
+    uninvoicedDelivered: 400,
+    settlementInDnb: false,
+    settlementInvoiceId: null,
+  });
+  assert.equal(unknown.advance?.kind, "check_advance");
+  assert.equal(unknown.goods?.kind, "register_delivery");
+  assert.equal(unknown.partial?.kind, "invoice_delivered");
+
   const unpaid = orderWorkActions({
     confirmed: true,
     remaining: 6180,
     ordered: 6180,
     hasAdvanceAgreement: true,
     claimPrepared: true,
+    paymentChecked: true,
     advanceInvoiceId: "dnb-1",
     advanceOutstandingOre: ADVANCE,
     uninvoicedDelivered: 400,
@@ -152,6 +251,7 @@ test("delivery stays available before the advance is paid, and partial invoicing
     ordered: 6180,
     hasAdvanceAgreement: true,
     claimPrepared: true,
+    paymentChecked: true,
     advanceInvoiceId: "dnb-1",
     advanceOutstandingOre: 0,
     uninvoicedDelivered: 6180,
@@ -163,18 +263,17 @@ test("delivery stays available before the advance is paid, and partial invoicing
   assert.equal(done.partial, null);
 
   const inDnb = orderWorkActions({
-    ...{
-      confirmed: true,
-      remaining: 0,
-      ordered: 6180,
-      hasAdvanceAgreement: true,
-      claimPrepared: true,
-      advanceInvoiceId: "dnb-1",
-      advanceOutstandingOre: 0,
-      uninvoicedDelivered: 0,
-      settlementInDnb: true,
-      settlementInvoiceId: "dnb-2",
-    },
+    confirmed: true,
+    remaining: 0,
+    ordered: 6180,
+    hasAdvanceAgreement: true,
+    claimPrepared: true,
+    paymentChecked: true,
+    advanceInvoiceId: "dnb-1",
+    advanceOutstandingOre: 0,
+    uninvoicedDelivered: 0,
+    settlementInDnb: true,
+    settlementInvoiceId: "dnb-2",
   });
   assert.equal(inDnb.final?.kind, "open_settlement");
 
@@ -184,6 +283,7 @@ test("delivery stays available before the advance is paid, and partial invoicing
     ordered: 20,
     hasAdvanceAgreement: false,
     claimPrepared: false,
+    paymentChecked: false,
     advanceInvoiceId: null,
     advanceOutstandingOre: null,
     uninvoicedDelivered: 10,
@@ -216,6 +316,30 @@ test("the advance sql keeps the claim off the goods lines and caps the offset", 
   );
   assert.match(sql, /COALESCE\(p_dnb_rest_ore, dnb_rest_ore\)/);
   assert.match(sql, /advance_received_ore/);
+  assert.doesNotMatch(sql, /INSERT INTO public\.invoice_draft_lines/);
+  assert.doesNotMatch(sql, /vat_percent\s*=\s*0/);
+  assert.doesNotMatch(sql, /UPDATE public\.customers/);
+  assert.doesNotMatch(sql, /UPDATE public\.deliveries/);
+  assert.doesNotMatch(sql, /net\.http|unimicro|send.?mail/i);
+});
+
+test("the check sql treats an unread payment as unknown and keeps surplus out of a later draft", () => {
+  const sql = readFileSync(new URL("../../sql/27_advance_dnb_check.sql", import.meta.url), "utf8");
+  const migration = readFileSync(
+    new URL("../../supabase/migrations/20261020180000_advance_dnb_check.sql", import.meta.url),
+    "utf8",
+  );
+  assert.equal(
+    sql.slice(sql.indexOf("ALTER TABLE")),
+    migration.slice(migration.indexOf("ALTER TABLE")),
+  );
+  assert.match(sql, /payments_checked_at/);
+  assert.match(sql, /surplus_ore/);
+  assert.match(sql, /confirmed_ore/);
+  assert.match(sql, /advance payment is not checked/);
+  assert.match(sql, /LEAST\(room, p_ceiling_ore\)/);
+  assert.match(sql, /DROP FUNCTION IF EXISTS public\.record_advance_offset\(UUID, UUID\)/);
+  assert.match(sql, /already \+ NEW\.amount_ore \+ surplus > received/);
   assert.doesNotMatch(sql, /INSERT INTO public\.invoice_draft_lines/);
   assert.doesNotMatch(sql, /vat_percent\s*=\s*0/);
   assert.doesNotMatch(sql, /UPDATE public\.customers/);

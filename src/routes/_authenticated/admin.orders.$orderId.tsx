@@ -8,7 +8,12 @@ import { DriverSelect } from "@/components/delivery-driver-editor";
 import { InvoiceFact, InvoiceStepView } from "@/components/order-invoice-step";
 import { OrderSettlementPanel } from "@/components/order-settlement";
 import { supabase } from "@/integrations/supabase/client";
-import { listProductionStaff, transferInvoiceDraft } from "@/lib/admin.functions";
+import {
+  dnbCompanyName,
+  listProductionStaff,
+  syncOrderAdvance,
+  transferInvoiceDraft,
+} from "@/lib/admin.functions";
 import { useSessionInfo } from "@/hooks/use-session";
 import {
   canApproveOrders,
@@ -33,8 +38,8 @@ import {
 } from "@/lib/lot-stock";
 import { isDeliveryDriverSchemaError, suggestedDeliveredBy } from "@/lib/delivery-driver";
 import {
-  goodsDnbFigures,
   orderBasisOre,
+  settlementClaims,
   settlementView,
   type AdvancePayment,
 } from "@/lib/order-advance";
@@ -101,6 +106,8 @@ function OrderPage() {
   const action = orderPrimaryAction(approver);
   const staffFn = useServerFn(listProductionStaff);
   const transferFn = useServerFn(transferInvoiceDraft);
+  const syncAdvanceFn = useServerFn(syncOrderAdvance);
+  const companyFn = useServerFn(dnbCompanyName);
   const [busy, setBusy] = useState(false);
   const [agreedOn, setAgreedOn] = useState("");
   const [ownerId, setOwnerId] = useState("");
@@ -290,18 +297,18 @@ function OrderPage() {
       const claim = await supabase
         .from("order_advance_claims")
         .select(
-          "id, amount_ore, accounting_invoice_id, accounting_invoice_number, dnb_rest_ore, dnb_received_ore",
+          "id, amount_ore, accounting_invoice_id, accounting_invoice_number, dnb_rest_ore, dnb_received_ore, payments_checked_at, surplus_ore",
         )
         .eq("order_id", orderId)
         .maybeSingle();
       if (claim.error) {
         if (isOrderSchemaError(claim.error.message)) {
-          return { pendingSql: true as const, claim: null, payments: [], offsetOre: 0 };
+          return { pendingSql: true as const, claim: null, payments: [], offsets: [] };
         }
         throw claim.error;
       }
       if (!claim.data) {
-        return { pendingSql: false as const, claim: null, payments: [], offsetOre: 0 };
+        return { pendingSql: false as const, claim: null, payments: [], offsets: [] };
       }
       const [payments, offsets] = await Promise.all([
         supabase
@@ -309,7 +316,10 @@ function OrderPage() {
           .select("amount_ore, paid_on")
           .eq("claim_id", claim.data.id)
           .order("paid_on", { ascending: true }),
-        supabase.from("order_advance_offsets").select("amount_ore").eq("claim_id", claim.data.id),
+        supabase
+          .from("order_advance_offsets")
+          .select("amount_ore, confirmed_ore, invoice_draft_id")
+          .eq("claim_id", claim.data.id),
       ]);
       if (payments.error) throw payments.error;
       if (offsets.error) throw offsets.error;
@@ -320,8 +330,38 @@ function OrderPage() {
           amountOre: payment.amount_ore,
           paidOn: payment.paid_on,
         })),
-        offsetOre: (offsets.data ?? []).reduce((sum, row) => sum + row.amount_ore, 0),
+        offsets: offsets.data ?? [],
       };
+    },
+  });
+
+  const company = useQuery({
+    queryKey: ["dnb-company-name"],
+    enabled: operations || commercial,
+    queryFn: () => companyFn(),
+    staleTime: 60_000,
+  });
+
+  const settlementDraftId =
+    (invoiceLines.data?.rows ?? []).find(
+      (line) => line.transferStatus === "transferred" && line.active,
+    )?.draftId ?? null;
+
+  const advanceSync = useQuery({
+    queryKey: [
+      "order-advance-sync",
+      orderId,
+      advance.data?.claim?.accounting_invoice_id ?? null,
+      settlementDraftId,
+    ],
+    enabled:
+      (operations || commercial) &&
+      Boolean(advance.data?.claim?.accounting_invoice_id) &&
+      advance.data?.pendingSql !== true,
+    queryFn: async () => {
+      const result = await syncAdvanceFn({ data: { orderId, settlementDraftId } });
+      await queryClient.invalidateQueries({ queryKey: ["order-advance", orderId] });
+      return result;
     },
   });
 
@@ -454,11 +494,63 @@ function OrderPage() {
     await queryClient.invalidateQueries({ queryKey: ["admin-deliveries"] });
   }
 
-  async function recordOffset(draftId: string) {
+  function offsetPlan(finalIds: readonly string[], draftId: string | null) {
+    const claim = advance.data?.claim;
+    const invoiceRows = (invoiceLines.data?.rows ?? []).filter((line) => line.active);
+    const claims = settlementClaims(invoiceRows, finalIds);
+    const known = new Set(invoiceRows.map((line) => line.fulfillmentId));
+    let extra = 0;
+    for (const id of finalIds) {
+      if (known.has(id)) continue;
+      const link = linked.find((item) => item.id === id);
+      const line = orderLines.find((item) => item.id === link?.order_line_id);
+      if (link && line?.unit_price_ore) extra += link.quantity * line.unit_price_ore;
+    }
+    const reported =
+      draftId == null
+        ? undefined
+        : invoiceRows.find((line) => line.draftId === draftId && line.dnbTotalOre != null);
+    const goodsOre = claims.finalClaimOre + extra;
+    const offsets = advance.data?.offsets ?? [];
+    const own = draftId ? offsets.find((offset) => offset.invoice_draft_id === draftId) : undefined;
+    const view = settlementView({
+      percent: Number(row?.advance_percent ?? 0),
+      basisOre: row?.advance_basis_ore ?? 0,
+      agreedOre: row?.advance_agreed_ore ?? 0,
+      claimedOre: claim?.amount_ore ?? null,
+      paymentChecked: Boolean(claim?.payments_checked_at),
+      payments: advance.data?.payments ?? [],
+      dnbReceivedOre: claim?.dnb_received_ore ?? null,
+      dnbRestOre: claim?.dnb_rest_ore ?? null,
+      finalClaimOre: reported?.dnbTotalOre ?? (goodsOre > 0 ? goodsOre : null),
+      alreadyPlannedOre: offsets
+        .filter((offset) => offset.invoice_draft_id !== draftId)
+        .reduce((sum, offset) => sum + offset.amount_ore, 0),
+      storedSurplusOre: claim?.surplus_ore ?? null,
+      confirmedOre: own?.confirmed_ore ?? null,
+      previouslyInvoicedOre: claims.previouslyInvoicedOre,
+      vatOre: reported?.dnbVatOre ?? null,
+      totalOre: reported?.dnbTotalOre ?? null,
+      remainingOre: reported?.dnbRestOre ?? null,
+    });
+    if (!own) return view;
+    return { ...view, plannedOre: own.amount_ore };
+  }
+
+  async function recordOffset(draftId: string, finalIds: readonly string[]) {
     if (!row) return;
+    const plan = offsetPlan(finalIds, draftId);
+    if (!plan.paymentChecked || plan.receivedOre == null) {
+      toast.error(t("orders_payment_unchecked"));
+      return;
+    }
+    if (plan.plannedOre == null || plan.surplusOre == null) return;
+    if (plan.plannedOre <= 0 && plan.surplusOre <= 0) return;
     const { error } = await supabase.rpc("record_advance_offset", {
       p_order_id: row.id,
       p_invoice_draft_id: draftId,
+      p_ceiling_ore: plan.plannedOre,
+      p_surplus_ore: plan.surplusOre,
     });
     if (error) {
       toast.error(isOrderSchemaError(error.message) ? t("orders_pending_sql") : error.message);
@@ -833,7 +925,7 @@ function OrderPage() {
       toast.error(inserted.error.message);
       return;
     }
-    if (settle && advance.data?.claim) await recordOffset(draftId);
+    if (settle && advance.data?.claim) await recordOffset(draftId, again.action.fulfillmentIds);
     setBusy(false);
     toast.success(t("invoice_draft_created"));
     await refresh();
@@ -843,7 +935,10 @@ function OrderPage() {
     if (!commercial) return;
     setBusy(true);
     if (remainingQuantity(orderedQty, fulfilledQty) === 0 && advance.data?.claim) {
-      await recordOffset(draftId);
+      const ids = (invoiceLines.data?.rows ?? [])
+        .filter((line) => line.draftId === draftId && line.active)
+        .map((line) => line.fulfillmentId);
+      await recordOffset(draftId, ids);
     }
     try {
       const result = await transferFn({ data: { draftId } });
@@ -896,6 +991,53 @@ function OrderPage() {
     toast.success(t("orders_advance_attached"));
     await refresh();
   }
+
+  const offsetAttempt = useRef<string | null>(null);
+  useEffect(() => {
+    if (!commercial || !row) return;
+    if (remainingQuantity(orderedQty, fulfilledQty) !== 0) return;
+    if (!invoiceLines.isSuccess || invoiceLines.data.pendingSql) return;
+    if (!advance.data || advance.data.pendingSql || !advance.data.claim?.payments_checked_at)
+      return;
+    const action = orderInvoiceSteps({
+      remaining: 0,
+      fulfillmentIds: (fulfillments.data ?? []).map((item) => item.id),
+      lines: invoiceLines.data.rows,
+    }).action;
+    const draftId = action && "draftId" in action ? action.draftId : settlementDraftId;
+    if (!draftId) return;
+    if (advance.data.offsets.some((offset) => offset.invoice_draft_id === draftId)) return;
+    const ids =
+      action && (action.kind === "prepare" || action.kind === "append")
+        ? action.fulfillmentIds
+        : invoiceLines.data.rows
+            .filter((line) => line.draftId === draftId && line.active)
+            .map((line) => line.fulfillmentId);
+    const preview = offsetPlan(ids, draftId);
+    if (preview.plannedOre == null || preview.surplusOre == null) return;
+    if (preview.plannedOre <= 0 && preview.surplusOre <= 0) return;
+    const key = `${row.id}:${draftId}`;
+    if (offsetAttempt.current === key) return;
+    offsetAttempt.current = key;
+    void recordOffset(draftId, ids).then(async () => {
+      await queryClient.invalidateQueries({ queryKey: ["order-advance", orderId] });
+      await queryClient.invalidateQueries({ queryKey: ["order-advance-sync", orderId] });
+    });
+    // The plan helpers close over the query data listed here.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    advance.data,
+    commercial,
+    fulfilledQty,
+    fulfillments.data,
+    invoiceLines.data,
+    invoiceLines.isSuccess,
+    orderId,
+    orderedQty,
+    queryClient,
+    row,
+    settlementDraftId,
+  ]);
 
   if (!row) return <main className="min-h-screen" />;
 
@@ -967,25 +1109,23 @@ function OrderPage() {
   const liveBasis = orderBasisOre(
     orderLines.map((line) => ({ quantity: line.quantity, unitPriceOre: line.unit_price_ore })),
   );
-  const figures = goodsDnbFigures(invoiceLines.data?.rows ?? []);
+  const finalAction = invoicePlan?.action;
+  const finalIds =
+    finalAction && (finalAction.kind === "prepare" || finalAction.kind === "append")
+      ? finalAction.fulfillmentIds
+      : finalAction && (finalAction.kind === "transfer" || finalAction.kind === "open_dnb")
+        ? (invoiceLines.data?.rows ?? [])
+            .filter((line) => line.draftId === finalAction.draftId && line.active)
+            .map((line) => line.fulfillmentId)
+        : [];
+  const finalDraftId =
+    finalAction && "draftId" in finalAction ? finalAction.draftId : settlementDraftId;
   const settlement =
     claim &&
     row.advance_percent != null &&
     row.advance_basis_ore != null &&
     row.advance_agreed_ore != null
-      ? settlementView({
-          percent: Number(row.advance_percent),
-          basisOre: row.advance_basis_ore,
-          agreedOre: row.advance_agreed_ore,
-          claimedOre: claim.amount_ore,
-          payments: advance.data?.payments ?? [],
-          dnbReceivedOre: claim.dnb_received_ore,
-          dnbRestOre: claim.dnb_rest_ore,
-          offsetOre: advance.data?.offsetOre ?? 0,
-          vatOre: figures.vatOre,
-          totalOre: figures.totalOre,
-          remainingOre: figures.remainingOre,
-        })
+      ? offsetPlan(leftQty === 0 ? finalIds : [], leftQty === 0 ? finalDraftId : null)
       : null;
   const settleNow =
     leftQty === 0 &&
@@ -994,7 +1134,8 @@ function OrderPage() {
   const settlementPending =
     Boolean(order.data?.pendingSql) ||
     Boolean(advance.data?.pendingSql) ||
-    Boolean(invoiceLines.data?.pendingSql);
+    Boolean(invoiceLines.data?.pendingSql) ||
+    advanceSync.data?.reason === "pending_sql";
 
   return (
     <main className="mx-auto w-full max-w-5xl px-5 pb-16">
@@ -1317,6 +1458,7 @@ function OrderPage() {
               commercial={commercial}
               busy={busy}
               basisOre={liveBasis}
+              companyName={company.data?.name ?? null}
               onPrepare={(percent) => void prepareAdvance(percent)}
               onAttach={(invoiceId, invoiceNumber) => void attachAdvance(invoiceId, invoiceNumber)}
             />
@@ -1335,6 +1477,7 @@ function OrderPage() {
                   onPrepare={() => void prepareInvoice(settleNow)}
                   onTransfer={(draftId) => void transferDraft(draftId)}
                   {...(settleNow ? { prepareLabel: t("orders_prepare_settlement") } : {})}
+                  companyName={company.data?.name ?? null}
                 />
               ) : null}
             </>

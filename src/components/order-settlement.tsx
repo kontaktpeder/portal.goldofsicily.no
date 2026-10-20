@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { PrimaryButton, TextField } from "@/components/field";
+import { companySentence } from "@/lib/dnb-advance";
 import { dnbInvoiceHref } from "@/lib/dnb-invoice";
-import { useI18n } from "@/lib/i18n";
+import { useI18n, type TranslationKey } from "@/lib/i18n";
 import { agreedAdvanceOre, type AdvancePayment, type SettlementView } from "@/lib/order-advance";
 import { formatAgreedDelivery } from "@/lib/orders";
 import { formatPriceNok } from "@/lib/slug";
@@ -20,6 +21,7 @@ export function OrderSettlementPanel({
   commercial,
   busy,
   basisOre,
+  companyName,
   onPrepare,
   onAttach,
 }: {
@@ -30,6 +32,7 @@ export function OrderSettlementPanel({
   commercial: boolean;
   busy: boolean;
   basisOre: number | null;
+  companyName: string | null;
   onPrepare: (percent: number) => void;
   onAttach: (invoiceId: string, invoiceNumber: string) => void;
 }) {
@@ -53,15 +56,11 @@ export function OrderSettlementPanel({
           <Fact label={t("orders_advance_basis")} value={money(view.basisOre)} />
           <Fact label={t("orders_advance_agreed")} value={money(view.agreedOre)} />
           <Fact label={t("orders_advance_claimed")} value={money(view.claimedOre)} />
-          <Fact
-            label={t("orders_advance_received")}
-            value={view.receivedFrom === "none" ? "—" : money(view.receivedOre)}
-          />
-          <Fact
-            label={t("orders_advance_offset")}
-            value={view.offsetOre > 0 ? money(view.offsetOre) : "—"}
-          />
-          <Fact label={t("orders_advance_outstanding")} value={money(view.outstandingOre)} />
+          <Fact label={t("orders_previously_invoiced")} value={money(view.previouslyInvoicedOre)} />
+          <Fact label={t("orders_advance_received")} value={receivedText(view, t)} />
+          <Fact label={t("orders_advance_planned")} value={money(view.plannedOre)} />
+          <Fact label={t("orders_advance_confirmed")} value={confirmedText(view, t)} />
+          <Fact label={t("orders_advance_outstanding")} value={outstandingText(view, t)} />
           <Fact label={t("orders_advance_total_dnb")} value={money(view.totalOre)} />
           <Fact label={t("orders_advance_vat_dnb")} value={money(view.vatOre)} />
           <Fact label={t("orders_remaining_payment")} value={money(view.remainingOre)} />
@@ -91,6 +90,11 @@ export function OrderSettlementPanel({
       ) : (
         <p className="text-sm">{t("orders_no_advance")}</p>
       )}
+      {view && view.surplusOre != null && view.surplusOre > 0 ? (
+        <p className="text-sm font-semibold">
+          {t("orders_advance_surplus")}: {money(view.surplusOre)}
+        </p>
+      ) : null}
       {view && view.receivedFrom === "payments" ? (
         <ul className="text-sm">
           {payments.map((payment, index) => (
@@ -109,15 +113,20 @@ export function OrderSettlementPanel({
           {t("orders_dnb_document")}: {documentNumber || documentId || "—"}
         </p>
       ) : null}
-      {view && view.outstandingOre != null && view.outstandingOre > 0 ? (
-        <a
-          href={dnbInvoiceHref(documentId)}
-          target="_blank"
-          rel="noreferrer"
-          className="inline-flex rounded-full bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground"
-        >
-          {t("orders_open_dnb")}
-        </a>
+      {view ? (
+        <div className="space-y-2">
+          <a
+            href={dnbInvoiceHref(documentId)}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex rounded-full bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground"
+          >
+            {t("orders_open_dnb")}
+          </a>
+          <p className="text-sm text-muted-foreground">
+            {companySentence(companyName, t("orders_dnb_company_unknown"), t("orders_dnb_company"))}
+          </p>
+        </div>
       ) : null}
       {view && commercial ? (
         <div className="space-y-3">
@@ -139,6 +148,22 @@ export function OrderSettlementPanel({
       ) : null}
     </div>
   );
+}
+
+function receivedText(view: SettlementView, t: (key: TranslationKey) => string): string {
+  if (!view.paymentChecked || view.receivedOre == null) return t("orders_payment_unchecked");
+  return money(view.receivedOre);
+}
+
+function outstandingText(view: SettlementView, t: (key: TranslationKey) => string): string {
+  if (!view.paymentChecked || view.outstandingOre == null) return t("orders_payment_unchecked");
+  return money(view.outstandingOre);
+}
+
+function confirmedText(view: SettlementView, t: (key: TranslationKey) => string): string {
+  if (view.confirmedOre == null) return t("orders_advance_unconfirmed");
+  if (view.confirmedOre === 0) return t("orders_advance_not_applied");
+  return money(view.confirmedOre);
 }
 
 function Fact({ label, value }: { label: string; value: string }) {

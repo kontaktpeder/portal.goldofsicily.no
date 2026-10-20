@@ -1713,6 +1713,8 @@ export type Database = {
           dnb_rest_ore: number | null
           dnb_vat_ore: number | null
           dnb_received_ore: number | null
+          payments_checked_at: string | null
+          surplus_ore: number | null
         }
         Insert: {
           id?: string
@@ -1726,6 +1728,8 @@ export type Database = {
           dnb_rest_ore?: number | null
           dnb_vat_ore?: number | null
           dnb_received_ore?: number | null
+          payments_checked_at?: string | null
+          surplus_ore?: number | null
         }
         Update: {
           id?: string
@@ -1739,6 +1743,8 @@ export type Database = {
           dnb_rest_ore?: number | null
           dnb_vat_ore?: number | null
           dnb_received_ore?: number | null
+          payments_checked_at?: string | null
+          surplus_ore?: number | null
         }
         Relationships: [
           {
@@ -1792,6 +1798,8 @@ export type Database = {
           invoice_draft_id: string
           amount_ore: number
           created_at: string
+          confirmed_ore: number | null
+          confirmed_at: string | null
         }
         Insert: {
           id?: string
@@ -1799,6 +1807,8 @@ export type Database = {
           invoice_draft_id: string
           amount_ore: number
           created_at?: string
+          confirmed_ore?: number | null
+          confirmed_at?: string | null
         }
         Update: {
           id?: string
@@ -1806,6 +1816,8 @@ export type Database = {
           invoice_draft_id?: string
           amount_ore?: number
           created_at?: string
+          confirmed_ore?: number | null
+          confirmed_at?: string | null
         }
         Relationships: [
           {
@@ -1871,7 +1883,35 @@ export type Database = {
         Returns: undefined
       }
       record_advance_offset: {
-        Args: { p_order_id: string; p_invoice_draft_id: string }
+        Args: {
+          p_order_id: string
+          p_invoice_draft_id: string
+          p_ceiling_ore: number
+          p_surplus_ore: number
+        }
+        Returns: number
+      }
+      record_advance_check: {
+        Args: {
+          p_order_id: string
+          p_payments: Json
+          p_use_balance: boolean
+          p_dnb_received_ore: number | null
+          p_has_rest: boolean
+          p_dnb_rest_ore: number | null
+          p_has_total: boolean
+          p_dnb_total_ore: number | null
+          p_has_vat: boolean
+          p_dnb_vat_ore: number | null
+        }
+        Returns: undefined
+      }
+      record_advance_confirmation: {
+        Args: {
+          p_order_id: string
+          p_invoice_draft_id: string
+          p_confirmed_ore: number
+        }
         Returns: number
       }
       order_invoice_lines: {

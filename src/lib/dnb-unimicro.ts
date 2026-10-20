@@ -1,3 +1,4 @@
+import { companyNameFromPayload, invoiceMoneyFromPayload, type InvoiceMoney } from "./dnb-advance.ts";
 import { digitsOnly, kronerToOre, remotePaidOn, type RemoteInvoice } from "./dnb-invoice.ts";
 
 export type UnimicroConfig = {
@@ -169,6 +170,32 @@ export function unimicroGateway(config: UnimicroConfig, fetchImpl: FetchLike = f
       const invoice = remoteInvoiceFromPayload(payload);
       if (!invoice) throw new Error("Unimicro invoice response had no ID");
       return invoice;
+    },
+    async readInvoice(invoiceId: string): Promise<InvoiceMoney | null> {
+      const id = invoiceId.trim();
+      if (!/^\d+$/.test(id)) return null;
+      try {
+        const payload = await get(
+          `/api/biz/invoices/${id}?expand=Payments&select=ID,InvoiceNumber,RestAmount,TaxInclusiveAmount,VatAmount,TaxAmount,Payments`,
+        );
+        return invoiceMoneyFromPayload(payload);
+      } catch {
+        try {
+          const payload = await get(
+            `/api/biz/invoices/${id}?select=ID,InvoiceNumber,RestAmount,TaxInclusiveAmount,VatAmount,TaxAmount`,
+          );
+          return invoiceMoneyFromPayload(payload);
+        } catch {
+          return null;
+        }
+      }
+    },
+    async companyName(): Promise<string | null> {
+      try {
+        return companyNameFromPayload(await get("/api/biz/companysettings"));
+      } catch {
+        return null;
+      }
     },
   };
 }

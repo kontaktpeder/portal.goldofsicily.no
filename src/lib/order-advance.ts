@@ -29,29 +29,34 @@ export type AdvancePayment = {
  * and it is not added on top of the payment rows.
  */
 export function receivedAdvance(input: {
+  paymentChecked: boolean;
   payments: readonly AdvancePayment[];
   dnbReceivedOre: number | null;
-}): { amountOre: number; from: "payments" | "dnb" | "none" } {
+}): { amountOre: number | null; from: "payments" | "dnb" | "none" | "unchecked" } {
+  if (!input.paymentChecked) return { amountOre: null, from: "unchecked" };
   if (input.payments.length > 0) {
     return {
       amountOre: input.payments.reduce((sum, payment) => sum + payment.amountOre, 0),
       from: "payments",
     };
   }
-  if (input.dnbReceivedOre != null && input.dnbReceivedOre > 0) {
-    return { amountOre: input.dnbReceivedOre, from: "dnb" };
-  }
-  return { amountOre: 0, from: "none" };
+  if (input.dnbReceivedOre != null) return { amountOre: input.dnbReceivedOre, from: "dnb" };
+  return { amountOre: null, from: "none" };
 }
 
-/** What is still open on the advance. A claim without a payment stays outstanding. */
+/**
+ * What is still open on the advance.
+ * A missing check is null. Zero is only used after DNB has reported a number.
+ */
 export function outstandingAdvance(input: {
+  paymentChecked: boolean;
   claimedOre: number | null;
-  receivedOre: number;
+  receivedOre: number | null;
   dnbRestOre: number | null;
 }): number | null {
-  if (input.claimedOre == null) return null;
+  if (!input.paymentChecked || input.claimedOre == null) return null;
   if (input.dnbRestOre != null) return Math.max(0, input.dnbRestOre);
+  if (input.receivedOre == null) return null;
   return Math.max(0, input.claimedOre - input.receivedOre);
 }
 
@@ -60,9 +65,15 @@ export type SettlementView = {
   basisOre: number;
   agreedOre: number;
   claimedOre: number | null;
-  receivedOre: number;
-  receivedFrom: "payments" | "dnb" | "none";
-  offsetOre: number;
+  paymentChecked: boolean;
+  receivedOre: number | null;
+  receivedFrom: "payments" | "dnb" | "none" | "unchecked";
+  /** Local plan. This is not proof that DNB applied the advance. */
+  plannedOre: number | null;
+  /** Null until DNB has been read. Zero means DNB listed no linked application. */
+  confirmedOre: number | null;
+  surplusOre: number | null;
+  previouslyInvoicedOre: number;
   outstandingOre: number | null;
   /** Present only when DNB has reported the settlement. Not derived here. */
   vatOre: number | null;
@@ -75,27 +86,45 @@ export function settlementView(input: {
   basisOre: number;
   agreedOre: number;
   claimedOre: number | null;
+  paymentChecked: boolean;
   payments: readonly AdvancePayment[];
   dnbReceivedOre: number | null;
   dnbRestOre: number | null;
-  offsetOre: number;
+  finalClaimOre: number | null;
+  alreadyPlannedOre: number;
+  storedSurplusOre: number | null;
+  confirmedOre: number | null;
+  previouslyInvoicedOre: number;
   vatOre: number | null;
   totalOre: number | null;
   remainingOre: number | null;
 }): SettlementView {
   const received = receivedAdvance({
+    paymentChecked: input.paymentChecked,
     payments: input.payments,
     dnbReceivedOre: input.dnbReceivedOre,
+  });
+  const plan = finalOffsetPlan({
+    paymentChecked: input.paymentChecked,
+    receivedOre: received.amountOre,
+    finalClaimOre: input.finalClaimOre,
+    alreadyPlannedOre: input.alreadyPlannedOre,
+    storedSurplusOre: input.storedSurplusOre,
   });
   return {
     percent: input.percent,
     basisOre: input.basisOre,
     agreedOre: input.agreedOre,
     claimedOre: input.claimedOre,
+    paymentChecked: input.paymentChecked,
     receivedOre: received.amountOre,
     receivedFrom: received.from,
-    offsetOre: input.offsetOre,
+    plannedOre: plan.plannedOre,
+    confirmedOre: input.confirmedOre,
+    surplusOre: plan.surplusOre,
+    previouslyInvoicedOre: input.previouslyInvoicedOre,
     outstandingOre: outstandingAdvance({
+      paymentChecked: input.paymentChecked,
       claimedOre: input.claimedOre,
       receivedOre: received.amountOre,
       dnbRestOre: input.dnbRestOre,
@@ -104,6 +133,60 @@ export function settlementView(input: {
     totalOre: input.totalOre,
     remainingOre: input.remainingOre,
   };
+}
+
+/**
+ * Caps the unused advance at this settlement's own goods.
+ * Surplus stays visible and is not offered to a later draft.
+ */
+export function finalOffsetPlan(input: {
+  paymentChecked: boolean;
+  receivedOre: number | null;
+  finalClaimOre: number | null;
+  alreadyPlannedOre: number;
+  storedSurplusOre: number | null;
+}): { unusedOre: number | null; plannedOre: number | null; surplusOre: number | null } {
+  if (!input.paymentChecked || input.receivedOre == null) {
+    return { unusedOre: null, plannedOre: null, surplusOre: input.storedSurplusOre };
+  }
+  const unused = Math.max(
+    0,
+    input.receivedOre - input.alreadyPlannedOre - (input.storedSurplusOre ?? 0),
+  );
+  if (input.storedSurplusOre != null) {
+    const claim = input.finalClaimOre == null ? null : Math.max(0, input.finalClaimOre);
+    return {
+      unusedOre: unused,
+      plannedOre: claim == null ? null : Math.min(unused, claim),
+      surplusOre: input.storedSurplusOre,
+    };
+  }
+  if (input.finalClaimOre == null) return { unusedOre: unused, plannedOre: null, surplusOre: null };
+  const claim = Math.max(0, input.finalClaimOre);
+  const planned = Math.min(unused, claim);
+  return { unusedOre: unused, plannedOre: planned, surplusOre: unused - planned };
+}
+
+/** Previously invoiced goods stay out of the final claim. */
+export function settlementClaims(
+  lines: readonly {
+    fulfillmentId: string;
+    quantity: number;
+    unitPriceOre: number;
+    active: boolean;
+  }[],
+  finalFulfillmentIds: readonly string[],
+): { previouslyInvoicedOre: number; finalClaimOre: number } {
+  const finalIds = new Set(finalFulfillmentIds);
+  let previouslyInvoicedOre = 0;
+  let finalClaimOre = 0;
+  for (const line of lines) {
+    if (!line.active) continue;
+    const amount = line.quantity * line.unitPriceOre;
+    if (finalIds.has(line.fulfillmentId)) finalClaimOre += amount;
+    else previouslyInvoicedOre += amount;
+  }
+  return { previouslyInvoicedOre, finalClaimOre };
 }
 
 /** How much of the received advance can still be applied. Never uses the claimed amount. */
@@ -118,6 +201,7 @@ export function offsetAmount(input: {
 
 export type OrderWorkAction =
   | { kind: "prepare_advance" }
+  | { kind: "check_advance"; invoiceId: string | null }
   | { kind: "open_advance"; invoiceId: string | null; outstandingOre: number }
   | { kind: "register_delivery" }
   | { kind: "prepare_settlement" }
@@ -130,6 +214,7 @@ export function orderWorkActions(input: {
   ordered: number;
   hasAdvanceAgreement: boolean;
   claimPrepared: boolean;
+  paymentChecked: boolean;
   advanceInvoiceId: string | null;
   advanceOutstandingOre: number | null;
   uninvoicedDelivered: number;
@@ -147,6 +232,8 @@ export function orderWorkActions(input: {
   let advance: OrderWorkAction | null = null;
   if (input.confirmed && input.hasAdvanceAgreement && !input.claimPrepared) {
     advance = { kind: "prepare_advance" };
+  } else if (input.claimPrepared && !input.paymentChecked) {
+    advance = { kind: "check_advance", invoiceId: input.advanceInvoiceId };
   } else if (
     input.claimPrepared &&
     input.advanceOutstandingOre != null &&

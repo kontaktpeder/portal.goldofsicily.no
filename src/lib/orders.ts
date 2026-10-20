@@ -129,7 +129,7 @@ export function orderDeliveryDraft(input: {
 }
 
 export function isOrderSchemaError(message: string): boolean {
-  return /customer_orders|customer_order_status|approved_name_snapshot|submitted_name_snapshot|return_note|changes_requested|register_order_delivery|order_delivery_requests|follow_up_on|order_invoice_lines|registered_name_snapshot|dnb_paid_on|advance_percent|order_advance|prepare_order_advance|dnb_total_ore/.test(
+  return /customer_orders|customer_order_status|approved_name_snapshot|submitted_name_snapshot|return_note|changes_requested|register_order_delivery|order_delivery_requests|follow_up_on|order_invoice_lines|registered_name_snapshot|dnb_paid_on|advance_percent|order_advance|prepare_order_advance|dnb_total_ore|payments_checked_at|surplus_ore|confirmed_ore/.test(
     message,
   );
 }

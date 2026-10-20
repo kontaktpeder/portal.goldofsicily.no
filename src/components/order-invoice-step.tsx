@@ -1,4 +1,5 @@
 import { PrimaryButton } from "@/components/field";
+import { companySentence } from "@/lib/dnb-advance";
 import { dnbInvoiceHref } from "@/lib/dnb-invoice";
 import { useI18n } from "@/lib/i18n";
 import { formatAgreedDelivery, type OrderInvoiceStep } from "@/lib/orders";
@@ -12,6 +13,7 @@ export function InvoiceStepView({
   onPrepare,
   onTransfer,
   prepareLabel,
+  companyName,
 }: {
   step: OrderInvoiceStep;
   placement: "primary" | "secondary";
@@ -20,6 +22,7 @@ export function InvoiceStepView({
   onPrepare: () => void;
   onTransfer: (draftId: string) => void;
   prepareLabel?: string;
+  companyName: string | null;
 }) {
   const { t } = useI18n();
   if (step.kind === "paid" || step.kind === "sent") {
@@ -40,14 +43,19 @@ export function InvoiceStepView({
 
   if (step.kind === "open_dnb") {
     return (
-      <a
-        href={dnbInvoiceHref(step.invoiceId)}
-        target="_blank"
-        rel="noreferrer"
-        className="inline-flex rounded-full bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground"
-      >
-        {label}
-      </a>
+      <div className="space-y-2">
+        <a
+          href={dnbInvoiceHref(step.invoiceId)}
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex rounded-full bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground"
+        >
+          {label}
+        </a>
+        <p className="text-sm text-muted-foreground">
+          {companySentence(companyName, t("orders_dnb_company_unknown"), t("orders_dnb_company"))}
+        </p>
+      </div>
     );
   }
 
