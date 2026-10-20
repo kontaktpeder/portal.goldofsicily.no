@@ -810,3 +810,21 @@ test("the invoice line sql adds transfer_status and reads it without a name clas
   assert.doesNotMatch(sql, /UPDATE public\.customers/);
   assert.doesNotMatch(sql, /UPDATE public\.invoice_drafts/);
 });
+
+test("the invoice due sql adds payment_due_on without rewriting drafts", () => {
+  const sql = readFileSync(
+    new URL("../../sql/30_invoice_payment_due.sql", import.meta.url),
+    "utf8",
+  );
+  const migration = readFileSync(
+    new URL("../../supabase/migrations/20261020230000_invoice_payment_due.sql", import.meta.url),
+    "utf8",
+  );
+  assert.equal(sql, migration);
+  assert.match(sql, /ADD COLUMN IF NOT EXISTS payment_due_on DATE/);
+  assert.doesNotMatch(sql, /UPDATE public\.deliveries/);
+  assert.doesNotMatch(sql, /UPDATE public\.customers/);
+  assert.doesNotMatch(sql, /UPDATE public\.invoice_drafts/);
+  assert.doesNotMatch(sql, /DROP FUNCTION/);
+  assert.doesNotMatch(sql, /vat_percent/);
+});
