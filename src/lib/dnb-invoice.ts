@@ -9,7 +9,8 @@ export const DNB_PAID_STATUS_CODE = 42004;
 
 export const NO_SEND_DISTRIBUTION_NAME = "ingen utsendelse";
 
-export type TransferStatus = "not_transferred" | "queued" | "transferred" | "failed" | "needs_review";
+export type TransferStatus =
+  "not_transferred" | "queued" | "transferred" | "failed" | "needs_review";
 
 export type DnbInvoiceStatus = "draft" | "issued" | "partly_paid" | "paid" | "credited";
 
@@ -29,7 +30,14 @@ export type RemoteInvoice = {
   restAmount: number | null;
   totalAmount: number | null;
   paidOn?: string | null;
+  /** Ore, only when the remote document included a VAT amount. */
+  vatOre?: number | null;
 };
+
+export function kronerToOre(value: number | null | undefined): number | null {
+  if (value == null || !Number.isFinite(value)) return null;
+  return Math.round(value * 100);
+}
 
 /** Opens the DNB draft for a human to check and send. The portal does not send it. */
 export function dnbInvoiceHref(invoiceId: string | null | undefined): string {
@@ -86,7 +94,10 @@ export function lineAmounts(quantity: number, unitPriceOre: number, vatPercent: 
 }
 
 /** Prices come from the frozen line. Nothing here reads today's price list. */
-export function invoiceItemFromFrozenLine(line: FrozenInvoiceLine, vatPercent: number): InvoiceItemPayload {
+export function invoiceItemFromFrozenLine(
+  line: FrozenInvoiceLine,
+  vatPercent: number,
+): InvoiceItemPayload {
   const amounts = lineAmounts(line.quantity, line.unitPriceOre, vatPercent);
   return {
     ItemText: `${line.productName} · ${line.venueName}`,
@@ -104,7 +115,9 @@ export function invoiceItemFromFrozenLine(line: FrozenInvoiceLine, vatPercent: n
   };
 }
 
-export function noSendDistributionId(plans: readonly { id: number; name: string }[]): number | null {
+export function noSendDistributionId(
+  plans: readonly { id: number; name: string }[],
+): number | null {
   const match = plans.find((plan) => plan.name.trim().toLowerCase() === NO_SEND_DISTRIBUTION_NAME);
   return match?.id ?? null;
 }
@@ -162,7 +175,10 @@ export function draftInvoiceBody(input: {
 
 export type TransferStep =
   | { action: "adopt"; invoice: RemoteInvoice }
-  | { action: "blocked"; reason: "no_distribution" | "ambiguous_customer" | "missing_org" | "no_lines" }
+  | {
+      action: "blocked";
+      reason: "no_distribution" | "ambiguous_customer" | "missing_org" | "no_lines";
+    }
   | { action: "create_customer"; distributionPlanId: number }
   | { action: "create"; customerId: number; distributionPlanId: number };
 
@@ -183,11 +199,15 @@ export function nextTransferStep(input: {
   if (input.customers.length > 1) return { action: "blocked", reason: "ambiguous_customer" };
   if (input.distributionPlanId == null) return { action: "blocked", reason: "no_distribution" };
   const customerId = input.customers[0]?.id;
-  if (customerId == null) return { action: "create_customer", distributionPlanId: input.distributionPlanId };
+  if (customerId == null)
+    return { action: "create_customer", distributionPlanId: input.distributionPlanId };
   return { action: "create", customerId, distributionPlanId: input.distributionPlanId };
 }
 
-export function outcomeForRemote(invoice: RemoteInvoice, createdNow: boolean): {
+export function outcomeForRemote(
+  invoice: RemoteInvoice,
+  createdNow: boolean,
+): {
   transferStatus: TransferStatus;
   dnbStatus: DnbInvoiceStatus | null;
   invoiceNumber: string | null;
@@ -197,7 +217,11 @@ export function outcomeForRemote(invoice: RemoteInvoice, createdNow: boolean): {
     return { transferStatus: "needs_review", dnbStatus, invoiceNumber: invoice.invoiceNumber };
   }
   if (!dnbStatus) {
-    return { transferStatus: "needs_review", dnbStatus: null, invoiceNumber: invoice.invoiceNumber };
+    return {
+      transferStatus: "needs_review",
+      dnbStatus: null,
+      invoiceNumber: invoice.invoiceNumber,
+    };
   }
   return {
     transferStatus: "transferred",

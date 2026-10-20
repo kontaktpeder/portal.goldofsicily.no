@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { PrimaryButton, TextAreaField, TextField } from "@/components/field";
 import { DriverSelect } from "@/components/delivery-driver-editor";
 import { InvoiceFact, InvoiceStepView } from "@/components/order-invoice-step";
+import { OrderSettlementPanel } from "@/components/order-settlement";
 import { supabase } from "@/integrations/supabase/client";
 import { listProductionStaff, transferInvoiceDraft } from "@/lib/admin.functions";
 import { useSessionInfo } from "@/hooks/use-session";
@@ -31,6 +32,12 @@ import {
   type StockSource,
 } from "@/lib/lot-stock";
 import { isDeliveryDriverSchemaError, suggestedDeliveredBy } from "@/lib/delivery-driver";
+import {
+  goodsDnbFigures,
+  orderBasisOre,
+  settlementView,
+  type AdvancePayment,
+} from "@/lib/order-advance";
 import {
   canCancelOrder,
   deliveryErrorKind,
@@ -127,12 +134,33 @@ function OrderPage() {
       const base =
         "id, order_number, status, contact_name, desired_delivery_on, confirmed_delivery_on, billing_legal_entity_id, billing_legal_name_snapshot, billing_organization_number_snapshot, owner_id, owner_name_snapshot, deviation_note, notes, ordered_by_customer_id, ship_to_customer_id";
       const detail = `${base}, return_note, approved_at, approved_name_snapshot, submitted_at, submitted_name_snapshot`;
+      const withAdvance = await supabase
+        .from("customer_orders")
+        .select(
+          `${detail}, follow_up_on, follow_up_note, advance_percent, advance_basis_ore, advance_agreed_ore, ${embedded}`,
+        )
+        .eq("id", orderId)
+        .maybeSingle();
+      if (!withAdvance.error) return { pendingSql: false as const, row: withAdvance.data };
+      if (!isOrderSchemaError(withAdvance.error.message)) throw withAdvance.error;
       const withFollow = await supabase
         .from("customer_orders")
         .select(`${detail}, follow_up_on, follow_up_note, ${embedded}`)
         .eq("id", orderId)
         .maybeSingle();
-      if (!withFollow.error) return { pendingSql: false as const, row: withFollow.data };
+      if (!withFollow.error) {
+        return {
+          pendingSql: true as const,
+          row: withFollow.data
+            ? {
+                ...withFollow.data,
+                advance_percent: null,
+                advance_basis_ore: null,
+                advance_agreed_ore: null,
+              }
+            : null,
+        };
+      }
       if (!isOrderSchemaError(withFollow.error.message)) throw withFollow.error;
       const rich = await supabase
         .from("customer_orders")
@@ -142,7 +170,16 @@ function OrderPage() {
       if (!rich.error) {
         return {
           pendingSql: true as const,
-          row: rich.data ? { ...rich.data, follow_up_on: null, follow_up_note: null } : null,
+          row: rich.data
+            ? {
+                ...rich.data,
+                follow_up_on: null,
+                follow_up_note: null,
+                advance_percent: null,
+                advance_basis_ore: null,
+                advance_agreed_ore: null,
+              }
+            : null,
         };
       }
       if (!isOrderSchemaError(rich.error.message)) throw rich.error;
@@ -164,6 +201,9 @@ function OrderPage() {
               submitted_name_snapshot: null,
               follow_up_on: null,
               follow_up_note: null,
+              advance_percent: null,
+              advance_basis_ore: null,
+              advance_agreed_ore: null,
             }
           : null,
       };
@@ -240,6 +280,48 @@ function OrderPage() {
         throw error;
       }
       return { pendingSql: false as const, rows: toInvoiceLines(data ?? []) };
+    },
+  });
+
+  const advance = useQuery({
+    queryKey: ["order-advance", orderId],
+    enabled: (operations || commercial) && Boolean(order.data && !order.data.pendingSql),
+    queryFn: async () => {
+      const claim = await supabase
+        .from("order_advance_claims")
+        .select(
+          "id, amount_ore, accounting_invoice_id, accounting_invoice_number, dnb_rest_ore, dnb_received_ore",
+        )
+        .eq("order_id", orderId)
+        .maybeSingle();
+      if (claim.error) {
+        if (isOrderSchemaError(claim.error.message)) {
+          return { pendingSql: true as const, claim: null, payments: [], offsetOre: 0 };
+        }
+        throw claim.error;
+      }
+      if (!claim.data) {
+        return { pendingSql: false as const, claim: null, payments: [], offsetOre: 0 };
+      }
+      const [payments, offsets] = await Promise.all([
+        supabase
+          .from("order_advance_payments")
+          .select("amount_ore, paid_on")
+          .eq("claim_id", claim.data.id)
+          .order("paid_on", { ascending: true }),
+        supabase.from("order_advance_offsets").select("amount_ore").eq("claim_id", claim.data.id),
+      ]);
+      if (payments.error) throw payments.error;
+      if (offsets.error) throw offsets.error;
+      return {
+        pendingSql: false as const,
+        claim: claim.data,
+        payments: (payments.data ?? []).map((payment): AdvancePayment => ({
+          amountOre: payment.amount_ore,
+          paidOn: payment.paid_on,
+        })),
+        offsetOre: (offsets.data ?? []).reduce((sum, row) => sum + row.amount_ore, 0),
+      };
     },
   });
 
@@ -368,7 +450,19 @@ function OrderPage() {
     await queryClient.invalidateQueries({ queryKey: ["order-approval-notices"] });
     await queryClient.invalidateQueries({ queryKey: ["order-work-notices"] });
     await queryClient.invalidateQueries({ queryKey: ["order-invoice-lines", orderId] });
+    await queryClient.invalidateQueries({ queryKey: ["order-advance", orderId] });
     await queryClient.invalidateQueries({ queryKey: ["admin-deliveries"] });
+  }
+
+  async function recordOffset(draftId: string) {
+    if (!row) return;
+    const { error } = await supabase.rpc("record_advance_offset", {
+      p_order_id: row.id,
+      p_invoice_draft_id: draftId,
+    });
+    if (error) {
+      toast.error(isOrderSchemaError(error.message) ? t("orders_pending_sql") : error.message);
+    }
   }
 
   async function setStatus(
@@ -668,7 +762,7 @@ function OrderPage() {
     await refresh();
   }
 
-  async function prepareInvoice() {
+  async function prepareInvoice(settle: boolean) {
     if (!row || !commercial) return;
     const action = orderInvoiceSteps({
       remaining: remainingQuantity(orderedQty, fulfilledQty),
@@ -739,6 +833,7 @@ function OrderPage() {
       toast.error(inserted.error.message);
       return;
     }
+    if (settle && advance.data?.claim) await recordOffset(draftId);
     setBusy(false);
     toast.success(t("invoice_draft_created"));
     await refresh();
@@ -747,6 +842,9 @@ function OrderPage() {
   async function transferDraft(draftId: string) {
     if (!commercial) return;
     setBusy(true);
+    if (remainingQuantity(orderedQty, fulfilledQty) === 0 && advance.data?.claim) {
+      await recordOffset(draftId);
+    }
     try {
       const result = await transferFn({ data: { draftId } });
       if (!result.ok) toast.error(result.message ?? t("invoice_failed"));
@@ -755,6 +853,47 @@ function OrderPage() {
       toast.error(error instanceof Error ? error.message : t("invoice_failed"));
     }
     setBusy(false);
+    await refresh();
+  }
+
+  async function prepareAdvance(percent: number) {
+    if (!row || !commercial) return;
+    const basis = orderBasisOre(
+      orderLines.map((line) => ({ quantity: line.quantity, unitPriceOre: line.unit_price_ore })),
+    );
+    if (basis == null) {
+      toast.error(t("orders_price_missing"));
+      return;
+    }
+    setBusy(true);
+    const { error } = await supabase.rpc("prepare_order_advance", {
+      p_order_id: row.id,
+      p_percent: percent,
+      p_basis_ore: basis,
+    });
+    setBusy(false);
+    if (error) {
+      toast.error(isOrderSchemaError(error.message) ? t("orders_pending_sql") : error.message);
+      return;
+    }
+    toast.success(t("orders_advance_prepared"));
+    await refresh();
+  }
+
+  async function attachAdvance(invoiceId: string, invoiceNumber: string) {
+    if (!row || !commercial) return;
+    setBusy(true);
+    const { error } = await supabase.rpc("attach_advance_document", {
+      p_order_id: row.id,
+      p_accounting_invoice_id: invoiceId,
+      p_accounting_invoice_number: invoiceNumber,
+    });
+    setBusy(false);
+    if (error) {
+      toast.error(isOrderSchemaError(error.message) ? t("orders_pending_sql") : error.message);
+      return;
+    }
+    toast.success(t("orders_advance_attached"));
     await refresh();
   }
 
@@ -824,6 +963,38 @@ function OrderPage() {
             price: line.unit_price_ore,
           };
         });
+  const claim = advance.data?.claim ?? null;
+  const liveBasis = orderBasisOre(
+    orderLines.map((line) => ({ quantity: line.quantity, unitPriceOre: line.unit_price_ore })),
+  );
+  const figures = goodsDnbFigures(invoiceLines.data?.rows ?? []);
+  const settlement =
+    claim &&
+    row.advance_percent != null &&
+    row.advance_basis_ore != null &&
+    row.advance_agreed_ore != null
+      ? settlementView({
+          percent: Number(row.advance_percent),
+          basisOre: row.advance_basis_ore,
+          agreedOre: row.advance_agreed_ore,
+          claimedOre: claim.amount_ore,
+          payments: advance.data?.payments ?? [],
+          dnbReceivedOre: claim.dnb_received_ore,
+          dnbRestOre: claim.dnb_rest_ore,
+          offsetOre: advance.data?.offsetOre ?? 0,
+          vatOre: figures.vatOre,
+          totalOre: figures.totalOre,
+          remainingOre: figures.remainingOre,
+        })
+      : null;
+  const settleNow =
+    leftQty === 0 &&
+    claim != null &&
+    (invoicePlan?.action?.kind === "prepare" || invoicePlan?.action?.kind === "append");
+  const settlementPending =
+    Boolean(order.data?.pendingSql) ||
+    Boolean(advance.data?.pendingSql) ||
+    Boolean(invoiceLines.data?.pendingSql);
 
   return (
     <main className="mx-auto w-full max-w-5xl px-5 pb-16">
@@ -880,70 +1051,81 @@ function OrderPage() {
         <p className="surface-card mt-4 p-4 text-sm">{row.return_note}</p>
       ) : null}
 
-      <section className="mt-8 overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="text-left text-muted-foreground">
-              <th className="py-2 pr-3 font-medium">{t("orders_product")}</th>
-              <th className="py-2 pr-3 text-right font-medium">{t("orders_ordered_qty")}</th>
-              <th className="py-2 pr-3 text-right font-medium">{t("orders_delivered_qty")}</th>
-              <th className="py-2 text-right font-medium">{t("orders_remaining")}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {tableRows.map((line) => {
-              const done = line.lineId
-                ? linked
-                    .filter((item) => item.order_line_id === line.lineId)
-                    .reduce((sum, item) => sum + item.quantity, 0)
-                : 0;
-              const ordered = editable
-                ? Number.parseInt(lineQty[line.productId] ?? "", 10) || line.ordered
-                : line.ordered;
-              if (!editable && ordered <= 0) return null;
-              return (
-                <tr key={line.key} className="border-t border-border">
-                  <td className="py-3 pr-3 font-medium">{line.name}</td>
-                  <td className="py-3 pr-3 text-right">
-                    {editable ? (
-                      <input
-                        className={`${fieldClass} ml-auto max-w-28 text-right`}
-                        inputMode="numeric"
-                        aria-label={line.name}
-                        value={
-                          lineQty[line.productId] ?? (line.ordered ? String(line.ordered) : "")
-                        }
-                        onChange={(event) =>
-                          setLineQty((current) => ({
-                            ...current,
-                            [line.productId]: event.target.value,
-                          }))
-                        }
-                      />
-                    ) : (
-                      line.ordered
-                    )}
-                  </td>
-                  <td className="py-3 pr-3 text-right">{done}</td>
-                  <td className="py-3 text-right font-semibold">
-                    {remainingQuantity(ordered, done)}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-        {editable && registrar ? (
-          <button
-            type="button"
-            className="mt-3 text-sm font-semibold"
-            disabled={busy}
-            onClick={() => void saveLines()}
-          >
-            {t("orders_save")}
-          </button>
-        ) : null}
+      <section className="mt-8">
+        <h2 className="text-sm font-semibold">{t("orders_goods")}</h2>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left text-muted-foreground">
+                <th className="py-2 pr-3 font-medium">{t("orders_product")}</th>
+                <th className="py-2 pr-3 text-right font-medium">{t("orders_ordered_qty")}</th>
+                <th className="py-2 pr-3 text-right font-medium">{t("orders_delivered_qty")}</th>
+                <th className="py-2 text-right font-medium">{t("orders_remaining")}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {tableRows.map((line) => {
+                const done = line.lineId
+                  ? linked
+                      .filter((item) => item.order_line_id === line.lineId)
+                      .reduce((sum, item) => sum + item.quantity, 0)
+                  : 0;
+                const ordered = editable
+                  ? Number.parseInt(lineQty[line.productId] ?? "", 10) || line.ordered
+                  : line.ordered;
+                if (!editable && ordered <= 0) return null;
+                return (
+                  <tr key={line.key} className="border-t border-border">
+                    <td className="py-3 pr-3 font-medium">{line.name}</td>
+                    <td className="py-3 pr-3 text-right">
+                      {editable ? (
+                        <input
+                          className={`${fieldClass} ml-auto max-w-28 text-right`}
+                          inputMode="numeric"
+                          aria-label={line.name}
+                          value={
+                            lineQty[line.productId] ?? (line.ordered ? String(line.ordered) : "")
+                          }
+                          onChange={(event) =>
+                            setLineQty((current) => ({
+                              ...current,
+                              [line.productId]: event.target.value,
+                            }))
+                          }
+                        />
+                      ) : (
+                        line.ordered
+                      )}
+                    </td>
+                    <td className="py-3 pr-3 text-right">{done}</td>
+                    <td className="py-3 text-right font-semibold">
+                      {remainingQuantity(ordered, done)}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          {editable && registrar ? (
+            <button
+              type="button"
+              className="mt-3 text-sm font-semibold"
+              disabled={busy}
+              onClick={() => void saveLines()}
+            >
+              {t("orders_save")}
+            </button>
+          ) : null}
+        </div>
       </section>
+
+      <DeliveryHistory
+        rows={linked}
+        showDeliveriesLink={operations}
+        staff={operations ? (staff.data?.staff ?? []) : []}
+        busy={busy}
+        onSaveDriver={(deliveryId, personId) => void saveDriver(deliveryId, personId)}
+      />
 
       {waiting && registrar ? (
         <section className="mt-8 space-y-4">
@@ -1121,11 +1303,25 @@ function OrderPage() {
       ) : null}
 
       {(operations || commercial) && row.status === "confirmed" ? (
-        <section className="mt-8 space-y-3">
-          <h2 className="text-sm font-semibold">{t("orders_invoice_heading")}</h2>
-          {invoiceLines.data?.pendingSql ? (
+        <section className="mt-8 space-y-4">
+          <h2 className="text-sm font-semibold">{t("orders_settlement")}</h2>
+          {settlementPending ? (
             <p className="text-sm text-muted-foreground">{t("orders_pending_sql")}</p>
-          ) : invoicePlan ? (
+          ) : advance.isLoading ? null : (
+            <OrderSettlementPanel
+              key={claim?.id ?? "new"}
+              view={settlement}
+              payments={advance.data?.payments ?? []}
+              documentId={claim?.accounting_invoice_id ?? null}
+              documentNumber={claim?.accounting_invoice_number ?? null}
+              commercial={commercial}
+              busy={busy}
+              basisOre={liveBasis}
+              onPrepare={(percent) => void prepareAdvance(percent)}
+              onAttach={(invoiceId, invoiceNumber) => void attachAdvance(invoiceId, invoiceNumber)}
+            />
+          )}
+          {invoicePlan ? (
             <>
               {invoicePlan.earlier.map((step) =>
                 "draftId" in step ? <InvoiceFact key={step.draftId} step={step} /> : null,
@@ -1136,8 +1332,9 @@ function OrderPage() {
                   placement={invoicePlan.placement}
                   commercial={commercial}
                   busy={busy}
-                  onPrepare={() => void prepareInvoice()}
+                  onPrepare={() => void prepareInvoice(settleNow)}
                   onTransfer={(draftId) => void transferDraft(draftId)}
+                  {...(settleNow ? { prepareLabel: t("orders_prepare_settlement") } : {})}
                 />
               ) : null}
             </>
@@ -1146,14 +1343,6 @@ function OrderPage() {
       ) : row.status === "confirmed" && leftQty === 0 && !operations && !commercial ? (
         <p className="mt-8 text-sm text-muted-foreground">{t("orders_invoice_owner")}</p>
       ) : null}
-
-      <DeliveryHistory
-        rows={linked}
-        showDeliveriesLink={operations}
-        staff={operations ? (staff.data?.staff ?? []) : []}
-        busy={busy}
-        onSaveDriver={(deliveryId, personId) => void saveDriver(deliveryId, personId)}
-      />
 
       {registrar ? (
         <section className="mt-8 space-y-4 rounded-2xl border border-border px-4 py-4">
@@ -1542,6 +1731,9 @@ function toInvoiceLines(
     accounting_invoice_number: string | null;
     payment_due_on: string | null;
     dnb_paid_on: string | null;
+    dnb_total_ore?: number | null;
+    dnb_rest_ore?: number | null;
+    dnb_vat_ore?: number | null;
     fulfillment_id: string | null;
     quantity: number;
     unit_price_ore: number;
@@ -1560,6 +1752,9 @@ function toInvoiceLines(
         invoiceNumber: row.accounting_invoice_number,
         dueOn: row.payment_due_on,
         paidOn: row.dnb_paid_on,
+        dnbTotalOre: row.dnb_total_ore ?? null,
+        dnbRestOre: row.dnb_rest_ore ?? null,
+        dnbVatOre: row.dnb_vat_ore ?? null,
         fulfillmentId: row.fulfillment_id,
         quantity: row.quantity,
         unitPriceOre: row.unit_price_ore,

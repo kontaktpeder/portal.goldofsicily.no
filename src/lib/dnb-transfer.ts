@@ -1,5 +1,6 @@
 import {
   draftInvoiceBody,
+  kronerToOre,
   nextTransferStep,
   noSendDistributionId,
   outcomeForRemote,
@@ -34,6 +35,9 @@ export type TransferOutcome = {
   externalInvoiceId: string | null;
   invoiceNumber: string | null;
   paidOn: string | null;
+  totalOre: number | null;
+  restOre: number | null;
+  vatOre: number | null;
   outcome: "adopted" | "created" | "blocked" | "ambiguous";
   detail: string | null;
 };
@@ -42,7 +46,10 @@ export type TransferOutcome = {
  * Finds an existing DNB draft by the stable reference before creating one.
  * Does not issue or send the invoice.
  */
-export async function transferBasis(basis: Basis, gateway: AccountingGateway): Promise<TransferOutcome> {
+export async function transferBasis(
+  basis: Basis,
+  gateway: AccountingGateway,
+): Promise<TransferOutcome> {
   let existing: RemoteInvoice | null = null;
   try {
     existing = await gateway.findInvoiceByReference(basis.reference);
@@ -76,7 +83,11 @@ export async function transferBasis(basis: Basis, gateway: AccountingGateway): P
         organizationNumber: basis.organizationNumber,
         name: basis.legalName,
       });
-      step = { action: "create", customerId: created.id, distributionPlanId: step.distributionPlanId };
+      step = {
+        action: "create",
+        customerId: created.id,
+        distributionPlanId: step.distributionPlanId,
+      };
     } catch (error) {
       return ambiguous(error);
     }
@@ -90,6 +101,9 @@ export async function transferBasis(basis: Basis, gateway: AccountingGateway): P
       externalInvoiceId: null,
       invoiceNumber: null,
       paidOn: null,
+      totalOre: null,
+      restOre: null,
+      vatOre: null,
       outcome: "blocked",
       detail: step.reason,
     };
@@ -101,6 +115,9 @@ export async function transferBasis(basis: Basis, gateway: AccountingGateway): P
       externalInvoiceId: null,
       invoiceNumber: null,
       paidOn: null,
+      totalOre: null,
+      restOre: null,
+      vatOre: null,
       outcome: "blocked",
       detail: "no_distribution",
     };
@@ -132,6 +149,9 @@ export async function transferBasis(basis: Basis, gateway: AccountingGateway): P
     externalInvoiceId: String(created.id),
     invoiceNumber: mapped.invoiceNumber,
     paidOn: mapped.dnbStatus === "paid" ? (created.paidOn ?? null) : null,
+    totalOre: kronerToOre(created.totalAmount),
+    restOre: kronerToOre(created.restAmount),
+    vatOre: created.vatOre ?? null,
     outcome: "created",
     detail: mapped.transferStatus === "needs_review" ? `status ${created.statusCode}` : null,
   };
@@ -145,6 +165,9 @@ function adopted(invoice: RemoteInvoice): TransferOutcome {
     externalInvoiceId: String(invoice.id),
     invoiceNumber: mapped.invoiceNumber,
     paidOn: mapped.dnbStatus === "paid" ? (invoice.paidOn ?? null) : null,
+    totalOre: kronerToOre(invoice.totalAmount),
+    restOre: kronerToOre(invoice.restAmount),
+    vatOre: invoice.vatOre ?? null,
     outcome: "adopted",
     detail: null,
   };
@@ -157,6 +180,9 @@ function ambiguous(error: unknown): TransferOutcome {
     externalInvoiceId: null,
     invoiceNumber: null,
     paidOn: null,
+    totalOre: null,
+    restOre: null,
+    vatOre: null,
     outcome: "ambiguous",
     detail: error instanceof Error ? error.message : "Unimicro request failed",
   };

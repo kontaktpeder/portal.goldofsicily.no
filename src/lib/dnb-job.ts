@@ -1,6 +1,12 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "../integrations/supabase/types.ts";
-import { outcomeForRemote, paymentDueOn, type DnbInvoiceStatus, type TransferStatus } from "./dnb-invoice.ts";
+import {
+  kronerToOre,
+  outcomeForRemote,
+  paymentDueOn,
+  type DnbInvoiceStatus,
+  type TransferStatus,
+} from "./dnb-invoice.ts";
 import { transferBasis, type TransferOutcome } from "./dnb-transfer.ts";
 import { unimicroConfigFromEnv, unimicroGateway } from "./dnb-unimicro.ts";
 
@@ -29,7 +35,9 @@ function osloToday(): string {
 }
 
 function pendingSql(message: string): boolean {
-  return /transfer_status|claim_dnb_transfer|record_dnb_transfer|dnb_status|dnb_paid_on/.test(message);
+  return /transfer_status|claim_dnb_transfer|record_dnb_transfer|dnb_status|dnb_paid_on/.test(
+    message,
+  );
 }
 
 async function loadDraft(admin: Admin, draftId: string) {
@@ -57,6 +65,9 @@ async function record(admin: Admin, draftId: string, outcome: TransferOutcome) {
     p_outcome: outcome.outcome,
     p_detail: detail,
     p_dnb_paid_on: outcome.paidOn,
+    p_dnb_total_ore: outcome.totalOre,
+    p_dnb_rest_ore: outcome.restOre,
+    p_dnb_vat_ore: outcome.vatOre,
   });
   if (error) throw new Error(error.message);
 }
@@ -81,7 +92,8 @@ export async function transferInvoiceBasis(
       return {
         ok: false,
         reason: "pending_sql",
-        message: "DNB-overføringen er ikke klar i databasen ennå. Kjør SQL for fakturaoverføring i Lovable Cloud.",
+        message:
+          "DNB-overføringen er ikke klar i databasen ennå. Kjør SQL for fakturaoverføring i Lovable Cloud.",
       };
     }
     throw new Error(loaded.error.message);
@@ -98,12 +110,14 @@ export async function transferInvoiceBasis(
       return {
         ok: false,
         reason: "pending_sql",
-        message: "DNB-overføringen er ikke klar i databasen ennå. Kjør SQL for fakturaoverføring i Lovable Cloud.",
+        message:
+          "DNB-overføringen er ikke klar i databasen ennå. Kjør SQL for fakturaoverføring i Lovable Cloud.",
       };
     }
     throw new Error(claimed.error.message);
   }
-  if (!claimed.data) return { ok: false, reason: "in_progress", message: "Overføringen pågår allerede." };
+  if (!claimed.data)
+    return { ok: false, reason: "in_progress", message: "Overføringen pågår allerede." };
 
   const lines = (draft.invoice_draft_lines ?? []).filter((line) => line.active);
   const vat = draft.vat_percent === 25 ? 25 : 15;
@@ -159,7 +173,8 @@ export async function refreshInvoiceBasis(
       return {
         ok: false,
         reason: "pending_sql",
-        message: "DNB-overføringen er ikke klar i databasen ennå. Kjør SQL for fakturaoverføring i Lovable Cloud.",
+        message:
+          "DNB-overføringen er ikke klar i databasen ennå. Kjør SQL for fakturaoverføring i Lovable Cloud.",
       };
     }
     throw new Error(loaded.error.message);
@@ -175,6 +190,9 @@ export async function refreshInvoiceBasis(
     externalInvoiceId: String(remote.id),
     invoiceNumber: mapped.invoiceNumber,
     paidOn: mapped.dnbStatus === "paid" ? (remote.paidOn ?? null) : null,
+    totalOre: kronerToOre(remote.totalAmount),
+    restOre: kronerToOre(remote.restAmount),
+    vatOre: remote.vatOre ?? null,
     outcome: "adopted",
     detail: null,
   });

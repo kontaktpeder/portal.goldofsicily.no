@@ -11,6 +11,7 @@ export function InvoiceStepView({
   busy,
   onPrepare,
   onTransfer,
+  prepareLabel,
 }: {
   step: OrderInvoiceStep;
   placement: "primary" | "secondary";
@@ -18,20 +19,24 @@ export function InvoiceStepView({
   busy: boolean;
   onPrepare: () => void;
   onTransfer: (draftId: string) => void;
+  prepareLabel?: string;
 }) {
-  const { t, lang } = useI18n();
+  const { t } = useI18n();
   if (step.kind === "paid" || step.kind === "sent") {
     return <InvoiceFact step={step} />;
   }
 
+  const preparing = step.kind === "prepare" || step.kind === "append";
   const label =
     step.kind === "transfer"
       ? t("dnb_transfer")
       : step.kind === "open_dnb"
         ? t("orders_open_dnb")
-        : placement === "secondary"
-          ? t("orders_invoice_delivered")
-          : t("orders_prepare_invoice");
+        : preparing && prepareLabel
+          ? prepareLabel
+          : placement === "secondary"
+            ? t("orders_invoice_delivered")
+            : t("orders_prepare_invoice");
 
   if (step.kind === "open_dnb") {
     return (

@@ -292,6 +292,9 @@ export type Database = {
           due_on: string | null
           follow_up_on: string | null
           follow_up_note: string | null
+          advance_percent: number | null
+          advance_basis_ore: number | null
+          advance_agreed_ore: number | null
           id: string
           notes: string | null
           order_number: string
@@ -321,6 +324,9 @@ export type Database = {
           due_on?: string | null
           follow_up_on?: string | null
           follow_up_note?: string | null
+          advance_percent?: number | null
+          advance_basis_ore?: number | null
+          advance_agreed_ore?: number | null
           id?: string
           notes?: string | null
           order_number?: string
@@ -351,6 +357,9 @@ export type Database = {
           due_on?: string | null
           follow_up_on?: string | null
           follow_up_note?: string | null
+          advance_percent?: number | null
+          advance_basis_ore?: number | null
+          advance_agreed_ore?: number | null
           id?: string
           notes?: string | null
           order_number?: string
@@ -1535,6 +1544,9 @@ export type Database = {
           transfer_attempted_at: string | null
           transferred_at: string | null
           dnb_paid_on: string | null
+          dnb_total_ore: number | null
+          dnb_rest_ore: number | null
+          dnb_vat_ore: number | null
         }
         Insert: {
           accounting_invoice_id?: string | null
@@ -1555,6 +1567,9 @@ export type Database = {
           transfer_attempted_at?: string | null
           transferred_at?: string | null
           dnb_paid_on?: string | null
+          dnb_total_ore?: number | null
+          dnb_rest_ore?: number | null
+          dnb_vat_ore?: number | null
         }
         Update: {
           accounting_invoice_id?: string | null
@@ -1575,6 +1590,9 @@ export type Database = {
           transfer_attempted_at?: string | null
           transferred_at?: string | null
           dnb_paid_on?: string | null
+          dnb_total_ore?: number | null
+          dnb_rest_ore?: number | null
+          dnb_vat_ore?: number | null
         }
         Relationships: [
           {
@@ -1682,6 +1700,130 @@ export type Database = {
           },
         ]
       }
+      order_advance_claims: {
+        Row: {
+          id: string
+          order_id: string
+          amount_ore: number
+          claimed_at: string
+          accounting_invoice_id: string | null
+          accounting_invoice_number: string | null
+          dnb_status: string | null
+          dnb_total_ore: number | null
+          dnb_rest_ore: number | null
+          dnb_vat_ore: number | null
+          dnb_received_ore: number | null
+        }
+        Insert: {
+          id?: string
+          order_id: string
+          amount_ore: number
+          claimed_at?: string
+          accounting_invoice_id?: string | null
+          accounting_invoice_number?: string | null
+          dnb_status?: string | null
+          dnb_total_ore?: number | null
+          dnb_rest_ore?: number | null
+          dnb_vat_ore?: number | null
+          dnb_received_ore?: number | null
+        }
+        Update: {
+          id?: string
+          order_id?: string
+          amount_ore?: number
+          claimed_at?: string
+          accounting_invoice_id?: string | null
+          accounting_invoice_number?: string | null
+          dnb_status?: string | null
+          dnb_total_ore?: number | null
+          dnb_rest_ore?: number | null
+          dnb_vat_ore?: number | null
+          dnb_received_ore?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "order_advance_claims_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: true
+            referencedRelation: "customer_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      order_advance_payments: {
+        Row: {
+          id: string
+          claim_id: string
+          amount_ore: number
+          paid_on: string | null
+          external_id: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          claim_id: string
+          amount_ore: number
+          paid_on?: string | null
+          external_id?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          claim_id?: string
+          amount_ore?: number
+          paid_on?: string | null
+          external_id?: string | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "order_advance_payments_claim_id_fkey"
+            columns: ["claim_id"]
+            isOneToOne: false
+            referencedRelation: "order_advance_claims"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      order_advance_offsets: {
+        Row: {
+          id: string
+          claim_id: string
+          invoice_draft_id: string
+          amount_ore: number
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          claim_id: string
+          invoice_draft_id: string
+          amount_ore: number
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          claim_id?: string
+          invoice_draft_id?: string
+          amount_ore?: number
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "order_advance_offsets_claim_id_fkey"
+            columns: ["claim_id"]
+            isOneToOne: false
+            referencedRelation: "order_advance_claims"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "order_advance_offsets_invoice_draft_id_fkey"
+            columns: ["invoice_draft_id"]
+            isOneToOne: false
+            referencedRelation: "invoice_drafts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
@@ -1710,8 +1852,27 @@ export type Database = {
           p_outcome: string
           p_detail: string | null
           p_dnb_paid_on: string | null
+          p_dnb_total_ore: number | null
+          p_dnb_rest_ore: number | null
+          p_dnb_vat_ore: number | null
         }
         Returns: undefined
+      }
+      prepare_order_advance: {
+        Args: { p_order_id: string; p_percent: number; p_basis_ore: number }
+        Returns: string
+      }
+      attach_advance_document: {
+        Args: {
+          p_order_id: string
+          p_accounting_invoice_id: string
+          p_accounting_invoice_number: string
+        }
+        Returns: undefined
+      }
+      record_advance_offset: {
+        Args: { p_order_id: string; p_invoice_draft_id: string }
+        Returns: number
       }
       order_invoice_lines: {
         Args: { p_order_id: string }
@@ -1724,6 +1885,9 @@ export type Database = {
           accounting_invoice_number: string | null
           payment_due_on: string | null
           dnb_paid_on: string | null
+          dnb_total_ore: number | null
+          dnb_rest_ore: number | null
+          dnb_vat_ore: number | null
           fulfillment_id: string
           quantity: number
           unit_price_ore: number

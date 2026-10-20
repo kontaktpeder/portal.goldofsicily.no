@@ -1,4 +1,4 @@
-import { digitsOnly, remotePaidOn, type RemoteInvoice } from "./dnb-invoice.ts";
+import { digitsOnly, kronerToOre, remotePaidOn, type RemoteInvoice } from "./dnb-invoice.ts";
 
 export type UnimicroConfig = {
   apiBase: string;
@@ -7,7 +7,9 @@ export type UnimicroConfig = {
   paymentInfoTypeId?: number;
 };
 
-export function unimicroConfigFromEnv(env: Record<string, string | undefined>): UnimicroConfig | null {
+export function unimicroConfigFromEnv(
+  env: Record<string, string | undefined>,
+): UnimicroConfig | null {
   const apiBase = env.UNIMICRO_API_BASE?.trim().replace(/\/$/, "");
   const accessToken = env.UNIMICRO_ACCESS_TOKEN?.trim();
   const companyKey = env.UNIMICRO_COMPANY_KEY?.trim();
@@ -34,9 +36,16 @@ function headers(config: UnimicroConfig): HeadersInit {
 }
 
 function asList(payload: unknown): Record<string, unknown>[] {
-  if (Array.isArray(payload)) return payload.filter((row) => row && typeof row === "object") as Record<string, unknown>[];
-  if (payload && typeof payload === "object" && Array.isArray((payload as { Data?: unknown }).Data)) {
-    return ((payload as { Data: unknown[] }).Data).filter((row) => row && typeof row === "object") as Record<string, unknown>[];
+  if (Array.isArray(payload))
+    return payload.filter((row) => row && typeof row === "object") as Record<string, unknown>[];
+  if (
+    payload &&
+    typeof payload === "object" &&
+    Array.isArray((payload as { Data?: unknown }).Data)
+  ) {
+    return (payload as { Data: unknown[] }).Data.filter(
+      (row) => row && typeof row === "object",
+    ) as Record<string, unknown>[];
   }
   return [];
 }
@@ -52,11 +61,19 @@ export function remoteInvoiceFromPayload(payload: unknown): RemoteInvoice | null
   if (!row || typeof row !== "object") return null;
   const record = row as Record<string, unknown>;
   const id = typeof record.ID === "number" ? record.ID : Number(record.ID);
-  const statusCode = typeof record.StatusCode === "number" ? record.StatusCode : Number(record.StatusCode);
+  const statusCode =
+    typeof record.StatusCode === "number" ? record.StatusCode : Number(record.StatusCode);
   if (!Number.isInteger(id) || !Number.isInteger(statusCode)) return null;
   const rest = typeof record.RestAmount === "number" ? record.RestAmount : null;
   const total = typeof record.TaxInclusiveAmount === "number" ? record.TaxInclusiveAmount : null;
   const paidOn = remotePaidOn(record["PaymentDate"]);
+  const vatKr =
+    typeof record["VatAmount"] === "number"
+      ? record["VatAmount"]
+      : typeof record["TaxAmount"] === "number"
+        ? record["TaxAmount"]
+        : null;
+  const vatOre = kronerToOre(vatKr);
   return {
     id,
     statusCode,
@@ -65,6 +82,7 @@ export function remoteInvoiceFromPayload(payload: unknown): RemoteInvoice | null
     restAmount: rest,
     totalAmount: total,
     ...(paidOn ? { paidOn } : {}),
+    ...(vatOre != null ? { vatOre } : {}),
   };
 }
 
@@ -125,7 +143,10 @@ export function unimicroGateway(config: UnimicroConfig, fetchImpl: FetchLike = f
         return Number.isInteger(id) ? [{ id }] : [];
       });
     },
-    async createCustomer(input: { organizationNumber: string; name: string }): Promise<{ id: number }> {
+    async createCustomer(input: {
+      organizationNumber: string;
+      name: string;
+    }): Promise<{ id: number }> {
       const payload = await post("/api/biz/customers", {
         OrgNumber: digitsOnly(input.organizationNumber),
         Info: { Name: input.name },

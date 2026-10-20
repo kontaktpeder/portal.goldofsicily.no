@@ -12,7 +12,11 @@ import {
   transferReference,
 } from "./dnb-invoice.ts";
 import { transferBasis } from "./dnb-transfer.ts";
-import { remoteInvoiceFromPayload, unimicroConfigFromEnv, unimicroGateway } from "./dnb-unimicro.ts";
+import {
+  remoteInvoiceFromPayload,
+  unimicroConfigFromEnv,
+  unimicroGateway,
+} from "./dnb-unimicro.ts";
 
 const line = {
   deliveryLineId: "line-1",
@@ -34,7 +38,13 @@ test("a frozen line keeps its ore price and does not read a price list", () => {
 
 test("the portal reference is stable and the no-send plan is found by name", () => {
   assert.equal(transferReference("abc"), "gos-abc");
-  assert.equal(noSendDistributionId([{ id: 4, name: "Std. EHF" }, { id: 15, name: "Ingen utsendelse" }]), 15);
+  assert.equal(
+    noSendDistributionId([
+      { id: 4, name: "Std. EHF" },
+      { id: 15, name: "Ingen utsendelse" },
+    ]),
+    15,
+  );
   assert.equal(noSendDistributionId([{ id: 5, name: "Std. e-post" }]), null);
 });
 
@@ -84,7 +94,14 @@ test("an existing DNB invoice is adopted and a second one is not created", async
 test("a lost response becomes needs review and the next try adopts the draft", async () => {
   const calls = { create: 0 };
   const gateway = {
-    found: null as null | { id: number; statusCode: number; invoiceNumber: null; credited: false; restAmount: null; totalAmount: null },
+    found: null as null | {
+      id: number;
+      statusCode: number;
+      invoiceNumber: null;
+      credited: false;
+      restAmount: null;
+      totalAmount: null;
+    },
     async findInvoiceByReference() {
       return this.found;
     },
@@ -168,12 +185,16 @@ test("creating a draft posts the frozen prices and never issues the invoice", as
     const url = String(input);
     posted.push({ path: url, body: init?.body ? JSON.parse(String(init.body)) : null });
     if (url.includes("/api/biz/invoices") && init?.method === "POST") {
-      return new Response(JSON.stringify({ ID: 9, StatusCode: DNB_DRAFT_STATUS_CODE, InvoiceNumber: null }), {
-        status: 200,
-      });
+      return new Response(
+        JSON.stringify({ ID: 9, StatusCode: DNB_DRAFT_STATUS_CODE, InvoiceNumber: null }),
+        {
+          status: 200,
+        },
+      );
     }
     if (url.includes("/api/biz/invoices")) return new Response("[]", { status: 200 });
-    if (url.includes("/api/biz/customers")) return new Response(JSON.stringify([{ ID: 3 }]), { status: 200 });
+    if (url.includes("/api/biz/customers"))
+      return new Response(JSON.stringify([{ ID: 3 }]), { status: 200 });
     if (url.includes("/api/biz/distributions")) {
       return new Response(JSON.stringify([{ ID: 15, Name: "Ingen utsendelse" }]), { status: 200 });
     }
@@ -213,12 +234,22 @@ test("creating a draft posts the frozen prices and never issues the invoice", as
     distributionPlanId: 15,
   });
   assert.deepEqual(create.body, body);
-  assert.equal(posted.some((call) => call.path.includes("action=invoice")), false);
+  assert.equal(
+    posted.some((call) => call.path.includes("action=invoice")),
+    false,
+  );
 });
 
 test("a non-draft create is kept and flagged for review", () => {
   const mapped = outcomeForRemote(
-    { id: 1, statusCode: 42002, invoiceNumber: "1001", credited: false, restAmount: 100, totalAmount: 100 },
+    {
+      id: 1,
+      statusCode: 42002,
+      invoiceNumber: "1001",
+      credited: false,
+      restAmount: 100,
+      totalAmount: 100,
+    },
     true,
   );
   assert.equal(mapped.transferStatus, "needs_review");
@@ -228,8 +259,22 @@ test("a non-draft create is kept and flagged for review", () => {
 test("remote payload and missing config stay explicit", () => {
   assert.equal(unimicroConfigFromEnv({}), null);
   assert.deepEqual(
-    remoteInvoiceFromPayload({ ID: 7, StatusCode: 42004, InvoiceNumber: "100", Credited: false, RestAmount: 0, TaxInclusiveAmount: 10 }),
-    { id: 7, statusCode: 42004, invoiceNumber: "100", credited: false, restAmount: 0, totalAmount: 10 },
+    remoteInvoiceFromPayload({
+      ID: 7,
+      StatusCode: 42004,
+      InvoiceNumber: "100",
+      Credited: false,
+      RestAmount: 0,
+      TaxInclusiveAmount: 10,
+    }),
+    {
+      id: 7,
+      statusCode: 42004,
+      invoiceNumber: "100",
+      credited: false,
+      restAmount: 0,
+      totalAmount: 10,
+    },
   );
   assert.equal(
     remoteInvoiceFromPayload({
@@ -240,6 +285,26 @@ test("remote payload and missing config stay explicit", () => {
       PaymentDate: "2026-10-20T00:00:00",
     })?.paidOn,
     "2026-10-20",
+  );
+  assert.equal(
+    remoteInvoiceFromPayload({
+      ID: 9,
+      StatusCode: 42002,
+      InvoiceNumber: "102",
+      Credited: false,
+      VatAmount: 19425,
+    })?.vatOre,
+    1_942_500,
+  );
+  assert.equal(
+    remoteInvoiceFromPayload({
+      ID: 10,
+      StatusCode: 42002,
+      InvoiceNumber: "103",
+      Credited: false,
+      TaxAmount: 19425,
+    })?.vatOre,
+    1_942_500,
   );
   assert.equal(dnbInvoiceHref("99"), "https://dnbregnskap.dnb.no/#/sales/invoices/99");
   assert.equal(dnbInvoiceHref(null), "https://dnbregnskap.dnb.no/");
@@ -256,7 +321,10 @@ test("remote payload and missing config stay explicit", () => {
 });
 
 test("the transfer sql locks the basis and does not issue an invoice", () => {
-  const sql = readFileSync(new URL("../../sql/20_dnb_invoice_transfer.sql", import.meta.url), "utf8");
+  const sql = readFileSync(
+    new URL("../../sql/20_dnb_invoice_transfer.sql", import.meta.url),
+    "utf8",
+  );
   const migration = readFileSync(
     new URL("../../supabase/migrations/20261013120000_dnb_invoice_transfer.sql", import.meta.url),
     "utf8",
@@ -266,7 +334,10 @@ test("the transfer sql locks the basis and does not issue an invoice", () => {
   assert.match(sql, /gos\.dnb_transfer/);
   assert.match(sql, /claim_dnb_transfer/);
   assert.equal(sql.includes("action=invoice"), false);
-  const page = readFileSync(new URL("../routes/_authenticated/admin.invoices.tsx", import.meta.url), "utf8");
+  const page = readFileSync(
+    new URL("../routes/_authenticated/admin.invoices.tsx", import.meta.url),
+    "utf8",
+  );
   assert.match(page, /dnb_transfer/);
   assert.match(page, /transferInvoiceDraft/);
   assert.equal(page.includes("action=invoice"), false);
