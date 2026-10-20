@@ -871,6 +871,27 @@ const dict = {
   },
   orders_registered_by: { no: "Registrert av", en: "Registered by" },
   orders_prepare_invoice: { no: "Klargjør faktura", en: "Prepare invoice" },
+  orders_invoice_loading: { no: "Henter fakturagrunnlag.", en: "Loading the invoice basis." },
+  orders_invoice_fetch_failed: {
+    no: "Fakturagrunnlaget kunne ikke hentes.",
+    en: "The invoice basis could not be loaded.",
+  },
+  orders_invoice_unexpected: {
+    no: "Fakturagrunnlaget hadde et uventet format.",
+    en: "The invoice basis had an unexpected format.",
+  },
+  orders_invoice_unlinked: {
+    no: "Ordren er levert, men ingen leveranse er klar for faktura.",
+    en: "The order is delivered, but no delivery is ready to invoice.",
+  },
+  orders_advance_optional: {
+    no: "Forskudd er valgfritt. Fakturaen kan klargjøres uten forskudd.",
+    en: "An advance is optional. The invoice can be prepared without one.",
+  },
+  orders_advance_fetch_failed: {
+    no: "Forskuddet kunne ikke hentes.",
+    en: "The advance could not be loaded.",
+  },
   orders_invoice_delivered: { no: "Fakturer levert antall", en: "Invoice delivered quantity" },
   orders_open_dnb: {
     no: "Åpne i DNB for kontroll og utsending",

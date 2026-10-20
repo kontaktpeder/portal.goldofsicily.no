@@ -19,6 +19,8 @@ import {
   productionNeed,
   deliveryNotice,
   followUpNotice,
+  dnbDocumentKey,
+  goodsInvoicePrepareLabel,
   orderInvoiceSteps,
   remainingQuantity,
   suggestedDeliveryQuantity,
@@ -563,6 +565,59 @@ test("the invoice button reuses an open basis instead of starting another", () =
   });
   assert.equal(stillDelivering.action, null);
   assert.equal(stillDelivering.earlier[0]?.kind, "paid");
+
+  const deliveredWithoutAdvance = orderInvoiceSteps({
+    remaining: 0,
+    fulfillmentIds: ["f1", "f2"],
+    lines: [],
+  });
+  assert.equal(deliveredWithoutAdvance.action?.kind, "prepare");
+  assert.equal(
+    goodsInvoicePrepareLabel({ remaining: 0, hasAdvanceClaim: false }),
+    "orders_prepare_invoice",
+  );
+  assert.equal(
+    goodsInvoicePrepareLabel({ remaining: 0, hasAdvanceClaim: true }),
+    "orders_prepare_settlement",
+  );
+  assert.equal(
+    goodsInvoicePrepareLabel({ remaining: 4, hasAdvanceClaim: false }),
+    "orders_invoice_delivered",
+  );
+
+  const existingBasis = orderInvoiceSteps({
+    remaining: 0,
+    fulfillmentIds: ["f1"],
+    lines: [invoiceLine({ draftId: "d1", fulfillmentId: "f1", transferStatus: "failed" })],
+  });
+  assert.equal(existingBasis.action?.kind, "transfer");
+  if (existingBasis.action?.kind === "transfer") {
+    assert.equal(existingBasis.action.transferStatus, "failed");
+    assert.equal(dnbDocumentKey(null, existingBasis.action.transferStatus), "dnb_failed");
+  }
+
+  const inDnb = orderInvoiceSteps({
+    remaining: 0,
+    fulfillmentIds: ["f1"],
+    lines: [
+      invoiceLine({
+        draftId: "d1",
+        fulfillmentId: "f1",
+        transferStatus: "transferred",
+        dnbStatus: "draft",
+        accountingInvoiceId: "99",
+        invoiceNumber: "1008",
+      }),
+    ],
+  });
+  assert.equal(inDnb.action?.kind, "open_dnb");
+  if (inDnb.action?.kind === "open_dnb") {
+    assert.equal(
+      dnbDocumentKey(inDnb.action.dnbStatus, inDnb.action.transferStatus),
+      "dnb_waiting",
+    );
+    assert.equal(inDnb.action.invoiceNumber, "1008");
+  }
 });
 
 test("the next-step sql requires who delivered and does not guess history", () => {

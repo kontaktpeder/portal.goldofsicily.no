@@ -439,8 +439,15 @@ export type OrderInvoiceLine = {
 export type OrderInvoiceStep =
   | { kind: "prepare"; fulfillmentIds: readonly string[] }
   | { kind: "append"; draftId: string; fulfillmentIds: readonly string[] }
-  | { kind: "transfer"; draftId: string }
-  | { kind: "open_dnb"; draftId: string; invoiceId: string | null }
+  | { kind: "transfer"; draftId: string; transferStatus: string }
+  | {
+      kind: "open_dnb";
+      draftId: string;
+      invoiceId: string | null;
+      dnbStatus: string | null;
+      transferStatus: string;
+      invoiceNumber: string | null;
+    }
   | {
       kind: "sent";
       draftId: string;
@@ -534,9 +541,16 @@ function classifyDraft(draft: InvoiceDraftBucket): OrderInvoiceStep {
     };
   }
   if (draft.transferStatus === "transferred") {
-    return { kind: "open_dnb", draftId: draft.id, invoiceId: draft.accountingInvoiceId };
+    return {
+      kind: "open_dnb",
+      draftId: draft.id,
+      invoiceId: draft.accountingInvoiceId,
+      dnbStatus: draft.dnbStatus,
+      transferStatus: draft.transferStatus,
+      invoiceNumber: draft.invoiceNumber,
+    };
   }
-  return { kind: "transfer", draftId: draft.id };
+  return { kind: "transfer", draftId: draft.id, transferStatus: draft.transferStatus };
 }
 
 function basisCanTakeLines(draft: InvoiceDraftBucket): boolean {
@@ -570,7 +584,7 @@ export function orderInvoiceSteps(input: {
     action =
       missing.length > 0
         ? { kind: "append", draftId: open.id, fulfillmentIds: missing }
-        : { kind: "transfer", draftId: open.id };
+        : { kind: "transfer", draftId: open.id, transferStatus: open.transferStatus };
   } else if (uninvoiced.length > 0) {
     action = { kind: "prepare", fulfillmentIds: uninvoiced };
   } else {
@@ -593,4 +607,41 @@ export function orderInvoiceSteps(input: {
     placement: input.remaining > 0 ? "secondary" : "primary",
     earlier,
   };
+}
+
+/**
+ * The goods invoice does not wait for an advance.
+ * A saved advance only changes the final label.
+ */
+export function goodsInvoicePrepareLabel(input: {
+  remaining: number;
+  hasAdvanceClaim: boolean;
+}): "orders_prepare_invoice" | "orders_prepare_settlement" | "orders_invoice_delivered" {
+  if (input.remaining > 0) return "orders_invoice_delivered";
+  if (input.hasAdvanceClaim) return "orders_prepare_settlement";
+  return "orders_prepare_invoice";
+}
+
+export function dnbDocumentKey(
+  dnbStatus: string | null,
+  transferStatus: string,
+):
+  | "dnb_waiting"
+  | "dnb_issued"
+  | "dnb_partly_paid"
+  | "dnb_paid"
+  | "dnb_credited"
+  | "dnb_failed"
+  | "dnb_needs_review"
+  | "dnb_queued"
+  | "dnb_not_transferred" {
+  if (transferStatus === "failed") return "dnb_failed";
+  if (transferStatus === "needs_review") return "dnb_needs_review";
+  if (transferStatus === "queued") return "dnb_queued";
+  if (dnbStatus === "issued") return "dnb_issued";
+  if (dnbStatus === "partly_paid") return "dnb_partly_paid";
+  if (dnbStatus === "paid") return "dnb_paid";
+  if (dnbStatus === "credited") return "dnb_credited";
+  if (transferStatus === "transferred") return "dnb_waiting";
+  return "dnb_not_transferred";
 }

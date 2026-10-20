@@ -50,6 +50,7 @@ import {
   followUpNotice,
   formatAgreedDelivery,
   fulfillmentBlock,
+  goodsInvoicePrepareLabel,
   isOrderSchemaError,
   linkableQuantity,
   orderInvoiceSteps,
@@ -283,10 +284,15 @@ function OrderPage() {
     queryFn: async () => {
       const { data, error } = await supabase.rpc("order_invoice_lines", { p_order_id: orderId });
       if (error) {
-        if (isOrderSchemaError(error.message)) return { pendingSql: true as const, rows: [] };
-        throw error;
+        if (isMissingOrderSetup(error.message)) {
+          return { pendingSql: true as const, rows: [], error: null };
+        }
+        return { pendingSql: false as const, rows: [], error: error.message };
       }
-      return { pendingSql: false as const, rows: toInvoiceLines(data ?? []) };
+      if (!Array.isArray(data)) {
+        return { pendingSql: false as const, rows: [], error: "unexpected" };
+      }
+      return { pendingSql: false as const, rows: toInvoiceLines(data), error: null };
     },
   });
 
@@ -302,13 +308,19 @@ function OrderPage() {
         .eq("order_id", orderId)
         .maybeSingle();
       if (claim.error) {
-        if (isOrderSchemaError(claim.error.message)) {
-          return { pendingSql: true as const, claim: null, payments: [], offsets: [] };
+        if (isMissingOrderSetup(claim.error.message)) {
+          return { pendingSql: true as const, claim: null, payments: [], offsets: [], error: null };
         }
-        throw claim.error;
+        return {
+          pendingSql: false as const,
+          claim: null,
+          payments: [],
+          offsets: [],
+          error: claim.error.message,
+        };
       }
       if (!claim.data) {
-        return { pendingSql: false as const, claim: null, payments: [], offsets: [] };
+        return { pendingSql: false as const, claim: null, payments: [], offsets: [], error: null };
       }
       const [payments, offsets] = await Promise.all([
         supabase
@@ -321,8 +333,24 @@ function OrderPage() {
           .select("amount_ore, confirmed_ore, invoice_draft_id")
           .eq("claim_id", claim.data.id),
       ]);
-      if (payments.error) throw payments.error;
-      if (offsets.error) throw offsets.error;
+      if (payments.error) {
+        return {
+          pendingSql: false as const,
+          claim: claim.data,
+          payments: [],
+          offsets: [],
+          error: payments.error.message,
+        };
+      }
+      if (offsets.error) {
+        return {
+          pendingSql: false as const,
+          claim: claim.data,
+          payments: [],
+          offsets: [],
+          error: offsets.error.message,
+        };
+      }
       return {
         pendingSql: false as const,
         claim: claim.data,
@@ -331,6 +359,7 @@ function OrderPage() {
           paidOn: payment.paid_on,
         })),
         offsets: offsets.data ?? [],
+        error: null,
       };
     },
   });
@@ -996,7 +1025,7 @@ function OrderPage() {
   useEffect(() => {
     if (!commercial || !row) return;
     if (remainingQuantity(orderedQty, fulfilledQty) !== 0) return;
-    if (!invoiceLines.isSuccess || invoiceLines.data.pendingSql) return;
+    if (!invoiceLines.isSuccess || invoiceLines.data.pendingSql || invoiceLines.data.error) return;
     if (!advance.data || advance.data.pendingSql || !advance.data.claim?.payments_checked_at)
       return;
     const action = orderInvoiceSteps({
@@ -1067,7 +1096,9 @@ function OrderPage() {
     followUpNote: row.follow_up_note,
     today,
   });
-  const invoiceReady = Boolean(invoiceLines.data && !invoiceLines.data.pendingSql);
+  const invoiceReady = Boolean(
+    invoiceLines.data && !invoiceLines.data.pendingSql && !invoiceLines.data.error,
+  );
   const invoicePlan =
     row.status === "confirmed" && invoiceReady
       ? orderInvoiceSteps({
@@ -1127,10 +1158,17 @@ function OrderPage() {
     row.advance_agreed_ore != null
       ? offsetPlan(leftQty === 0 ? finalIds : [], leftQty === 0 ? finalDraftId : null)
       : null;
-  const settleNow =
-    leftQty === 0 &&
-    claim != null &&
-    (invoicePlan?.action?.kind === "prepare" || invoicePlan?.action?.kind === "append");
+  const preparingGoods =
+    invoicePlan?.action?.kind === "prepare" || invoicePlan?.action?.kind === "append";
+  const settleNow = leftQty === 0 && claim != null && preparingGoods;
+  const invoiceLabel = preparingGoods
+    ? t(goodsInvoicePrepareLabel({ remaining: leftQty, hasAdvanceClaim: claim != null }))
+    : null;
+  const invoiceFailure =
+    invoiceLines.data?.error === "unexpected"
+      ? t("orders_invoice_unexpected")
+      : (invoiceLines.data?.error ?? null);
+  const advanceFailure = advance.data?.error ?? null;
   const settlementPending =
     Boolean(order.data?.pendingSql) ||
     Boolean(advance.data?.pendingSql) ||
@@ -1446,23 +1484,19 @@ function OrderPage() {
       {(operations || commercial) && row.status === "confirmed" ? (
         <section className="mt-8 space-y-4">
           <h2 className="text-sm font-semibold">{t("orders_settlement")}</h2>
-          {settlementPending ? (
+          {invoiceLines.isPending && !invoiceLines.data ? (
+            <p className="text-sm text-muted-foreground">{t("orders_invoice_loading")}</p>
+          ) : null}
+          {invoiceFailure ? (
+            <p className="text-sm font-semibold">
+              {invoiceFailure === t("orders_invoice_unexpected")
+                ? invoiceFailure
+                : `${t("orders_invoice_fetch_failed")} ${invoiceFailure}`}
+            </p>
+          ) : null}
+          {invoiceLines.data?.pendingSql ? (
             <p className="text-sm text-muted-foreground">{t("orders_pending_sql")}</p>
-          ) : advance.isLoading ? null : (
-            <OrderSettlementPanel
-              key={claim?.id ?? "new"}
-              view={settlement}
-              payments={advance.data?.payments ?? []}
-              documentId={claim?.accounting_invoice_id ?? null}
-              documentNumber={claim?.accounting_invoice_number ?? null}
-              commercial={commercial}
-              busy={busy}
-              basisOre={liveBasis}
-              companyName={company.data?.name ?? null}
-              onPrepare={(percent) => void prepareAdvance(percent)}
-              onAttach={(invoiceId, invoiceNumber) => void attachAdvance(invoiceId, invoiceNumber)}
-            />
-          )}
+          ) : null}
           {invoicePlan ? (
             <>
               {invoicePlan.earlier.map((step) =>
@@ -1476,12 +1510,44 @@ function OrderPage() {
                   busy={busy}
                   onPrepare={() => void prepareInvoice(settleNow)}
                   onTransfer={(draftId) => void transferDraft(draftId)}
-                  {...(settleNow ? { prepareLabel: t("orders_prepare_settlement") } : {})}
+                  {...(invoiceLabel ? { prepareLabel: invoiceLabel } : {})}
                   companyName={company.data?.name ?? null}
                 />
               ) : null}
             </>
           ) : null}
+          {invoiceReady && leftQty === 0 && linked.length > 0 && !invoicePlan?.action ? (
+            <p className="text-sm font-semibold">{t("orders_invoice_unlinked")}</p>
+          ) : null}
+          {settlementPending && !invoiceLines.data?.pendingSql ? (
+            <p className="text-sm text-muted-foreground">{t("orders_pending_sql")}</p>
+          ) : null}
+          {advanceFailure ? (
+            <p className="text-sm font-semibold">
+              {t("orders_advance_fetch_failed")} {advanceFailure}
+            </p>
+          ) : settlementPending || advance.isLoading ? null : (
+            <>
+              {!claim && commercial ? (
+                <p className="text-sm text-muted-foreground">{t("orders_advance_optional")}</p>
+              ) : null}
+              <OrderSettlementPanel
+                key={claim?.id ?? "new"}
+                view={settlement}
+                payments={advance.data?.payments ?? []}
+                documentId={claim?.accounting_invoice_id ?? null}
+                documentNumber={claim?.accounting_invoice_number ?? null}
+                commercial={commercial}
+                busy={busy}
+                basisOre={liveBasis}
+                companyName={company.data?.name ?? null}
+                onPrepare={(percent) => void prepareAdvance(percent)}
+                onAttach={(invoiceId, invoiceNumber) =>
+                  void attachAdvance(invoiceId, invoiceNumber)
+                }
+              />
+            </>
+          )}
         </section>
       ) : row.status === "confirmed" && leftQty === 0 && !operations && !commercial ? (
         <p className="mt-8 text-sm text-muted-foreground">{t("orders_invoice_owner")}</p>
@@ -1862,6 +1928,15 @@ function latestDeliveryDay(
     if (day && (!last || day > last)) last = day;
   }
   return last;
+}
+
+function isMissingOrderSetup(message: string): boolean {
+  return (
+    isOrderSchemaError(message) &&
+    /does not exist|schema cache|Could not find the function|Could not find the table/i.test(
+      message,
+    )
+  );
 }
 
 function toInvoiceLines(

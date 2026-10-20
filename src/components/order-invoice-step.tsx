@@ -2,7 +2,7 @@ import { PrimaryButton } from "@/components/field";
 import { companySentence } from "@/lib/dnb-advance";
 import { dnbInvoiceHref } from "@/lib/dnb-invoice";
 import { useI18n } from "@/lib/i18n";
-import { formatAgreedDelivery, type OrderInvoiceStep } from "@/lib/orders";
+import { dnbDocumentKey, formatAgreedDelivery, type OrderInvoiceStep } from "@/lib/orders";
 import { formatPriceNok } from "@/lib/slug";
 
 export function InvoiceStepView({
@@ -44,6 +44,10 @@ export function InvoiceStepView({
   if (step.kind === "open_dnb") {
     return (
       <div className="space-y-2">
+        <p className="text-sm font-semibold">
+          {t(dnbDocumentKey(step.dnbStatus, step.transferStatus))}
+          {step.invoiceNumber ? ` · ${step.invoiceNumber}` : ""}
+        </p>
         <a
           href={dnbInvoiceHref(step.invoiceId)}
           target="_blank"
@@ -59,31 +63,49 @@ export function InvoiceStepView({
     );
   }
 
+  const transferProblem =
+    step.kind === "transfer" && step.transferStatus !== "not_transferred"
+      ? t(dnbDocumentKey(null, step.transferStatus))
+      : null;
+
   if (!commercial) {
     return (
-      <p className="text-sm font-semibold">
-        {t("orders_invoice_heading")}: {label}
-      </p>
+      <div className="space-y-2">
+        {transferProblem ? <p className="text-sm font-semibold">{transferProblem}</p> : null}
+        <p className="text-sm font-semibold">
+          {t("orders_invoice_heading")}: {label}
+        </p>
+      </div>
     );
   }
 
   if (placement === "primary") {
     return (
-      <PrimaryButton type="button" disabled={busy} onClick={() => act(step, onPrepare, onTransfer)}>
-        {label}
-      </PrimaryButton>
+      <div className="space-y-2">
+        {transferProblem ? <p className="text-sm font-semibold">{transferProblem}</p> : null}
+        <PrimaryButton
+          type="button"
+          disabled={busy}
+          onClick={() => act(step, onPrepare, onTransfer)}
+        >
+          {label}
+        </PrimaryButton>
+      </div>
     );
   }
 
   return (
-    <button
-      type="button"
-      className="rounded-full border border-border px-4 py-2 text-sm font-semibold"
-      disabled={busy}
-      onClick={() => act(step, onPrepare, onTransfer)}
-    >
-      {label}
-    </button>
+    <div className="space-y-2">
+      {transferProblem ? <p className="text-sm font-semibold">{transferProblem}</p> : null}
+      <button
+        type="button"
+        className="rounded-full border border-border px-4 py-2 text-sm font-semibold"
+        disabled={busy}
+        onClick={() => act(step, onPrepare, onTransfer)}
+      >
+        {label}
+      </button>
+    </div>
   );
 }
 
