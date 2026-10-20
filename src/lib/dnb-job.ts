@@ -29,7 +29,7 @@ function osloToday(): string {
 }
 
 function pendingSql(message: string): boolean {
-  return /transfer_status|claim_dnb_transfer|record_dnb_transfer|dnb_status/.test(message);
+  return /transfer_status|claim_dnb_transfer|record_dnb_transfer|dnb_status|dnb_paid_on/.test(message);
 }
 
 async function loadDraft(admin: Admin, draftId: string) {
@@ -56,6 +56,7 @@ async function record(admin: Admin, draftId: string, outcome: TransferOutcome) {
     p_transfer_error: outcome.transferStatus === "transferred" ? null : detail,
     p_outcome: outcome.outcome,
     p_detail: detail,
+    p_dnb_paid_on: outcome.paidOn,
   });
   if (error) throw new Error(error.message);
 }
@@ -173,6 +174,7 @@ export async function refreshInvoiceBasis(
     dnbStatus: mapped.dnbStatus,
     externalInvoiceId: String(remote.id),
     invoiceNumber: mapped.invoiceNumber,
+    paidOn: mapped.dnbStatus === "paid" ? (remote.paidOn ?? null) : null,
     outcome: "adopted",
     detail: null,
   });

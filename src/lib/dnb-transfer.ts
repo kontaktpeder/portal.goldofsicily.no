@@ -33,6 +33,7 @@ export type TransferOutcome = {
   dnbStatus: DnbInvoiceStatus | null;
   externalInvoiceId: string | null;
   invoiceNumber: string | null;
+  paidOn: string | null;
   outcome: "adopted" | "created" | "blocked" | "ambiguous";
   detail: string | null;
 };
@@ -88,6 +89,7 @@ export async function transferBasis(basis: Basis, gateway: AccountingGateway): P
       dnbStatus: null,
       externalInvoiceId: null,
       invoiceNumber: null,
+      paidOn: null,
       outcome: "blocked",
       detail: step.reason,
     };
@@ -98,6 +100,7 @@ export async function transferBasis(basis: Basis, gateway: AccountingGateway): P
       dnbStatus: null,
       externalInvoiceId: null,
       invoiceNumber: null,
+      paidOn: null,
       outcome: "blocked",
       detail: "no_distribution",
     };
@@ -128,6 +131,7 @@ export async function transferBasis(basis: Basis, gateway: AccountingGateway): P
     dnbStatus: mapped.dnbStatus,
     externalInvoiceId: String(created.id),
     invoiceNumber: mapped.invoiceNumber,
+    paidOn: mapped.dnbStatus === "paid" ? (created.paidOn ?? null) : null,
     outcome: "created",
     detail: mapped.transferStatus === "needs_review" ? `status ${created.statusCode}` : null,
   };
@@ -140,6 +144,7 @@ function adopted(invoice: RemoteInvoice): TransferOutcome {
     dnbStatus: mapped.dnbStatus,
     externalInvoiceId: String(invoice.id),
     invoiceNumber: mapped.invoiceNumber,
+    paidOn: mapped.dnbStatus === "paid" ? (invoice.paidOn ?? null) : null,
     outcome: "adopted",
     detail: null,
   };
@@ -151,6 +156,7 @@ function ambiguous(error: unknown): TransferOutcome {
     dnbStatus: null,
     externalInvoiceId: null,
     invoiceNumber: null,
+    paidOn: null,
     outcome: "ambiguous",
     detail: error instanceof Error ? error.message : "Unimicro request failed",
   };

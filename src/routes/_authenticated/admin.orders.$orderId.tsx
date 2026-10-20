@@ -4,8 +4,10 @@ import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { PrimaryButton, TextAreaField, TextField } from "@/components/field";
+import { DriverSelect } from "@/components/delivery-driver-editor";
+import { InvoiceFact, InvoiceStepView } from "@/components/order-invoice-step";
 import { supabase } from "@/integrations/supabase/client";
-import { listProductionStaff } from "@/lib/admin.functions";
+import { listProductionStaff, transferInvoiceDraft } from "@/lib/admin.functions";
 import { useSessionInfo } from "@/hooks/use-session";
 import {
   canApproveOrders,
@@ -28,21 +30,28 @@ import {
   villaOptions,
   type StockSource,
 } from "@/lib/lot-stock";
+import { isDeliveryDriverSchemaError, suggestedDeliveredBy } from "@/lib/delivery-driver";
 import {
   canCancelOrder,
   deliveryErrorKind,
+  deliveryNotice,
+  followUpNotice,
   formatAgreedDelivery,
   fulfillmentBlock,
   isOrderSchemaError,
   linkableQuantity,
+  orderInvoiceSteps,
   orderPartyLabel,
   orderPrimaryAction,
   orderProgress,
+  osloToday,
   remainingQuantity,
   suggestedDeliveryQuantity,
+  type OrderInvoiceLine,
   type OrderProgress,
   type OrderWorkflow,
 } from "@/lib/orders";
+import type { ProductionStaff } from "@/lib/lot-producers";
 import { formatPriceNok } from "@/lib/slug";
 import { errorMessage } from "@/lib/utils";
 
@@ -84,16 +93,19 @@ function OrderPage() {
   const commercial = canManageCommercial(roles);
   const action = orderPrimaryAction(approver);
   const staffFn = useServerFn(listProductionStaff);
+  const transferFn = useServerFn(transferInvoiceDraft);
   const [busy, setBusy] = useState(false);
   const [agreedOn, setAgreedOn] = useState("");
   const [ownerId, setOwnerId] = useState("");
-  const [dueOn, setDueOn] = useState("");
+  const [followUpOn, setFollowUpOn] = useState("");
+  const [followUpNote, setFollowUpNote] = useState("");
   const [deviation, setDeviation] = useState("");
   const [returnNote, setReturnNote] = useState("");
   const [lineQty, setLineQty] = useState<Record<string, string>>({});
   const [loadedFor, setLoadedFor] = useState<string | null>(null);
   const [delivering, setDelivering] = useState(false);
   const [deliverOn, setDeliverOn] = useState("");
+  const [deliveredBy, setDeliveredBy] = useState("");
   const [deliverQty, setDeliverQty] = useState<Record<string, string>>({});
   const [deliverLot, setDeliverLot] = useState<Record<string, string>>({});
   const [deliverHandover, setDeliverHandover] = useState<Record<string, string>>({});
@@ -105,6 +117,7 @@ function OrderPage() {
   const savingDelivery = useRef(false);
   const deliveryKey = useRef<string | null>(null);
   const suggestedOnce = useRef(false);
+  const driverSuggested = useRef(false);
 
   const order = useQuery({
     queryKey: ["customer-order", orderId],
@@ -112,15 +125,26 @@ function OrderPage() {
       const embedded =
         "ordered_by:customers!customer_orders_ordered_by_customer_id_fkey(id, name), ship_to:customers!customer_orders_ship_to_customer_id_fkey(id, name)";
       const base =
-        "id, order_number, status, contact_name, desired_delivery_on, confirmed_delivery_on, billing_legal_name_snapshot, billing_organization_number_snapshot, owner_id, owner_name_snapshot, due_on, deviation_note, notes, ordered_by_customer_id, ship_to_customer_id";
-      const rich = await supabase
+        "id, order_number, status, contact_name, desired_delivery_on, confirmed_delivery_on, billing_legal_entity_id, billing_legal_name_snapshot, billing_organization_number_snapshot, owner_id, owner_name_snapshot, deviation_note, notes, ordered_by_customer_id, ship_to_customer_id";
+      const detail = `${base}, return_note, approved_at, approved_name_snapshot, submitted_at, submitted_name_snapshot`;
+      const withFollow = await supabase
         .from("customer_orders")
-        .select(
-          `${base}, return_note, approved_at, approved_name_snapshot, submitted_at, submitted_name_snapshot, ${embedded}`,
-        )
+        .select(`${detail}, follow_up_on, follow_up_note, ${embedded}`)
         .eq("id", orderId)
         .maybeSingle();
-      if (!rich.error) return { pendingSql: false as const, row: rich.data };
+      if (!withFollow.error) return { pendingSql: false as const, row: withFollow.data };
+      if (!isOrderSchemaError(withFollow.error.message)) throw withFollow.error;
+      const rich = await supabase
+        .from("customer_orders")
+        .select(`${detail}, ${embedded}`)
+        .eq("id", orderId)
+        .maybeSingle();
+      if (!rich.error) {
+        return {
+          pendingSql: true as const,
+          row: rich.data ? { ...rich.data, follow_up_on: null, follow_up_note: null } : null,
+        };
+      }
       if (!isOrderSchemaError(rich.error.message)) throw rich.error;
       const plain = await supabase
         .from("customer_orders")
@@ -138,6 +162,8 @@ function OrderPage() {
               approved_name_snapshot: null,
               submitted_at: null,
               submitted_name_snapshot: null,
+              follow_up_on: null,
+              follow_up_note: null,
             }
           : null,
       };
@@ -163,14 +189,24 @@ function OrderPage() {
     queryFn: async () => {
       const lineIds = (lines.data ?? []).map((line) => line.id);
       if (lineIds.length === 0) return [];
+      const rich =
+        "id, order_line_id, delivery_line_id, quantity, delivery_lines(id, quantity, product_name_snapshot, gold_lots(lot_code), deliveries(id, delivered_at, note, delivered_by, delivered_by_name, registered_name_snapshot))";
       const { data, error } = await supabase
         .from("order_line_fulfillments")
+        .select(rich)
+        .in("order_line_id", lineIds);
+      if (!error) return data ?? [];
+      if (!isOrderSchemaError(error.message) && !isDeliveryDriverSchemaError(error.message)) {
+        throw error;
+      }
+      const plain = await supabase
+        .from("order_line_fulfillments")
         .select(
-          "id, order_line_id, delivery_line_id, quantity, delivery_lines(id, quantity, product_name_snapshot, gold_lots(lot_code), deliveries(id, delivered_at, note))",
+          "id, order_line_id, delivery_line_id, quantity, delivery_lines(id, quantity, product_name_snapshot, gold_lots(lot_code), deliveries(id, delivered_at, note, delivered_by, delivered_by_name))",
         )
         .in("order_line_id", lineIds);
-      if (error) throw error;
-      return data ?? [];
+      if (plain.error) throw plain.error;
+      return plain.data ?? [];
     },
     enabled: lines.isSuccess,
   });
@@ -190,8 +226,21 @@ function OrderPage() {
 
   const staff = useQuery({
     queryKey: ["order-production-staff"],
-    enabled: approver,
+    enabled: approver || operations,
     queryFn: () => staffFn(),
+  });
+
+  const invoiceLines = useQuery({
+    queryKey: ["order-invoice-lines", orderId],
+    enabled: operations || commercial,
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("order_invoice_lines", { p_order_id: orderId });
+      if (error) {
+        if (isOrderSchemaError(error.message)) return { pendingSql: true as const, rows: [] };
+        throw error;
+      }
+      return { pendingSql: false as const, rows: toInvoiceLines(data ?? []) };
+    },
   });
 
   const row = order.data?.row ?? null;
@@ -199,7 +248,8 @@ function OrderPage() {
     setLoadedFor(row.id);
     setAgreedOn(row.confirmed_delivery_on || row.desired_delivery_on || "");
     setOwnerId(row.owner_id ?? "");
-    setDueOn(row.due_on ?? "");
+    setFollowUpOn(row.follow_up_on ?? "");
+    setFollowUpNote(row.follow_up_note ?? "");
     setDeviation(row.deviation_note ?? "");
     setReturnNote("");
     const nextQty: Record<string, string> = {};
@@ -299,6 +349,15 @@ function OrderPage() {
     });
   }, [delivering, stock.isSuccess]);
 
+  const userId = session.data?.session?.user.id ?? null;
+  useEffect(() => {
+    if (!delivering || driverSuggested.current) return;
+    const ids = (staff.data?.staff ?? []).map((person) => person.id);
+    if (ids.length === 0) return;
+    driverSuggested.current = true;
+    setDeliveredBy(suggestedDeliveredBy(ids, userId));
+  }, [delivering, staff.data, userId]);
+
   async function refresh() {
     await queryClient.invalidateQueries({ queryKey: ["customer-order", orderId] });
     await queryClient.invalidateQueries({ queryKey: ["customer-order-lines", orderId] });
@@ -307,6 +366,8 @@ function OrderPage() {
     await queryClient.invalidateQueries({ queryKey: ["invoice-desk"] });
     await queryClient.invalidateQueries({ queryKey: ["ops-home"] });
     await queryClient.invalidateQueries({ queryKey: ["order-approval-notices"] });
+    await queryClient.invalidateQueries({ queryKey: ["order-work-notices"] });
+    await queryClient.invalidateQueries({ queryKey: ["order-invoice-lines", orderId] });
     await queryClient.invalidateQueries({ queryKey: ["admin-deliveries"] });
   }
 
@@ -399,7 +460,8 @@ function OrderPage() {
       .from("customer_orders")
       .update({
         owner_id: ownerId || row.owner_id,
-        due_on: dueOn || null,
+        follow_up_on: followUpOn || null,
+        follow_up_note: followUpNote.trim() || null,
       })
       .eq("id", row.id);
     setBusy(false);
@@ -443,6 +505,7 @@ function OrderPage() {
     if (kind === "stock") return t("orders_stock_short");
     if (kind === "lot") return t("delivery_lot_required");
     if (kind === "site") return t("orders_site_mismatch");
+    if (kind === "driver") return t("orders_driver_required");
     if (kind === "quantity") return t("orders_remaining");
     return message || t("orders_save_failed");
   }
@@ -462,6 +525,10 @@ function OrderPage() {
         .filter((line) => line.quantity > 0);
       if (drafts.length === 0 || !deliverOn) {
         toast.error(t("delivery_missing"));
+        return;
+      }
+      if (!deliveredBy) {
+        toast.error(t("orders_driver_required"));
         return;
       }
       const reserved = assignStockSource(stockLots, drafts, effectiveSource);
@@ -515,6 +582,7 @@ function OrderPage() {
         p_delivered_on: deliverOn,
         p_idempotency_key: deliveryKey.current,
         p_lines: withLots,
+        p_delivered_by: deliveredBy,
       });
       if (saved.error || !saved.data) {
         toast.error(explainDeliveryError(saved.error?.message ?? ""));
@@ -526,6 +594,8 @@ function OrderPage() {
       setDeliverQty({});
       setDeliverLot({});
       setDeliverHandover({});
+      setDeliveredBy("");
+      driverSuggested.current = false;
       toast.success(t("orders_delivery_saved"));
       await refresh();
     } finally {
@@ -580,6 +650,114 @@ function OrderPage() {
     await refresh();
   }
 
+  async function saveDriver(deliveryId: string, personId: string) {
+    if (!operations || !personId) return;
+    setBusy(true);
+    const { error } = await supabase
+      .from("deliveries")
+      .update({ delivered_by: personId })
+      .eq("id", deliveryId);
+    setBusy(false);
+    if (error) {
+      toast.error(
+        isDeliveryDriverSchemaError(error.message) ? t("delivered_by_pending_sql") : error.message,
+      );
+      return;
+    }
+    toast.success(t("delivery_updated"));
+    await refresh();
+  }
+
+  async function prepareInvoice() {
+    if (!row || !commercial) return;
+    const action = orderInvoiceSteps({
+      remaining: remainingQuantity(orderedQty, fulfilledQty),
+      fulfillmentIds: linked.map((item) => item.id),
+      lines: invoiceLines.data?.rows ?? [],
+    }).action;
+    if (!action || (action.kind !== "prepare" && action.kind !== "append")) return;
+    if (!row.billing_legal_entity_id) {
+      toast.error(t("orders_invoice_no_recipient"));
+      return;
+    }
+    setBusy(true);
+    const fresh = await supabase.rpc("order_invoice_lines", { p_order_id: row.id });
+    if (fresh.error) {
+      setBusy(false);
+      toast.error(
+        isOrderSchemaError(fresh.error.message) ? t("orders_pending_sql") : fresh.error.message,
+      );
+      return;
+    }
+    const again = orderInvoiceSteps({
+      remaining: remainingQuantity(orderedQty, fulfilledQty),
+      fulfillmentIds: linked.map((item) => item.id),
+      lines: toInvoiceLines(fresh.data ?? []),
+    });
+    if (!again.action || (again.action.kind !== "prepare" && again.action.kind !== "append")) {
+      setBusy(false);
+      await refresh();
+      return;
+    }
+    let draftId = again.action.kind === "append" ? again.action.draftId : "";
+    let createdNow = false;
+    if (!draftId) {
+      const created = await supabase
+        .from("invoice_drafts")
+        .insert({ legal_entity_id: row.billing_legal_entity_id })
+        .select("id")
+        .single();
+      if (created.error || !created.data) {
+        setBusy(false);
+        toast.error(created.error?.message ?? t("invoice_failed"));
+        return;
+      }
+      draftId = created.data.id;
+      createdNow = true;
+    }
+    const rows = again.action.fulfillmentIds.flatMap((id) => {
+      const link = linked.find((item) => item.id === id);
+      if (!link) return [];
+      return [
+        {
+          invoice_draft_id: draftId,
+          delivery_line_id: link.delivery_line_id,
+          order_line_fulfillment_id: id,
+        },
+      ];
+    });
+    if (rows.length === 0) {
+      if (createdNow) await supabase.from("invoice_drafts").delete().eq("id", draftId);
+      setBusy(false);
+      toast.error(t("invoice_failed"));
+      return;
+    }
+    const inserted = await supabase.from("invoice_draft_lines").insert(rows);
+    if (inserted.error) {
+      if (createdNow) await supabase.from("invoice_drafts").delete().eq("id", draftId);
+      setBusy(false);
+      toast.error(inserted.error.message);
+      return;
+    }
+    setBusy(false);
+    toast.success(t("invoice_draft_created"));
+    await refresh();
+  }
+
+  async function transferDraft(draftId: string) {
+    if (!commercial) return;
+    setBusy(true);
+    try {
+      const result = await transferFn({ data: { draftId } });
+      if (!result.ok) toast.error(result.message ?? t("invoice_failed"));
+      else toast.success(t("dnb_transferred"));
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : t("invoice_failed"));
+    }
+    setBusy(false);
+    await refresh();
+  }
+
   if (!row) return <main className="min-h-screen" />;
 
   const orderer = one(row.ordered_by);
@@ -595,8 +773,29 @@ function OrderPage() {
     row.status === "draft" ||
     row.status === "pending_confirmation" ||
     row.status === "changes_requested";
-  const canDeliver =
-    operations && row.status === "confirmed" && remainingQuantity(orderedQty, fulfilledQty) > 0;
+  const leftQty = remainingQuantity(orderedQty, fulfilledQty);
+  const canDeliver = operations && row.status === "confirmed" && leftQty > 0;
+  const today = osloToday();
+  const agreedNotice = deliveryNotice({
+    agreedOn: row.confirmed_delivery_on,
+    today,
+    remaining: leftQty,
+  });
+  const followNotice = followUpNotice({
+    followUpOn: row.follow_up_on,
+    followUpNote: row.follow_up_note,
+    today,
+  });
+  const invoiceReady = Boolean(invoiceLines.data && !invoiceLines.data.pendingSql);
+  const invoicePlan =
+    row.status === "confirmed" && invoiceReady
+      ? orderInvoiceSteps({
+          remaining: leftQty,
+          fulfillmentIds: linked.map((item) => item.id),
+          lines: invoiceLines.data?.rows ?? [],
+        })
+      : null;
+  const lastDeliveredOn = latestDeliveryDay(linked);
   const catalog = products.data ?? [];
   const tableRows =
     editable && catalog.length > 0
@@ -649,16 +848,18 @@ function OrderPage() {
           {t("orders_ship_to")}: {party.site}
         </p>
       ) : null}
-      <p className="mt-3 text-sm">
-        {row.confirmed_delivery_on ? t("orders_confirmed_date") : t("orders_desired_date")}:{" "}
-        <strong>
-          {row.confirmed_delivery_on
-            ? formatAgreedDelivery(row.confirmed_delivery_on, lang)
-            : row.desired_delivery_on
-              ? formatAgreedDelivery(row.desired_delivery_on, lang)
-              : "—"}
-        </strong>
-      </p>
+      {row.desired_delivery_on ? (
+        <p className="mt-3 text-sm">
+          {t("orders_desired_date")}:{" "}
+          <strong>{formatAgreedDelivery(row.desired_delivery_on, lang)}</strong>
+        </p>
+      ) : null}
+      {row.confirmed_delivery_on ? (
+        <p className="mt-1 text-sm">
+          {t("orders_confirmed_date")}:{" "}
+          <strong>{formatAgreedDelivery(row.confirmed_delivery_on, lang)}</strong>
+        </p>
+      ) : null}
       <p className="mt-1 text-sm">
         {t("orders_owner_title")}: <strong>{row.owner_name_snapshot ?? "—"}</strong>
       </p>
@@ -804,8 +1005,41 @@ function OrderPage() {
         </section>
       ) : null}
 
+      {progress === "delivered" ? (
+        <section className="surface-card mt-8 p-5">
+          <p className="text-lg font-semibold">✓ {t("orders_all_delivered")}</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {fulfilledQty} {t("orders_of")} {orderedQty} {t("pcs")}
+            {lastDeliveredOn
+              ? ` · ${t("orders_last_delivery")} ${formatAgreedDelivery(lastDeliveredOn, lang)}`
+              : ""}
+          </p>
+        </section>
+      ) : null}
+      {agreedNotice ? (
+        <p className="mt-4 text-sm font-semibold">
+          {agreedNotice === "late"
+            ? t("orders_notice_late")
+            : agreedNotice === "today"
+              ? t("orders_notice_today")
+              : t("orders_notice_soon")}
+          {" · "}
+          {leftQty} {t("pcs")}
+        </p>
+      ) : null}
+      {followNotice ? (
+        <p className="mt-2 text-sm">
+          <strong>{t("orders_follow_up")}</strong>
+          {" · "}
+          {formatAgreedDelivery(followNotice.on, lang)}
+          {" · "}
+          {followNotice.note}
+        </p>
+      ) : null}
+
       {canDeliver ? (
         <section className="mt-8 space-y-4">
+          <h2 className="text-sm font-semibold">{t("orders_delivery_heading")}</h2>
           {delivering ? (
             <DeliveryForm
               siteName={siteName}
@@ -862,6 +1096,9 @@ function OrderPage() {
                 setDeliverLot((current) => ({ ...current, [productId]: lotId }));
                 setDeliverHandover((current) => ({ ...current, [productId]: handoverId }));
               }}
+              deliveredBy={deliveredBy}
+              staff={staff.data?.staff ?? []}
+              onDeliveredBy={setDeliveredBy}
               busy={busy}
               onSave={() => void saveDelivery()}
             />
@@ -870,10 +1107,9 @@ function OrderPage() {
               type="button"
               disabled={busy}
               onClick={() => {
-                const now = new Date();
-                setDeliverOn(
-                  `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`,
-                );
+                setDeliverOn(osloToday());
+                driverSuggested.current = false;
+                setDeliveredBy("");
                 if (!deliveryKey.current) deliveryKey.current = crypto.randomUUID();
                 setDelivering(true);
               }}
@@ -884,7 +1120,40 @@ function OrderPage() {
         </section>
       ) : null}
 
-      <DeliveryHistory rows={linked} showDeliveriesLink={operations} />
+      {(operations || commercial) && row.status === "confirmed" ? (
+        <section className="mt-8 space-y-3">
+          <h2 className="text-sm font-semibold">{t("orders_invoice_heading")}</h2>
+          {invoiceLines.data?.pendingSql ? (
+            <p className="text-sm text-muted-foreground">{t("orders_pending_sql")}</p>
+          ) : invoicePlan ? (
+            <>
+              {invoicePlan.earlier.map((step) =>
+                "draftId" in step ? <InvoiceFact key={step.draftId} step={step} /> : null,
+              )}
+              {invoicePlan.action ? (
+                <InvoiceStepView
+                  step={invoicePlan.action}
+                  placement={invoicePlan.placement}
+                  commercial={commercial}
+                  busy={busy}
+                  onPrepare={() => void prepareInvoice()}
+                  onTransfer={(draftId) => void transferDraft(draftId)}
+                />
+              ) : null}
+            </>
+          ) : null}
+        </section>
+      ) : row.status === "confirmed" && leftQty === 0 && !operations && !commercial ? (
+        <p className="mt-8 text-sm text-muted-foreground">{t("orders_invoice_owner")}</p>
+      ) : null}
+
+      <DeliveryHistory
+        rows={linked}
+        showDeliveriesLink={operations}
+        staff={operations ? (staff.data?.staff ?? []) : []}
+        busy={busy}
+        onSaveDriver={(deliveryId, personId) => void saveDriver(deliveryId, personId)}
+      />
 
       {registrar ? (
         <section className="mt-8 space-y-4 rounded-2xl border border-border px-4 py-4">
@@ -910,7 +1179,15 @@ function OrderPage() {
               {t("orders_owner")}: {row.owner_name_snapshot ?? "—"}
             </p>
           )}
-          <TextField label={t("orders_due")} type="date" value={dueOn} onChange={setDueOn} />
+          <h3 className="text-sm font-semibold">{t("orders_follow_up")}</h3>
+          <p className="text-sm text-muted-foreground">{t("orders_follow_up_hint")}</p>
+          <TextField
+            label={t("orders_follow_up")}
+            type="date"
+            value={followUpOn}
+            onChange={setFollowUpOn}
+          />
+          <TextAreaField value={followUpNote} onChange={setFollowUpNote} />
           {row.notes ? <p className="text-sm text-muted-foreground">{row.notes}</p> : null}
           <div className="flex flex-wrap gap-2">
             <button
@@ -958,6 +1235,7 @@ function OrderPage() {
         >
           <summary className="cursor-pointer text-sm font-semibold">{t("orders_choices")}</summary>
           <div className="mt-4 space-y-4">
+            <p className="text-sm text-muted-foreground">{t("orders_correct")}</p>
             <div>
               <p className="text-sm font-semibold">{t("orders_link_admin")}</p>
               <p className="mt-1 text-sm text-muted-foreground">{t("orders_link_help")}</p>
@@ -1087,11 +1365,26 @@ function toLinkCandidates(
   );
 }
 
+type HistoryDelivery = {
+  id: string;
+  delivered_at: string;
+  note: string | null;
+  delivered_by?: string | null;
+  delivered_by_name?: string | null;
+  registered_name_snapshot?: string | null;
+};
+
 function DeliveryHistory({
   rows,
   showDeliveriesLink,
+  staff,
+  busy,
+  onSaveDriver,
 }: {
   showDeliveriesLink: boolean;
+  staff: readonly ProductionStaff[];
+  busy: boolean;
+  onSaveDriver: (deliveryId: string, personId: string) => void;
   rows: {
     id: string;
     quantity: number;
@@ -1099,18 +1392,12 @@ function DeliveryHistory({
       | {
           product_name_snapshot: string;
           gold_lots: { lot_code: string } | { lot_code: string }[] | null;
-          deliveries:
-            | { id: string; delivered_at: string; note: string | null }
-            | { id: string; delivered_at: string; note: string | null }[]
-            | null;
+          deliveries: HistoryDelivery | HistoryDelivery[] | null;
         }
       | {
           product_name_snapshot: string;
           gold_lots: { lot_code: string } | { lot_code: string }[] | null;
-          deliveries:
-            | { id: string; delivered_at: string; note: string | null }
-            | { id: string; delivered_at: string; note: string | null }[]
-            | null;
+          deliveries: HistoryDelivery | HistoryDelivery[] | null;
         }[]
       | null;
   }[];
@@ -1118,13 +1405,23 @@ function DeliveryHistory({
   const { t, lang } = useI18n();
   const grouped = new Map<
     string,
-    { deliveredAt: string; lines: { name: string; lot: string; quantity: number }[] }
+    {
+      deliveredAt: string;
+      deliveredByName: string | null;
+      registeredName: string | null;
+      lines: { name: string; lot: string; quantity: number }[];
+    }
   >();
   for (const row of rows) {
     const line = one(row.delivery_lines);
     const delivery = line ? one(line.deliveries) : null;
     if (!line || !delivery) continue;
-    const current = grouped.get(delivery.id) ?? { deliveredAt: delivery.delivered_at, lines: [] };
+    const current = grouped.get(delivery.id) ?? {
+      deliveredAt: delivery.delivered_at,
+      deliveredByName: delivery.delivered_by_name ?? null,
+      registeredName: delivery.registered_name_snapshot ?? null,
+      lines: [],
+    };
     current.lines.push({
       name: line.product_name_snapshot,
       lot: one(line.gold_lots)?.lot_code ?? "—",
@@ -1142,7 +1439,27 @@ function DeliveryHistory({
         <div className="mt-3 space-y-3">
           {history.map(([id, delivery]) => (
             <article key={id} className="rounded-2xl border border-border px-4 py-3 text-sm">
-              <p className="font-semibold">{formatAgreedDelivery(delivery.deliveredAt, lang)}</p>
+              <p className="font-semibold">
+                {t("orders_actual")}: {formatAgreedDelivery(delivery.deliveredAt, lang)}
+              </p>
+              {delivery.deliveredByName ? (
+                <p className="mt-1">
+                  {t("delivered_by")}: {delivery.deliveredByName}
+                </p>
+              ) : staff.length > 0 ? (
+                <MissingDriver
+                  staff={staff}
+                  busy={busy}
+                  onSave={(personId) => onSaveDriver(id, personId)}
+                />
+              ) : (
+                <p className="mt-1 font-semibold">{t("orders_driver_fill")}</p>
+              )}
+              {delivery.registeredName ? (
+                <p className="mt-1 text-muted-foreground">
+                  {t("orders_registered_by")}: {delivery.registeredName}
+                </p>
+              ) : null}
               {delivery.lines.map((line) => (
                 <p key={`${id}-${line.lot}-${line.name}`} className="mt-1 text-muted-foreground">
                   {line.name} · {line.lot} · {line.quantity} {t("pcs")}
@@ -1165,10 +1482,100 @@ function DeliveryHistory({
   );
 }
 
+function MissingDriver({
+  staff,
+  busy,
+  onSave,
+}: {
+  staff: readonly ProductionStaff[];
+  busy: boolean;
+  onSave: (personId: string) => void;
+}) {
+  const { t } = useI18n();
+  const [person, setPerson] = useState("");
+  return (
+    <div className="mt-3 space-y-3">
+      <DriverSelect
+        label={t("delivered_by")}
+        value={person}
+        staff={staff}
+        emptyLabel={t("orders_driver_fill")}
+        onChange={setPerson}
+      />
+      <button
+        type="button"
+        className="rounded-full border border-border px-4 py-2 text-sm font-semibold"
+        disabled={busy || person.length === 0}
+        onClick={() => onSave(person)}
+      >
+        {t("orders_save")}
+      </button>
+    </div>
+  );
+}
+
+function latestDeliveryDay(
+  rows: {
+    delivery_lines:
+      | { deliveries: { delivered_at: string } | { delivered_at: string }[] | null }
+      | { deliveries: { delivered_at: string } | { delivered_at: string }[] | null }[]
+      | null;
+  }[],
+): string | null {
+  let last: string | null = null;
+  for (const row of rows) {
+    const line = one(row.delivery_lines);
+    const delivery = line ? one(line.deliveries) : null;
+    const day = delivery?.delivered_at.slice(0, 10);
+    if (day && (!last || day > last)) last = day;
+  }
+  return last;
+}
+
+function toInvoiceLines(
+  rows: {
+    draft_id: string;
+    draft_status: string;
+    transfer_status: string;
+    dnb_status: string | null;
+    accounting_invoice_id: string | null;
+    accounting_invoice_number: string | null;
+    payment_due_on: string | null;
+    dnb_paid_on: string | null;
+    fulfillment_id: string | null;
+    quantity: number;
+    unit_price_ore: number;
+    active: boolean;
+  }[],
+): OrderInvoiceLine[] {
+  return rows.flatMap((row) => {
+    if (!row.fulfillment_id) return [];
+    return [
+      {
+        draftId: row.draft_id,
+        status: row.draft_status,
+        transferStatus: row.transfer_status,
+        dnbStatus: row.dnb_status,
+        accountingInvoiceId: row.accounting_invoice_id,
+        invoiceNumber: row.accounting_invoice_number,
+        dueOn: row.payment_due_on,
+        paidOn: row.dnb_paid_on,
+        fulfillmentId: row.fulfillment_id,
+        quantity: row.quantity,
+        unitPriceOre: row.unit_price_ore,
+        active: row.active,
+      },
+    ];
+  });
+}
+
 function DeliveryForm({
   siteName,
   deliverOn,
   onDeliverOn,
+  deliveredBy,
+  staff,
+  onDeliveredBy,
   lines,
   stockLots,
   source,
@@ -1186,6 +1593,9 @@ function DeliveryForm({
   siteName: string;
   deliverOn: string;
   onDeliverOn: (value: string) => void;
+  deliveredBy: string;
+  staff: readonly ProductionStaff[];
+  onDeliveredBy: (value: string) => void;
   lines: { id: string; productId: string; name: string; left: number }[];
   stockLots: ReturnType<typeof toStockLots>;
   source: StockSource;
@@ -1206,7 +1616,19 @@ function DeliveryForm({
       <p className="text-sm">
         {t("orders_delivers_to")}: <strong>{siteName}</strong>
       </p>
-      <TextField label={t("date")} type="date" value={deliverOn} onChange={onDeliverOn} />
+      <DriverSelect
+        label={t("delivered_by")}
+        value={deliveredBy}
+        staff={staff}
+        emptyLabel={t("orders_driver_fill")}
+        onChange={onDeliveredBy}
+      />
+      <TextField
+        label={t("orders_delivery_date")}
+        type="date"
+        value={deliverOn}
+        onChange={onDeliverOn}
+      />
       {showSource ? (
         <div>
           <span className="eyebrow mb-2 block">{t("stock_source")}</span>

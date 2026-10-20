@@ -64,7 +64,6 @@ function OrdersPage() {
   const [agreedOn, setAgreedOn] = useState("");
   const [agreedTouched, setAgreedTouched] = useState(false);
   const [ownerId, setOwnerId] = useState("");
-  const [dueOn, setDueOn] = useState("");
   const [notes, setNotes] = useState("");
   const [quantities, setQuantities] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
@@ -152,7 +151,6 @@ function OrdersPage() {
         contact_name: contact.trim() || null,
         desired_delivery_on: desiredOn || null,
         owner_id: ownerId || userId,
-        due_on: dueOn || null,
         notes: notes.trim() || null,
         status: "draft",
       })
@@ -305,8 +303,8 @@ function OrdersPage() {
           </div>
           <details className="rounded-2xl border border-border px-4 py-3">
             <summary className="cursor-pointer text-sm font-semibold">{t("orders_more")}</summary>
-            <div className="mt-4 grid gap-4 sm:grid-cols-2">
-              {approver ? (
+            {approver ? (
+              <div className="mt-4 grid gap-4 sm:grid-cols-2">
                 <label className="block">
                   <span className="eyebrow mb-2 block">{t("orders_owner")}</span>
                   <select
@@ -322,9 +320,8 @@ function OrdersPage() {
                     ))}
                   </select>
                 </label>
-              ) : null}
-              <TextField label={t("orders_due")} type="date" value={dueOn} onChange={setDueOn} />
-            </div>
+              </div>
+            ) : null}
             <div className="mt-4">
               <TextField label={t("orders_notes")} value={notes} onChange={setNotes} />
             </div>

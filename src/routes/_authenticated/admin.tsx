@@ -6,6 +6,14 @@ import { useSessionInfo } from "@/hooks/use-session";
 import { supabase } from "@/integrations/supabase/client";
 import { canApproveOrders, canRegisterOrders } from "@/lib/access";
 import { useI18n } from "@/lib/i18n";
+import {
+  formatAgreedDelivery,
+  isOrderSchemaError,
+  osloToday,
+  remainingQuantity,
+  visibleOrderNotices,
+  type OrderNoticeRow,
+} from "@/lib/orders";
 import { signOutAndReturn } from "@/lib/sign-out";
 import { LanguageToggle, Wordmark } from "@/components/brand";
 
@@ -70,6 +78,7 @@ function AdminLayout() {
         </nav>
       </header>
       {approver ? <ApprovalNotice /> : null}
+      <WorkNotices viewerId={info.session?.user.id ?? null} viewerIsLead={approver} />
       <Outlet />
     </div>
   );
@@ -111,6 +120,114 @@ function ApprovalNotice() {
             </Link>
           );
         })}
+      </div>
+    </div>
+  );
+}
+
+function toWorkNotice(
+  order: {
+    id: string;
+    order_number: string;
+    owner_id: string | null;
+    confirmed_delivery_on: string | null;
+    ordered_by: { name: string } | { name: string }[] | null;
+    customer_order_lines:
+      { quantity: number; order_line_fulfillments: { quantity: number }[] | null }[] | null;
+  },
+  followUpOn: string | null,
+  followUpNote: string | null,
+): OrderNoticeRow {
+  const ordered = (order.customer_order_lines ?? []).reduce((sum, line) => sum + line.quantity, 0);
+  const fulfilled = (order.customer_order_lines ?? []).reduce(
+    (sum, line) =>
+      sum + (line.order_line_fulfillments ?? []).reduce((inner, item) => inner + item.quantity, 0),
+    0,
+  );
+  return {
+    id: order.id,
+    orderNumber: order.order_number,
+    customerName: one(order.ordered_by)?.name ?? "—",
+    ownerId: order.owner_id,
+    agreedOn: order.confirmed_delivery_on,
+    remaining: remainingQuantity(ordered, fulfilled),
+    followUpOn,
+    followUpNote,
+  };
+}
+
+function WorkNotices({
+  viewerId,
+  viewerIsLead,
+}: {
+  viewerId: string | null;
+  viewerIsLead: boolean;
+}) {
+  const { t, lang } = useI18n();
+  const notices = useQuery({
+    queryKey: ["order-work-notices", viewerId, viewerIsLead],
+    queryFn: async () => {
+      const embedded =
+        "ordered_by:customers!customer_orders_ordered_by_customer_id_fkey(name), customer_order_lines(quantity, order_line_fulfillments(quantity))";
+      const rich = await supabase
+        .from("customer_orders")
+        .select(
+          `id, order_number, owner_id, confirmed_delivery_on, follow_up_on, follow_up_note, ${embedded}`,
+        )
+        .eq("status", "confirmed")
+        .limit(80);
+      if (!rich.error) {
+        return (rich.data ?? []).map((order) =>
+          toWorkNotice(order, order.follow_up_on, order.follow_up_note),
+        );
+      }
+      if (!isOrderSchemaError(rich.error.message)) return [];
+      const plain = await supabase
+        .from("customer_orders")
+        .select(`id, order_number, owner_id, confirmed_delivery_on, ${embedded}`)
+        .eq("status", "confirmed")
+        .limit(80);
+      if (plain.error) return [];
+      return (plain.data ?? []).map((order) => toWorkNotice(order, null, null));
+    },
+  });
+  const today = osloToday();
+  const visible = visibleOrderNotices({
+    today,
+    viewerId,
+    viewerIsLead,
+    orders: notices.data ?? [],
+  });
+  if (visible.deliveries.length === 0 && visible.followUps.length === 0) return null;
+  return (
+    <div className="border-b border-border bg-card">
+      <div className="mx-auto flex w-full max-w-5xl flex-col gap-2 px-5 py-3">
+        {visible.deliveries.map((order) => (
+          <Link
+            key={`delivery-${order.id}`}
+            to="/admin/orders/$orderId"
+            params={{ orderId: order.id }}
+            className="text-sm font-semibold underline"
+          >
+            {order.state === "late"
+              ? t("orders_notice_late")
+              : order.state === "today"
+                ? t("orders_notice_today")
+                : t("orders_notice_soon")}
+            {" · "}
+            {order.customerName} · {order.orderNumber} · {order.remaining} {t("pcs")}
+          </Link>
+        ))}
+        {visible.followUps.map((order) => (
+          <Link
+            key={`follow-${order.id}`}
+            to="/admin/orders/$orderId"
+            params={{ orderId: order.id }}
+            className="text-sm underline"
+          >
+            {t("orders_follow_up")} · {formatAgreedDelivery(order.on, lang)} · {order.note}
+          </Link>
+        ))}
       </div>
     </div>
   );

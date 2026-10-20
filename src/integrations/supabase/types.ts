@@ -290,6 +290,8 @@ export type Database = {
           desired_delivery_on: string | null
           deviation_note: string | null
           due_on: string | null
+          follow_up_on: string | null
+          follow_up_note: string | null
           id: string
           notes: string | null
           order_number: string
@@ -317,6 +319,8 @@ export type Database = {
           desired_delivery_on?: string | null
           deviation_note?: string | null
           due_on?: string | null
+          follow_up_on?: string | null
+          follow_up_note?: string | null
           id?: string
           notes?: string | null
           order_number?: string
@@ -345,6 +349,8 @@ export type Database = {
           desired_delivery_on?: string | null
           deviation_note?: string | null
           due_on?: string | null
+          follow_up_on?: string | null
+          follow_up_note?: string | null
           id?: string
           notes?: string | null
           order_number?: string
@@ -480,6 +486,9 @@ export type Database = {
           delivered_at: string
           delivered_by: string | null
           delivered_by_name: string | null
+          registered_by: string | null
+          registered_at: string | null
+          registered_name_snapshot: string | null
           id: string
           note: string | null
           quantity: number
@@ -493,6 +502,9 @@ export type Database = {
           delivered_at?: string
           delivered_by?: string | null
           delivered_by_name?: string | null
+          registered_by?: string | null
+          registered_at?: string | null
+          registered_name_snapshot?: string | null
           id?: string
           note?: string | null
           quantity: number
@@ -506,6 +518,9 @@ export type Database = {
           delivered_at?: string
           delivered_by?: string | null
           delivered_by_name?: string | null
+          registered_by?: string | null
+          registered_at?: string | null
+          registered_name_snapshot?: string | null
           id?: string
           note?: string | null
           quantity?: number
@@ -1519,6 +1534,7 @@ export type Database = {
           transfer_error: string | null
           transfer_attempted_at: string | null
           transferred_at: string | null
+          dnb_paid_on: string | null
         }
         Insert: {
           accounting_invoice_id?: string | null
@@ -1538,6 +1554,7 @@ export type Database = {
           transfer_error?: string | null
           transfer_attempted_at?: string | null
           transferred_at?: string | null
+          dnb_paid_on?: string | null
         }
         Update: {
           accounting_invoice_id?: string | null
@@ -1557,6 +1574,7 @@ export type Database = {
           transfer_error?: string | null
           transfer_attempted_at?: string | null
           transferred_at?: string | null
+          dnb_paid_on?: string | null
         }
         Relationships: [
           {
@@ -1691,8 +1709,26 @@ export type Database = {
           p_transfer_error: string | null
           p_outcome: string
           p_detail: string | null
+          p_dnb_paid_on: string | null
         }
         Returns: undefined
+      }
+      order_invoice_lines: {
+        Args: { p_order_id: string }
+        Returns: {
+          draft_id: string
+          draft_status: string
+          transfer_status: string
+          dnb_status: string | null
+          accounting_invoice_id: string | null
+          accounting_invoice_number: string | null
+          payment_due_on: string | null
+          dnb_paid_on: string | null
+          fulfillment_id: string
+          quantity: number
+          unit_price_ore: number
+          active: boolean
+        }[]
       }
       next_gold_lot_code: {
         Args: { p_lot_letter: string; p_production_date: string }
@@ -1705,6 +1741,7 @@ export type Database = {
           p_delivered_on: string
           p_idempotency_key: string
           p_lines: Json
+          p_delivered_by: string
         }
         Returns: string
       }

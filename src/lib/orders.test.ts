@@ -17,8 +17,13 @@ import {
   orderPrimaryAction,
   orderProgress,
   productionNeed,
+  deliveryNotice,
+  followUpNotice,
+  orderInvoiceSteps,
   remainingQuantity,
   suggestedDeliveryQuantity,
+  visibleOrderNotices,
+  type OrderInvoiceLine,
   type ActiveInvoiceSlice,
   type DeskDelivery,
   type DeskFulfillment,
@@ -382,4 +387,210 @@ test("the database freezes the recipient and guards quantities", () => {
   assert.match(sql, /order_line_fulfillment_id/);
   const orderBranch = sql.indexOf("IF NEW.order_line_fulfillment_id IS NOT NULL");
   assert.doesNotMatch(sql.slice(orderBranch, sql.indexOf("ELSE", orderBranch)), /commercial_route/);
+});
+
+function invoiceLine(
+  over: Partial<OrderInvoiceLine> & { draftId: string; fulfillmentId: string },
+): OrderInvoiceLine {
+  return {
+    status: "draft",
+    transferStatus: "not_transferred",
+    dnbStatus: null,
+    accountingInvoiceId: null,
+    invoiceNumber: null,
+    dueOn: null,
+    paidOn: null,
+    quantity: 20,
+    unitPriceOre: 2500,
+    active: true,
+    ...over,
+  };
+}
+
+test("agreed delivery notices stop when nothing remains", () => {
+  assert.equal(
+    deliveryNotice({ agreedOn: "2026-10-18", today: "2026-10-20", remaining: 4 }),
+    "late",
+  );
+  assert.equal(
+    deliveryNotice({ agreedOn: "2026-10-20", today: "2026-10-20", remaining: 4 }),
+    "today",
+  );
+  assert.equal(
+    deliveryNotice({ agreedOn: "2026-10-22", today: "2026-10-20", remaining: 4 }),
+    "approaching",
+  );
+  assert.equal(deliveryNotice({ agreedOn: "2026-10-25", today: "2026-10-20", remaining: 4 }), null);
+  assert.equal(deliveryNotice({ agreedOn: "2026-10-18", today: "2026-10-20", remaining: 0 }), null);
+  assert.equal(deliveryNotice({ agreedOn: null, today: "2026-10-20", remaining: 4 }), null);
+  assert.equal(
+    followUpNotice({ followUpOn: "2026-10-20", followUpNote: "  ", today: "2026-10-20" }),
+    null,
+  );
+  assert.deepEqual(
+    followUpNotice({
+      followUpOn: "2026-10-20",
+      followUpNote: "Avklar transport",
+      today: "2026-10-20",
+    }),
+    { on: "2026-10-20", note: "Avklar transport", state: "today" },
+  );
+});
+
+test("delivery notices go to the owner, and a lead sees every open order", () => {
+  const orders = [
+    {
+      id: "o1",
+      orderNumber: "O-1",
+      customerName: "Villa",
+      ownerId: "denis",
+      agreedOn: "2026-10-20",
+      remaining: 3,
+      followUpOn: null,
+      followUpNote: null,
+    },
+  ];
+  assert.equal(
+    visibleOrderNotices({ today: "2026-10-20", viewerId: "ashraf", viewerIsLead: false, orders })
+      .deliveries.length,
+    0,
+  );
+  assert.equal(
+    visibleOrderNotices({ today: "2026-10-20", viewerId: "denis", viewerIsLead: false, orders })
+      .deliveries.length,
+    1,
+  );
+  assert.equal(
+    visibleOrderNotices({ today: "2026-10-20", viewerId: "ashraf", viewerIsLead: true, orders })
+      .deliveries[0]?.state,
+    "today",
+  );
+});
+
+test("the invoice button reuses an open basis instead of starting another", () => {
+  const prepare = orderInvoiceSteps({ remaining: 0, fulfillmentIds: ["f1"], lines: [] });
+  assert.equal(prepare.action?.kind, "prepare");
+  assert.equal(prepare.placement, "primary");
+
+  const transfer = orderInvoiceSteps({
+    remaining: 0,
+    fulfillmentIds: ["f1"],
+    lines: [invoiceLine({ draftId: "d1", fulfillmentId: "f1" })],
+  });
+  assert.equal(transfer.action?.kind, "transfer");
+
+  const partial = orderInvoiceSteps({ remaining: 10, fulfillmentIds: ["f1"], lines: [] });
+  assert.equal(partial.placement, "secondary");
+  assert.equal(partial.action?.kind, "prepare");
+
+  const append = orderInvoiceSteps({
+    remaining: 10,
+    fulfillmentIds: ["f1", "f2"],
+    lines: [invoiceLine({ draftId: "d1", fulfillmentId: "f1", quantity: 10 })],
+  });
+  assert.equal(append.action?.kind, "append");
+  if (append.action?.kind === "append") assert.deepEqual([...append.action.fulfillmentIds], ["f2"]);
+
+  const remote = orderInvoiceSteps({
+    remaining: 0,
+    fulfillmentIds: ["f1"],
+    lines: [
+      invoiceLine({
+        draftId: "d1",
+        fulfillmentId: "f1",
+        transferStatus: "transferred",
+        dnbStatus: "draft",
+        accountingInvoiceId: "99",
+      }),
+    ],
+  });
+  assert.equal(remote.action?.kind, "open_dnb");
+  if (remote.action?.kind === "open_dnb") assert.equal(remote.action.invoiceId, "99");
+
+  const sent = orderInvoiceSteps({
+    remaining: 0,
+    fulfillmentIds: ["f1"],
+    lines: [
+      invoiceLine({
+        draftId: "d1",
+        fulfillmentId: "f1",
+        status: "sent",
+        transferStatus: "transferred",
+        dnbStatus: "issued",
+        invoiceNumber: "1001",
+        dueOn: "2026-11-03",
+        quantity: 20,
+        unitPriceOre: 2500,
+      }),
+    ],
+  });
+  assert.equal(sent.action?.kind, "sent");
+  if (sent.action?.kind === "sent") {
+    assert.equal(sent.action.invoiceNumber, "1001");
+    assert.equal(sent.action.amountOre, 50000);
+    assert.equal(sent.action.dueOn, "2026-11-03");
+  }
+
+  const paid = orderInvoiceSteps({
+    remaining: 0,
+    fulfillmentIds: ["f1"],
+    lines: [
+      invoiceLine({
+        draftId: "d1",
+        fulfillmentId: "f1",
+        transferStatus: "transferred",
+        dnbStatus: "paid",
+        invoiceNumber: "1001",
+        paidOn: "2026-10-20",
+      }),
+    ],
+  });
+  assert.equal(paid.action?.kind, "paid");
+  if (paid.action?.kind === "paid") assert.equal(paid.action.paidOn, "2026-10-20");
+
+  const stillDelivering = orderInvoiceSteps({
+    remaining: 5,
+    fulfillmentIds: ["f1"],
+    lines: [
+      invoiceLine({
+        draftId: "d1",
+        fulfillmentId: "f1",
+        transferStatus: "transferred",
+        dnbStatus: "paid",
+        paidOn: "2026-10-20",
+      }),
+    ],
+  });
+  assert.equal(stillDelivering.action, null);
+  assert.equal(stillDelivering.earlier[0]?.kind, "paid");
+});
+
+test("the next-step sql requires who delivered and does not guess history", () => {
+  const sql = readFileSync(new URL("../../sql/25_order_next.sql", import.meta.url), "utf8");
+  const migration = readFileSync(
+    new URL("../../supabase/migrations/20261020120000_order_next.sql", import.meta.url),
+    "utf8",
+  );
+  assert.equal(
+    sql.slice(sql.indexOf("ALTER TABLE")),
+    migration.slice(migration.indexOf("ALTER TABLE")),
+  );
+  assert.match(
+    sql,
+    /DROP FUNCTION IF EXISTS public\.register_order_delivery\(UUID, DATE, UUID, JSONB\)/,
+  );
+  assert.match(sql, /p_delivered_by UUID/);
+  assert.match(sql, /delivery driver is missing/);
+  assert.match(sql, /NEW\.registered_by := auth\.uid\(\)/);
+  assert.match(sql, /fulfillment exceeds ordered quantity/);
+  assert.match(sql, /follow_up_on/);
+  assert.match(sql, /WHEN p_dnb_status = 'paid' AND p_dnb_paid_on IS NOT NULL THEN p_dnb_paid_on/);
+  assert.match(sql, /order_invoice_lines/);
+  assert.doesNotMatch(sql, /UPDATE public\.deliveries/);
+  assert.doesNotMatch(sql, /UPDATE public\.customers/);
+  assert.doesNotMatch(sql, /UPDATE public\.customer_orders/);
+  assert.doesNotMatch(sql, /\bdue_on\b/);
+  assert.doesNotMatch(sql, /net\.http|unimicro|send.?mail/i);
+  assert.equal(deliveryErrorKind("delivery driver is missing"), "driver");
+  assert.equal(isOrderSchemaError("column follow_up_on does not exist"), true);
 });

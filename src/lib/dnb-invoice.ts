@@ -28,7 +28,22 @@ export type RemoteInvoice = {
   credited: boolean;
   restAmount: number | null;
   totalAmount: number | null;
+  paidOn?: string | null;
 };
+
+/** Opens the DNB draft for a human to check and send. The portal does not send it. */
+export function dnbInvoiceHref(invoiceId: string | null | undefined): string {
+  const id = invoiceId?.trim();
+  if (!id) return "https://dnbregnskap.dnb.no/";
+  return `https://dnbregnskap.dnb.no/#/sales/invoices/${encodeURIComponent(id)}`;
+}
+
+/** A paid date is stored only when DNB actually returned one. */
+export function remotePaidOn(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const match = /^(\d{4}-\d{2}-\d{2})/.exec(value.trim());
+  return match?.[1] ?? null;
+}
 
 export type InvoiceItemPayload = {
   ItemText: string;

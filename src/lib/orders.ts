@@ -129,7 +129,7 @@ export function orderDeliveryDraft(input: {
 }
 
 export function isOrderSchemaError(message: string): boolean {
-  return /customer_orders|customer_order_status|approved_name_snapshot|submitted_name_snapshot|return_note|changes_requested|register_order_delivery|order_delivery_requests/.test(
+  return /customer_orders|customer_order_status|approved_name_snapshot|submitted_name_snapshot|return_note|changes_requested|register_order_delivery|order_delivery_requests|follow_up_on|order_invoice_lines|registered_name_snapshot|dnb_paid_on/.test(
     message,
   );
 }
@@ -149,16 +149,18 @@ export function linkableQuantity(
   return Math.max(0, delivered - alreadyLinked - legacyInvoiced);
 }
 
-export type DeliveryErrorKind = "schema" | "stock" | "lot" | "site" | "quantity" | "other";
+export type DeliveryErrorKind =
+  "schema" | "stock" | "lot" | "site" | "quantity" | "driver" | "other";
 
 export function deliveryErrorKind(message: string): DeliveryErrorKind {
   if (
-    /register_order_delivery|order_delivery_requests|submitted_name_snapshot|schema cache|PGRST202/i.test(
+    /register_order_delivery|order_delivery_requests|submitted_name_snapshot|follow_up_on|schema cache|PGRST202/i.test(
       message,
     )
   ) {
     return "schema";
   }
+  if (/delivery driver is missing|delivery driver must be staff/i.test(message)) return "driver";
   if (/does not match the order/i.test(message)) return "site";
   if (/ikke nok|not enough|insufficient|villa stock is short/i.test(message)) return "stock";
   if (/gold_lot|requires gold_lot|ikke åpen|not open/i.test(message)) return "lot";
@@ -323,4 +325,268 @@ export function legacyInvoicePortions(
     });
   }
   return portions;
+}
+
+export function addIsoDays(iso: string, days: number): string {
+  const date = new Date(`${iso.slice(0, 10)}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+export function osloToday(now: Date = new Date()): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Oslo" }).format(now);
+}
+
+/** Agreed delivery is "soon" inside this many days, then due today, then late. */
+export const DELIVERY_APPROACHING_DAYS = 2;
+
+export type DatedNotice = "late" | "today" | "approaching";
+
+function dateBucket(on: string, today: string): DatedNotice | null {
+  const day = on.slice(0, 10);
+  const now = today.slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day) || !/^\d{4}-\d{2}-\d{2}$/.test(now)) return null;
+  if (day < now) return "late";
+  if (day === now) return "today";
+  if (day <= addIsoDays(now, DELIVERY_APPROACHING_DAYS)) return "approaching";
+  return null;
+}
+
+/** In-portal reminder for the order owner. It stops when nothing remains to deliver. */
+export function deliveryNotice(input: {
+  agreedOn: string | null;
+  today: string;
+  remaining: number;
+}): DatedNotice | null {
+  if (input.remaining <= 0 || !input.agreedOn) return null;
+  return dateBucket(input.agreedOn, input.today);
+}
+
+/** A follow-up is a concrete note plus a date. A bare date is not a notice. */
+export function followUpNotice(input: {
+  followUpOn: string | null;
+  followUpNote: string | null;
+  today: string;
+}): { on: string; note: string; state: DatedNotice } | null {
+  const note = input.followUpNote?.trim() ?? "";
+  if (!note || !input.followUpOn) return null;
+  const state = dateBucket(input.followUpOn, input.today);
+  if (!state) return null;
+  return { on: input.followUpOn.slice(0, 10), note, state };
+}
+
+export type OrderNoticeRow = {
+  id: string;
+  orderNumber: string;
+  customerName: string;
+  ownerId: string | null;
+  agreedOn: string | null;
+  remaining: number;
+  followUpOn: string | null;
+  followUpNote: string | null;
+};
+
+export function visibleOrderNotices(input: {
+  today: string;
+  viewerId: string | null;
+  viewerIsLead: boolean;
+  orders: readonly OrderNoticeRow[];
+}): {
+  deliveries: (OrderNoticeRow & { state: DatedNotice })[];
+  followUps: (OrderNoticeRow & { note: string; on: string; state: DatedNotice })[];
+} {
+  const deliveries: (OrderNoticeRow & { state: DatedNotice })[] = [];
+  const followUps: (OrderNoticeRow & { note: string; on: string; state: DatedNotice })[] = [];
+  for (const order of input.orders) {
+    const visible =
+      input.viewerIsLead || (input.viewerId != null && order.ownerId === input.viewerId);
+    if (!visible) continue;
+    const state = deliveryNotice({
+      agreedOn: order.agreedOn,
+      today: input.today,
+      remaining: order.remaining,
+    });
+    if (state) deliveries.push({ ...order, state });
+    const follow = followUpNotice({
+      followUpOn: order.followUpOn,
+      followUpNote: order.followUpNote,
+      today: input.today,
+    });
+    if (follow) followUps.push({ ...order, note: follow.note, on: follow.on, state: follow.state });
+  }
+  return { deliveries, followUps };
+}
+
+export type OrderInvoiceLine = {
+  draftId: string;
+  status: string;
+  transferStatus: string;
+  dnbStatus: string | null;
+  accountingInvoiceId: string | null;
+  invoiceNumber: string | null;
+  dueOn: string | null;
+  paidOn: string | null;
+  fulfillmentId: string;
+  quantity: number;
+  unitPriceOre: number;
+  active: boolean;
+};
+
+export type OrderInvoiceStep =
+  | { kind: "prepare"; fulfillmentIds: readonly string[] }
+  | { kind: "append"; draftId: string; fulfillmentIds: readonly string[] }
+  | { kind: "transfer"; draftId: string }
+  | { kind: "open_dnb"; draftId: string; invoiceId: string | null }
+  | {
+      kind: "sent";
+      draftId: string;
+      invoiceNumber: string | null;
+      amountOre: number | null;
+      dueOn: string | null;
+    }
+  | {
+      kind: "paid";
+      draftId: string;
+      paidOn: string | null;
+      invoiceNumber: string | null;
+      amountOre: number | null;
+    };
+
+export type OrderInvoicePlan = {
+  action: OrderInvoiceStep | null;
+  placement: "primary" | "secondary";
+  earlier: readonly OrderInvoiceStep[];
+};
+
+type InvoiceDraftBucket = {
+  id: string;
+  status: string;
+  transferStatus: string;
+  dnbStatus: string | null;
+  accountingInvoiceId: string | null;
+  invoiceNumber: string | null;
+  dueOn: string | null;
+  paidOn: string | null;
+  fulfillmentIds: string[];
+  amountOre: number;
+};
+
+function groupInvoiceDrafts(lines: readonly OrderInvoiceLine[]): InvoiceDraftBucket[] {
+  const order: string[] = [];
+  const map = new Map<string, InvoiceDraftBucket>();
+  for (const line of lines) {
+    if (!line.active) continue;
+    if (line.status === "cancelled" || line.status === "credited") continue;
+    const existing = map.get(line.draftId);
+    const bucket: InvoiceDraftBucket = existing ?? {
+      id: line.draftId,
+      status: line.status,
+      transferStatus: line.transferStatus,
+      dnbStatus: line.dnbStatus,
+      accountingInvoiceId: line.accountingInvoiceId,
+      invoiceNumber: line.invoiceNumber,
+      dueOn: line.dueOn,
+      paidOn: line.paidOn,
+      fulfillmentIds: [],
+      amountOre: 0,
+    };
+    if (!existing) {
+      map.set(line.draftId, bucket);
+      order.push(line.draftId);
+    }
+    if (!bucket.fulfillmentIds.includes(line.fulfillmentId)) {
+      bucket.fulfillmentIds.push(line.fulfillmentId);
+    }
+    bucket.amountOre += line.quantity * line.unitPriceOre;
+  }
+  return order.flatMap((id) => {
+    const bucket = map.get(id);
+    return bucket ? [bucket] : [];
+  });
+}
+
+function classifyDraft(draft: InvoiceDraftBucket): OrderInvoiceStep {
+  const amountOre = draft.amountOre > 0 ? draft.amountOre : null;
+  if (draft.dnbStatus === "paid") {
+    return {
+      kind: "paid",
+      draftId: draft.id,
+      paidOn: draft.paidOn,
+      invoiceNumber: draft.invoiceNumber,
+      amountOre,
+    };
+  }
+  if (
+    draft.dnbStatus === "issued" ||
+    draft.dnbStatus === "partly_paid" ||
+    draft.status === "sent"
+  ) {
+    return {
+      kind: "sent",
+      draftId: draft.id,
+      invoiceNumber: draft.invoiceNumber,
+      amountOre,
+      dueOn: draft.dueOn,
+    };
+  }
+  if (draft.transferStatus === "transferred") {
+    return { kind: "open_dnb", draftId: draft.id, invoiceId: draft.accountingInvoiceId };
+  }
+  return { kind: "transfer", draftId: draft.id };
+}
+
+function basisCanTakeLines(draft: InvoiceDraftBucket): boolean {
+  return (
+    draft.status === "draft" &&
+    draft.transferStatus !== "transferred" &&
+    draft.dnbStatus !== "issued" &&
+    draft.dnbStatus !== "partly_paid" &&
+    draft.dnbStatus !== "paid"
+  );
+}
+
+/**
+ * The next invoice job for one order.
+ * An open basis is reused. A second draft is only started when nothing open can take the lines.
+ */
+export function orderInvoiceSteps(input: {
+  remaining: number;
+  fulfillmentIds: readonly string[];
+  lines: readonly OrderInvoiceLine[];
+}): OrderInvoicePlan {
+  const drafts = groupInvoiceDrafts(input.lines);
+  const covered = new Set(drafts.flatMap((draft) => draft.fulfillmentIds));
+  const uninvoiced = input.fulfillmentIds.filter((id) => !covered.has(id));
+  const steps = drafts.map(classifyDraft);
+  const open = drafts.find(basisCanTakeLines) ?? null;
+
+  let action: OrderInvoiceStep | null = null;
+  if (uninvoiced.length > 0 && open) {
+    const missing = uninvoiced.filter((id) => !open.fulfillmentIds.includes(id));
+    action =
+      missing.length > 0
+        ? { kind: "append", draftId: open.id, fulfillmentIds: missing }
+        : { kind: "transfer", draftId: open.id };
+  } else if (uninvoiced.length > 0) {
+    action = { kind: "prepare", fulfillmentIds: uninvoiced };
+  } else {
+    action =
+      steps.find((step) => step.kind === "transfer" || step.kind === "open_dnb") ??
+      steps.find((step) => step.kind === "sent") ??
+      steps.find((step) => step.kind === "paid") ??
+      null;
+  }
+
+  if (input.remaining > 0 && action && (action.kind === "paid" || action.kind === "sent")) {
+    action = null;
+  }
+
+  const actionId = action && "draftId" in action ? action.draftId : null;
+  const earlier = steps.filter((step) => !("draftId" in step) || step.draftId !== actionId);
+
+  return {
+    action,
+    placement: input.remaining > 0 ? "secondary" : "primary",
+    earlier,
+  };
 }

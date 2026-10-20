@@ -1,4 +1,4 @@
-import { digitsOnly, type RemoteInvoice } from "./dnb-invoice.ts";
+import { digitsOnly, remotePaidOn, type RemoteInvoice } from "./dnb-invoice.ts";
 
 export type UnimicroConfig = {
   apiBase: string;
@@ -56,6 +56,7 @@ export function remoteInvoiceFromPayload(payload: unknown): RemoteInvoice | null
   if (!Number.isInteger(id) || !Number.isInteger(statusCode)) return null;
   const rest = typeof record.RestAmount === "number" ? record.RestAmount : null;
   const total = typeof record.TaxInclusiveAmount === "number" ? record.TaxInclusiveAmount : null;
+  const paidOn = remotePaidOn(record["PaymentDate"]);
   return {
     id,
     statusCode,
@@ -63,6 +64,7 @@ export function remoteInvoiceFromPayload(payload: unknown): RemoteInvoice | null
     credited: record.Credited === true,
     restAmount: rest,
     totalAmount: total,
+    ...(paidOn ? { paidOn } : {}),
   };
 }
 
@@ -104,9 +106,13 @@ export function unimicroGateway(config: UnimicroConfig, fetchImpl: FetchLike = f
     config,
     async findInvoiceByReference(reference: string): Promise<RemoteInvoice | null> {
       const filter = encodeURIComponent(`OurReference eq '${reference.replaceAll("'", "")}'`);
-      const payload = await get(
-        `/api/biz/invoices?filter=${filter}&select=ID,StatusCode,InvoiceNumber,RestAmount,TaxInclusiveAmount,Credited`,
-      );
+      const base = `/api/biz/invoices?filter=${filter}&select=ID,StatusCode,InvoiceNumber,RestAmount,TaxInclusiveAmount,Credited`;
+      let payload: unknown;
+      try {
+        payload = await get(`${base},PaymentDate`);
+      } catch {
+        payload = await get(base);
+      }
       const first = asList(payload)[0];
       return first ? remoteInvoiceFromPayload(first) : null;
     },

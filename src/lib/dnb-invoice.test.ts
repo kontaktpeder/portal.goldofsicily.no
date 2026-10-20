@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
   DNB_DRAFT_STATUS_CODE,
+  dnbInvoiceHref,
   draftInvoiceBody,
   invoiceItemFromFrozenLine,
   nextTransferStep,
@@ -230,6 +231,18 @@ test("remote payload and missing config stay explicit", () => {
     remoteInvoiceFromPayload({ ID: 7, StatusCode: 42004, InvoiceNumber: "100", Credited: false, RestAmount: 0, TaxInclusiveAmount: 10 }),
     { id: 7, statusCode: 42004, invoiceNumber: "100", credited: false, restAmount: 0, totalAmount: 10 },
   );
+  assert.equal(
+    remoteInvoiceFromPayload({
+      ID: 8,
+      StatusCode: 42004,
+      InvoiceNumber: "101",
+      Credited: false,
+      PaymentDate: "2026-10-20T00:00:00",
+    })?.paidOn,
+    "2026-10-20",
+  );
+  assert.equal(dnbInvoiceHref("99"), "https://dnbregnskap.dnb.no/#/sales/invoices/99");
+  assert.equal(dnbInvoiceHref(null), "https://dnbregnskap.dnb.no/");
   assert.equal(
     nextTransferStep({
       existing: null,
