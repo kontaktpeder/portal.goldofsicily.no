@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { PrimaryButton, TextAreaField, TextField } from "@/components/field";
 import { DriverSelect } from "@/components/delivery-driver-editor";
-import { InvoiceFact, InvoiceStepView } from "@/components/order-invoice-step";
+import { InvoiceFact, InvoiceReview, InvoiceStepView } from "@/components/order-invoice-step";
 import { OrderSettlementPanel } from "@/components/order-settlement";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -51,6 +51,7 @@ import {
   formatAgreedDelivery,
   fulfillmentBlock,
   goodsInvoicePrepareLabel,
+  invoiceReviewLines,
   isOrderSchemaError,
   linkableQuantity,
   orderInvoiceSteps,
@@ -110,6 +111,7 @@ function OrderPage() {
   const syncAdvanceFn = useServerFn(syncOrderAdvance);
   const companyFn = useServerFn(dnbCompanyName);
   const [busy, setBusy] = useState(false);
+  const [invoiceReview, setInvoiceReview] = useState(false);
   const [agreedOn, setAgreedOn] = useState("");
   const [ownerId, setOwnerId] = useState("");
   const [followUpOn, setFollowUpOn] = useState("");
@@ -130,6 +132,7 @@ function OrderPage() {
   const [linkConfirmed, setLinkConfirmed] = useState(false);
   const [repairOpen, setRepairOpen] = useState(false);
   const savingDelivery = useRef(false);
+  const savingInvoice = useRef(false);
   const deliveryKey = useRef<string | null>(null);
   const suggestedOnce = useRef(false);
   const driverSuggested = useRef(false);
@@ -722,6 +725,7 @@ function OrderPage() {
     if (kind === "site") return t("orders_site_mismatch");
     if (kind === "driver") return t("orders_driver_required");
     if (kind === "quantity") return t("orders_remaining");
+    if (kind === "price") return t("orders_delivery_price");
     return message || t("orders_save_failed");
   }
 
@@ -884,80 +888,89 @@ function OrderPage() {
   }
 
   async function prepareInvoice(settle: boolean) {
-    if (!row || !commercial) return;
-    const action = orderInvoiceSteps({
-      remaining: remainingQuantity(orderedQty, fulfilledQty),
-      fulfillmentIds: linked.map((item) => item.id),
-      lines: invoiceLines.data?.rows ?? [],
-    }).action;
-    if (!action || (action.kind !== "prepare" && action.kind !== "append")) return;
-    if (!row.billing_legal_entity_id) {
-      toast.error(t("orders_invoice_no_recipient"));
-      return;
-    }
-    setBusy(true);
-    const fresh = await supabase.rpc("order_invoice_lines", { p_order_id: row.id });
-    if (fresh.error) {
-      setBusy(false);
-      toast.error(
-        isOrderSchemaError(fresh.error.message) ? t("orders_pending_sql") : fresh.error.message,
-      );
-      return;
-    }
-    const again = orderInvoiceSteps({
-      remaining: remainingQuantity(orderedQty, fulfilledQty),
-      fulfillmentIds: linked.map((item) => item.id),
-      lines: toInvoiceLines(fresh.data ?? []),
-    });
-    if (!again.action || (again.action.kind !== "prepare" && again.action.kind !== "append")) {
-      setBusy(false);
-      await refresh();
-      return;
-    }
-    let draftId = again.action.kind === "append" ? again.action.draftId : "";
-    let createdNow = false;
-    if (!draftId) {
-      const created = await supabase
-        .from("invoice_drafts")
-        .insert({ legal_entity_id: row.billing_legal_entity_id })
-        .select("id")
-        .single();
-      if (created.error || !created.data) {
-        setBusy(false);
-        toast.error(created.error?.message ?? t("invoice_failed"));
+    if (savingInvoice.current || !row || !commercial) return;
+    savingInvoice.current = true;
+    try {
+      const action = orderInvoiceSteps({
+        remaining: remainingQuantity(orderedQty, fulfilledQty),
+        fulfillmentIds: linked.map((item) => item.id),
+        lines: invoiceLines.data?.rows ?? [],
+      }).action;
+      if (!action || (action.kind !== "prepare" && action.kind !== "append")) return;
+      if (!row.billing_legal_entity_id) {
+        toast.error(t("orders_invoice_no_recipient"));
         return;
       }
-      draftId = created.data.id;
-      createdNow = true;
-    }
-    const rows = again.action.fulfillmentIds.flatMap((id) => {
-      const link = linked.find((item) => item.id === id);
-      if (!link) return [];
-      return [
-        {
-          invoice_draft_id: draftId,
-          delivery_line_id: link.delivery_line_id,
-          order_line_fulfillment_id: id,
-        },
-      ];
-    });
-    if (rows.length === 0) {
-      if (createdNow) await supabase.from("invoice_drafts").delete().eq("id", draftId);
+      setBusy(true);
+      const fresh = await supabase.rpc("order_invoice_lines", { p_order_id: row.id });
+      if (fresh.error) {
+        setBusy(false);
+        toast.error(
+          /transfer_status/i.test(fresh.error.message)
+            ? t("orders_invoice_sql28")
+            : isOrderSchemaError(fresh.error.message)
+              ? t("orders_pending_sql")
+              : fresh.error.message,
+        );
+        return;
+      }
+      const again = orderInvoiceSteps({
+        remaining: remainingQuantity(orderedQty, fulfilledQty),
+        fulfillmentIds: linked.map((item) => item.id),
+        lines: toInvoiceLines(fresh.data ?? []),
+      });
+      if (!again.action || (again.action.kind !== "prepare" && again.action.kind !== "append")) {
+        setBusy(false);
+        await refresh();
+        return;
+      }
+      let draftId = again.action.kind === "append" ? again.action.draftId : "";
+      let createdNow = false;
+      if (!draftId) {
+        const created = await supabase
+          .from("invoice_drafts")
+          .insert({ legal_entity_id: row.billing_legal_entity_id })
+          .select("id")
+          .single();
+        if (created.error || !created.data) {
+          setBusy(false);
+          toast.error(created.error?.message ?? t("invoice_failed"));
+          return;
+        }
+        draftId = created.data.id;
+        createdNow = true;
+      }
+      const rows = again.action.fulfillmentIds.flatMap((id) => {
+        const link = linked.find((item) => item.id === id);
+        if (!link) return [];
+        return [
+          {
+            invoice_draft_id: draftId,
+            delivery_line_id: link.delivery_line_id,
+            order_line_fulfillment_id: id,
+          },
+        ];
+      });
+      if (rows.length === 0) {
+        if (createdNow) await supabase.from("invoice_drafts").delete().eq("id", draftId);
+        setBusy(false);
+        toast.error(t("invoice_failed"));
+        return;
+      }
+      const inserted = await supabase.from("invoice_draft_lines").insert(rows);
+      if (inserted.error) {
+        if (createdNow) await supabase.from("invoice_drafts").delete().eq("id", draftId);
+        setBusy(false);
+        toast.error(inserted.error.message);
+        return;
+      }
+      if (settle && advance.data?.claim) await recordOffset(draftId, again.action.fulfillmentIds);
       setBusy(false);
-      toast.error(t("invoice_failed"));
-      return;
+      toast.success(t("invoice_draft_created"));
+      await refresh();
+    } finally {
+      savingInvoice.current = false;
     }
-    const inserted = await supabase.from("invoice_draft_lines").insert(rows);
-    if (inserted.error) {
-      if (createdNow) await supabase.from("invoice_drafts").delete().eq("id", draftId);
-      setBusy(false);
-      toast.error(inserted.error.message);
-      return;
-    }
-    if (settle && advance.data?.claim) await recordOffset(draftId, again.action.fulfillmentIds);
-    setBusy(false);
-    toast.success(t("invoice_draft_created"));
-    await refresh();
   }
 
   async function transferDraft(draftId: string) {
@@ -1164,10 +1177,25 @@ function OrderPage() {
   const invoiceLabel = preparingGoods
     ? t(goodsInvoicePrepareLabel({ remaining: leftQty, hasAdvanceClaim: claim != null }))
     : null;
-  const invoiceFailure =
-    invoiceLines.data?.error === "unexpected"
-      ? t("orders_invoice_unexpected")
-      : (invoiceLines.data?.error ?? null);
+  const invoiceFailure = invoiceFailureText(invoiceLines.data?.error ?? null, t);
+  const goods = invoiceReviewLines({
+    fulfillmentIds:
+      invoicePlan?.action &&
+      (invoicePlan.action.kind === "prepare" || invoicePlan.action.kind === "append")
+        ? invoicePlan.action.fulfillmentIds
+        : [],
+    reuseDraftId:
+      invoicePlan?.action && "draftId" in invoicePlan.action ? invoicePlan.action.draftId : null,
+    fulfillments: linked.map((link) => ({
+      id: link.id,
+      quantity: link.quantity,
+      unitPriceOre:
+        orderLines.find((line) => line.id === link.order_line_id)?.unit_price_ore ?? null,
+    })),
+    invoiceLines: invoiceLines.data?.rows ?? [],
+  });
+  const reviewTransfer =
+    invoicePlan?.action?.kind === "transfer" ? invoicePlan.action.transferStatus : null;
   const advanceFailure = advance.data?.error ?? null;
   const settlementPending =
     Boolean(order.data?.pendingSql) ||
@@ -1487,13 +1515,7 @@ function OrderPage() {
           {invoiceLines.isPending && !invoiceLines.data ? (
             <p className="text-sm text-muted-foreground">{t("orders_invoice_loading")}</p>
           ) : null}
-          {invoiceFailure ? (
-            <p className="text-sm font-semibold">
-              {invoiceFailure === t("orders_invoice_unexpected")
-                ? invoiceFailure
-                : `${t("orders_invoice_fetch_failed")} ${invoiceFailure}`}
-            </p>
-          ) : null}
+          {invoiceFailure ? <p className="text-sm font-semibold">{invoiceFailure}</p> : null}
           {invoiceLines.data?.pendingSql ? (
             <p className="text-sm text-muted-foreground">{t("orders_pending_sql")}</p>
           ) : null}
@@ -1510,8 +1532,28 @@ function OrderPage() {
                   busy={busy}
                   onPrepare={() => void prepareInvoice(settleNow)}
                   onTransfer={(draftId) => void transferDraft(draftId)}
+                  onReview={() => setInvoiceReview(true)}
                   {...(invoiceLabel ? { prepareLabel: invoiceLabel } : {})}
                   companyName={company.data?.name ?? null}
+                />
+              ) : null}
+              {invoiceReview && invoicePlan.action ? (
+                <InvoiceReview
+                  customerName={ordererName}
+                  orderNumber={row.order_number}
+                  quantity={goods.quantity}
+                  amountOre={goods.amountOre}
+                  advanceOre={claim?.amount_ore ?? null}
+                  busy={busy}
+                  canCreate={preparingGoods}
+                  canTransfer={invoicePlan.action.kind === "transfer"}
+                  transferStatus={reviewTransfer}
+                  onCreate={() => void prepareInvoice(settleNow)}
+                  onTransfer={() => {
+                    if (invoicePlan.action && "draftId" in invoicePlan.action) {
+                      void transferDraft(invoicePlan.action.draftId);
+                    }
+                  }}
                 />
               ) : null}
             </>
@@ -1928,6 +1970,16 @@ function latestDeliveryDay(
     if (day && (!last || day > last)) last = day;
   }
   return last;
+}
+
+function invoiceFailureText(
+  error: string | null,
+  t: (key: TranslationKey) => string,
+): string | null {
+  if (!error) return null;
+  if (error === "unexpected") return t("orders_invoice_unexpected");
+  if (/transfer_status/i.test(error)) return t("orders_invoice_sql28");
+  return `${t("orders_invoice_fetch_failed")} ${error}`;
 }
 
 function isMissingOrderSetup(message: string): boolean {

@@ -836,10 +836,19 @@ const dict = {
   },
   invoices: { no: "Faktura", en: "Invoices" },
   invoices_intro: {
-    no: "Ufakturerte Gold-salg. Kanal og pris er frosset på leveransen. Overføring lager et utkast i DNB. Portalen sender ikke fakturaen til kunden.",
-    en: "Uninvoiced Gold sales. Route and price are frozen on the delivery. Transfer creates a draft in DNB. The portal does not send the invoice to the customer.",
+    no: "Én ordre eller ett utkast om gangen. Ferdigleverte ordrer som ikke er fakturert står som venter. Leveranser uten ordre ligger for seg og er ikke valgt. Portalen sender ikke fakturaen til kunden.",
+    en: "One order or one draft at a time. Fully delivered orders that are not invoiced stay waiting. Deliveries without an order are separate and not selected. The portal does not send the invoice to the customer.",
   },
   uninvoiced: { no: "Ufakturert", en: "Uninvoiced" },
+  orders_invoice_waiting: { no: "Venter på fakturering", en: "Waiting for invoicing" },
+  orders_invoice_legacy: { no: "Leveranser uten ordre", en: "Deliveries without an order" },
+  orders_invoice_legacy_hint: {
+    no: "Disse er ikke valgt. De følger ikke med når en ordre faktureres.",
+    en: "These are not selected. They are not included when an order is invoiced.",
+  },
+  orders_invoice_show_lines: { no: "Vis linjer", en: "Show lines" },
+  orders_invoice_hide_lines: { no: "Skjul linjer", en: "Hide lines" },
+  orders_invoice_next: { no: "Neste", en: "Next" },
   invoice_drafts: { no: "Fakturautkast", en: "Invoice drafts" },
   create_invoice_draft: { no: "Opprett fakturautkast", en: "Create invoice draft" },
   invoice_draft_created: { no: "Fakturautkast opprettet", en: "Invoice draft created" },
@@ -871,6 +880,16 @@ const dict = {
   },
   orders_registered_by: { no: "Registrert av", en: "Registered by" },
   orders_prepare_invoice: { no: "Klargjør faktura", en: "Prepare invoice" },
+  orders_invoice_open_basis: { no: "Åpne fakturagrunnlag", en: "Open invoice basis" },
+  orders_invoice_ex_vat: { no: "ekskl. MVA", en: "ex VAT" },
+  orders_invoice_only_order: {
+    no: "Bare denne ordren. Eldre leveranser følger ikke med.",
+    en: "This order only. Older deliveries are not included.",
+  },
+  orders_invoice_sql28: {
+    no: "Fakturagrunnlaget feiler på transfer_status. Kjør sql/28_order_invoice_review.sql i Lovable Cloud etter sql/27.",
+    en: "The invoice basis fails on transfer_status. Run sql/28_order_invoice_review.sql in Lovable Cloud after sql/27.",
+  },
   orders_invoice_loading: { no: "Henter fakturagrunnlag.", en: "Loading the invoice basis." },
   orders_invoice_fetch_failed: {
     no: "Fakturagrunnlaget kunne ikke hentes.",
@@ -964,6 +983,10 @@ const dict = {
   orders_price_missing: {
     no: "Bestilleren mangler pris på den bekreftede datoen.",
     en: "The orderer has no price on the confirmed date.",
+  },
+  orders_delivery_price: {
+    no: "Ordrelevering bruker prisen som er frosset på ordren. Kjør sql/28_order_invoice_review.sql i Lovable Cloud etter sql/27.",
+    en: "An order delivery uses the price frozen on the order. Run sql/28_order_invoice_review.sql in Lovable Cloud after sql/27.",
   },
   orders_pending_sql: {
     no: "Kjør sql/27_advance_dnb_check.sql i Lovable Cloud etter sql/26. sql/22 til sql/26 må være kjørt først.",

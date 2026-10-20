@@ -150,7 +150,7 @@ export function linkableQuantity(
 }
 
 export type DeliveryErrorKind =
-  "schema" | "stock" | "lot" | "site" | "quantity" | "driver" | "other";
+  "schema" | "stock" | "lot" | "site" | "quantity" | "driver" | "price" | "other";
 
 export function deliveryErrorKind(message: string): DeliveryErrorKind {
   if (
@@ -160,6 +160,7 @@ export function deliveryErrorKind(message: string): DeliveryErrorKind {
   ) {
     return "schema";
   }
+  if (/missing price snapshot|confirmed order price is missing/i.test(message)) return "price";
   if (/delivery driver is missing|delivery driver must be staff/i.test(message)) return "driver";
   if (/does not match the order/i.test(message)) return "site";
   if (/ikke nok|not enough|insufficient|villa stock is short/i.test(message)) return "stock";
@@ -283,6 +284,113 @@ export type LegacyInvoicePortion = {
   unitPriceOre: number;
   billingLegalEntityId: string;
 };
+
+export type GoodsPortion = {
+  quantity: number;
+  unitPriceOre: number;
+};
+
+/** Goods amount for one order. An advance is never added here. */
+export function orderGoodsReview(portions: readonly GoodsPortion[]): {
+  quantity: number;
+  amountOre: number;
+} {
+  let quantity = 0;
+  let amountOre = 0;
+  for (const portion of portions) {
+    if (portion.quantity <= 0 || portion.unitPriceOre <= 0) continue;
+    quantity += portion.quantity;
+    amountOre += portion.quantity * portion.unitPriceOre;
+  }
+  return { quantity, amountOre };
+}
+
+export type InvoiceReviewFulfillment = {
+  id: string;
+  quantity: number;
+  unitPriceOre: number | null;
+};
+
+export type InvoiceReviewLine = {
+  draftId: string;
+  fulfillmentId: string;
+  quantity: number;
+  unitPriceOre: number;
+  active: boolean;
+};
+
+/**
+ * The control for one order.
+ * An existing draft is shown as-is. New fulfillments are added only when they are not already on it.
+ */
+export function invoiceReviewLines(input: {
+  fulfillmentIds: readonly string[];
+  reuseDraftId: string | null;
+  fulfillments: readonly InvoiceReviewFulfillment[];
+  invoiceLines: readonly InvoiceReviewLine[];
+}): { quantity: number; amountOre: number } {
+  const seen = new Set<string>();
+  const portions: GoodsPortion[] = [];
+  if (input.reuseDraftId) {
+    for (const line of input.invoiceLines) {
+      if (!line.active || line.draftId !== input.reuseDraftId) continue;
+      if (seen.has(line.fulfillmentId)) continue;
+      seen.add(line.fulfillmentId);
+      portions.push({ quantity: line.quantity, unitPriceOre: line.unitPriceOre });
+    }
+  }
+  for (const id of input.fulfillmentIds) {
+    if (seen.has(id)) continue;
+    const row = input.fulfillments.find((item) => item.id === id);
+    if (!row || row.unitPriceOre == null || row.unitPriceOre <= 0 || row.quantity <= 0) continue;
+    seen.add(id);
+    portions.push({ quantity: row.quantity, unitPriceOre: row.unitPriceOre });
+  }
+  return orderGoodsReview(portions);
+}
+
+export type WaitingInvoiceLine = {
+  productName: string;
+  quantity: number;
+  unitPriceOre: number;
+};
+
+export type WaitingInvoiceOrder = {
+  orderId: string;
+  orderNumber: string;
+  customerName: string;
+  quantity: number;
+  amountOre: number;
+  lines: WaitingInvoiceLine[];
+};
+
+/** Fully delivered orders that still have goods with no invoice basis. */
+export function waitingInvoiceOrders(
+  orders: readonly {
+    orderId: string;
+    orderNumber: string;
+    customerName: string;
+    orderedQuantity: number;
+    fulfilledQuantity: number;
+    lines: readonly WaitingInvoiceLine[];
+  }[],
+): WaitingInvoiceOrder[] {
+  const rows: WaitingInvoiceOrder[] = [];
+  for (const order of orders) {
+    if (order.orderedQuantity <= 0 || order.fulfilledQuantity < order.orderedQuantity) continue;
+    const goods = orderGoodsReview(order.lines);
+    if (goods.quantity <= 0) continue;
+    rows.push({
+      orderId: order.orderId,
+      orderNumber: order.orderNumber,
+      customerName: order.customerName,
+      quantity: goods.quantity,
+      amountOre: goods.amountOre,
+      lines: order.lines.filter((line) => line.quantity > 0 && line.unitPriceOre > 0),
+    });
+  }
+  return rows.sort((a, b) => a.orderNumber.localeCompare(b.orderNumber));
+}
 
 export function orderInvoicePortions(
   fulfillments: readonly DeskFulfillment[],

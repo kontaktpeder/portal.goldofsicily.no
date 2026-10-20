@@ -8,14 +8,15 @@ import { useRequireCommercial } from "@/hooks/use-session";
 import { useI18n } from "@/lib/i18n";
 import { formatDate } from "@/lib/sign-out";
 import { formatPriceNok } from "@/lib/slug";
+import { dnbInvoiceHref } from "@/lib/dnb-invoice";
 import { billingLegalEntityId, type CommercialRoute } from "@/lib/economy";
-import { legacyInvoicePortions, orderInvoicePortions } from "@/lib/orders";
+import { legacyInvoicePortions, orderInvoicePortions, waitingInvoiceOrders } from "@/lib/orders";
 import { refreshInvoiceDraft, transferInvoiceDraft } from "@/lib/admin.functions";
 import type { TranslationKey } from "@/lib/i18n";
 import { PrimaryButton } from "@/components/field";
 
 const draftSelect =
-  "id, status, legal_name_snapshot, organization_number_snapshot, created_at, transfer_status, transfer_reference, dnb_status, payment_due_on, vat_percent, transfer_error, accounting_invoice_number, invoice_draft_lines(id, venue_name_snapshot, product_name_snapshot, quantity, unit_price_ore, active)";
+  "id, status, legal_name_snapshot, organization_number_snapshot, created_at, transfer_status, transfer_reference, dnb_status, payment_due_on, vat_percent, transfer_error, accounting_invoice_id, accounting_invoice_number, invoice_draft_lines(id, venue_name_snapshot, product_name_snapshot, quantity, unit_price_ore, active)";
 const draftSelectLegacy =
   "id, status, legal_name_snapshot, organization_number_snapshot, created_at, invoice_draft_lines(id, venue_name_snapshot, product_name_snapshot, quantity, unit_price_ore, active)";
 
@@ -75,40 +76,53 @@ function AdminInvoices() {
   const { allowed, isLoading } = useRequireCommercial();
   const queryClient = useQueryClient();
   const [busy, setBusy] = useState(false);
-  const [skipped, setSkipped] = useState<Record<string, true>>({});
+  const [legacyChosen, setLegacyChosen] = useState<Record<string, true>>({});
+  const [openOrder, setOpenOrder] = useState<Record<string, true>>({});
+  const [openDraft, setOpenDraft] = useState<Record<string, true>>({});
   const transfer = useServerFn(transferInvoiceDraft);
   const refreshStatus = useServerFn(refreshInvoiceDraft);
 
   const bundle = useQuery({
     queryKey: ["invoice-desk"],
     queryFn: async () => {
-      const [linesRes, allocatedRes, fulfillmentRes, entitiesRes, draftsRes] = await Promise.all([
-        supabase
-          .from("delivery_lines")
-          .select(
-            "id, quantity, unit_price_ore, product_name_snapshot, deliveries!inner(delivered_at, customer_id, customer_name_snapshot, commercial_route, customers!deliveries_customer_id_fkey(type, legal_entity_id, billing_legal_entity_id))",
-          )
-          .limit(1000),
-        supabase
-          .from("invoice_draft_lines")
-          .select("delivery_line_id, order_line_fulfillment_id, quantity")
-          .eq("active", true),
-        supabase
-          .from("order_line_fulfillments")
-          .select(
-            "id, quantity, delivery_line_id, customer_order_lines!order_line_fulfillments_order_line_id_fkey(unit_price_ore, product_name_snapshot, customer_orders!customer_order_lines_order_id_fkey(order_number, billing_legal_entity_id, billing_legal_name_snapshot))",
-          ),
-        supabase
-          .from("legal_entities")
-          .select("id, legal_name, organization_number, parent_legal_entity_id"),
-        supabase
-          .from("invoice_drafts")
-          .select(draftSelect)
-          .order("created_at", { ascending: false })
-          .limit(50),
-      ]);
+      const [linesRes, allocatedRes, fulfillmentRes, entitiesRes, draftsRes, orderLinesRes] =
+        await Promise.all([
+          supabase
+            .from("delivery_lines")
+            .select(
+              "id, quantity, unit_price_ore, product_name_snapshot, deliveries!inner(delivered_at, customer_id, customer_name_snapshot, commercial_route, customers!deliveries_customer_id_fkey(type, legal_entity_id, billing_legal_entity_id))",
+            )
+            .limit(1000),
+          supabase
+            .from("invoice_draft_lines")
+            .select("delivery_line_id, order_line_fulfillment_id, quantity")
+            .eq("active", true),
+          supabase
+            .from("order_line_fulfillments")
+            .select(
+              "id, quantity, delivery_line_id, customer_order_lines!order_line_fulfillments_order_line_id_fkey(unit_price_ore, product_name_snapshot, customer_orders!customer_order_lines_order_id_fkey(id, order_number, billing_legal_entity_id, billing_legal_name_snapshot))",
+            ),
+          supabase
+            .from("legal_entities")
+            .select("id, legal_name, organization_number, parent_legal_entity_id"),
+          supabase
+            .from("invoice_drafts")
+            .select(draftSelect)
+            .order("created_at", { ascending: false })
+            .limit(50),
+          supabase
+            .from("customer_order_lines")
+            .select(
+              "order_id, quantity, customer_orders!customer_order_lines_order_id_fkey(id, order_number, status, billing_legal_name_snapshot, customers!customer_orders_ordered_by_customer_id_fkey(name))",
+            ),
+        ]);
       if (linesRes.error) throw linesRes.error;
       if (entitiesRes.error) throw entitiesRes.error;
+      if (orderLinesRes.error) {
+        if (!/customer_order_lines|customer_orders/.test(orderLinesRes.error.message)) {
+          throw orderLinesRes.error;
+        }
+      }
       let activeInvoices = allocatedRes.data ?? [];
       if (allocatedRes.error) {
         if (!/order_line_fulfillment_id/.test(allocatedRes.error.message)) throw allocatedRes.error;
@@ -153,6 +167,7 @@ function AdminInvoices() {
         entities: entitiesRes.data ?? [],
         drafts,
         pendingSql,
+        orderLines: orderLinesRes.error ? [] : (orderLinesRes.data ?? []),
       };
     },
   });
@@ -164,7 +179,6 @@ function AdminInvoices() {
     id: entity.id,
     parentLegalEntityId: entity.parent_legal_entity_id,
   }));
-  const catalog = new Map((bundle.data?.lines ?? []).map((row) => [row.id, row]));
   const activeInvoices = (bundle.data?.activeInvoices ?? []).map((row) => ({
     deliveryLineId: row.delivery_line_id,
     fulfillmentId: row.order_line_fulfillment_id,
@@ -173,7 +187,7 @@ function AdminInvoices() {
   const fulfillmentRows = (bundle.data?.fulfillments ?? []).flatMap((row) => {
     const orderLine = one(row.customer_order_lines);
     const sale = one(orderLine?.customer_orders ?? null);
-    if (!orderLine?.unit_price_ore || !sale?.billing_legal_entity_id) return [];
+    if (!orderLine?.unit_price_ore || !sale?.billing_legal_entity_id || !sale.id) return [];
     return [
       {
         id: row.id,
@@ -181,6 +195,7 @@ function AdminInvoices() {
         quantity: row.quantity,
         unitPriceOre: orderLine.unit_price_ore,
         billingLegalEntityId: sale.billing_legal_entity_id,
+        orderId: sale.id,
         orderNumber: sale.order_number,
         productName: orderLine.product_name_snapshot,
       },
@@ -249,31 +264,51 @@ function AdminInvoices() {
     if (!quantity || line.unitPriceOre == null) return [];
     return [{ ...line, quantity }];
   });
-  const orderReady: SaleLine[] = orderQty.flatMap((portion) => {
-    const source = catalog.get(portion.deliveryLineId);
-    const delivery = source ? one(source.deliveries) : null;
-    if (!source || !delivery) return [];
+  const fulfilledByOrder = new Map<string, number>();
+  for (const row of fulfillmentRows) {
+    fulfilledByOrder.set(row.orderId, (fulfilledByOrder.get(row.orderId) ?? 0) + row.quantity);
+  }
+  const orderHeads = new Map<
+    string,
+    { orderNumber: string; customerName: string; orderedQuantity: number }
+  >();
+  for (const line of bundle.data?.orderLines ?? []) {
+    const sale = one(line.customer_orders);
+    if (!sale || sale.status !== "confirmed") continue;
+    const customer = one(sale.customers);
+    const current = orderHeads.get(sale.id) ?? {
+      orderNumber: sale.order_number,
+      customerName: customer?.name || sale.billing_legal_name_snapshot || sale.order_number,
+      orderedQuantity: 0,
+    };
+    current.orderedQuantity += line.quantity;
+    orderHeads.set(sale.id, current);
+  }
+  const uninvoicedByOrder = new Map<
+    string,
+    { productName: string; quantity: number; unitPriceOre: number }[]
+  >();
+  for (const portion of orderQty) {
     const meta = fulfillmentRows.find((row) => row.id === portion.id);
-    return [
-      {
-        id: portion.id,
-        deliveryLineId: portion.deliveryLineId,
-        fulfillmentId: portion.id,
-        quantity: portion.quantity,
-        unitPriceOre: portion.unitPriceOre,
-        productName: meta?.productName || source.product_name_snapshot,
-        deliveredAt: delivery.delivered_at,
-        customerId: delivery.customer_id,
-        customerType: "venue",
-        customerName: delivery.customer_name_snapshot,
-        commercialRoute: delivery.commercial_route,
-        legalEntityId: portion.billingLegalEntityId,
-        billingLegalEntityId: portion.billingLegalEntityId,
-        orderNumber: meta?.orderNumber ?? null,
-      },
-    ];
-  });
-  const groups = groupSales([...orderReady, ...ready], links);
+    if (!meta) continue;
+    const list = uninvoicedByOrder.get(meta.orderId) ?? [];
+    list.push({
+      productName: meta.productName || "—",
+      quantity: portion.quantity,
+      unitPriceOre: portion.unitPriceOre,
+    });
+    uninvoicedByOrder.set(meta.orderId, list);
+  }
+  const waiting = waitingInvoiceOrders(
+    [...orderHeads.entries()].map(([orderId, head]) => ({
+      orderId,
+      orderNumber: head.orderNumber,
+      customerName: head.customerName,
+      orderedQuantity: head.orderedQuantity,
+      fulfilledQuantity: fulfilledByOrder.get(orderId) ?? 0,
+      lines: uninvoicedByOrder.get(orderId) ?? [],
+    })),
+  );
   const missingRecipient = described.flatMap((line) => {
     if (line.delivery.commercial_route !== "direct" || line.desk.billingLegalEntityId) return [];
     if ((legacyQty.get(line.row.id) ?? 0) <= 0 && line.row.unit_price_ore != null) return [];
@@ -337,6 +372,20 @@ function AdminInvoices() {
     await queryClient.invalidateQueries({ queryKey: ["invoice-desk"] });
   }
 
+  async function createLegacyDrafts() {
+    const chosen = ready.filter((line) => legacyChosen[line.id] && line.billingLegalEntityId);
+    const byEntity = new Map<string, SaleLine[]>();
+    for (const line of chosen) {
+      const entityId = line.billingLegalEntityId;
+      if (!entityId) continue;
+      byEntity.set(entityId, [...(byEntity.get(entityId) ?? []), line]);
+    }
+    for (const [entityId, lines] of byEntity) {
+      await createDraft(entityId, lines);
+    }
+    setLegacyChosen({});
+  }
+
   async function saveTerms(id: string, patch: { vat_percent?: number; payment_due_on?: string }) {
     const { error } = await supabase.from("invoice_drafts").update(patch).eq("id", id);
     if (error) {
@@ -387,7 +436,6 @@ function AdminInvoices() {
       <h1 className="pt-8 text-3xl font-semibold">{t("invoices")}</h1>
       <p className="mt-2 max-w-2xl text-sm text-muted-foreground">{t("invoices_intro")}</p>
 
-      <h2 className="mt-8 text-xl font-semibold">{t("uninvoiced")}</h2>
       {missingPrice.length > 0 ? (
         <section className="surface-card mt-4 space-y-3 p-5">
           <h3 className="font-semibold">{t("missing_price")}</h3>
@@ -446,53 +494,86 @@ function AdminInvoices() {
           ))}
         </section>
       ) : null}
-      {[...groups.entries()].map(([legalEntityId, lines]) => {
-        const entity = entities.find((row) => row.id === legalEntityId);
-        const chosen = lines.filter((line) => !skipped[line.id]);
-        const totalOre = chosen.reduce(
-          (sum, line) => sum + line.quantity * (line.unitPriceOre ?? 0),
-          0,
-        );
-        const totalQty = chosen.reduce((sum, line) => sum + line.quantity, 0);
-        return (
-          <section key={legalEntityId} className="surface-card mt-4 space-y-3 p-5">
-            <h3 className="font-semibold">{entity?.legal_name ?? legalEntityId}</h3>
-            <p className="text-xs text-muted-foreground">{entity?.organization_number}</p>
-            {lines.map((line) => (
-              <label key={line.id} className="flex items-start gap-3 text-sm">
-                <input
-                  type="checkbox"
-                  className="mt-1"
-                  checked={!skipped[line.id]}
-                  onChange={() =>
-                    setSkipped((current) => {
-                      const next = { ...current };
-                      if (next[line.id]) delete next[line.id];
-                      else next[line.id] = true;
-                      return next;
-                    })
-                  }
-                />
-                <span>
-                  {line.orderNumber ? `${line.orderNumber} · ` : ""}
-                  {line.customerName} · {formatDate(line.deliveredAt, lang)} · {line.quantity} ×{" "}
-                  {formatPriceNok(line.unitPriceOre)} kr · {line.productName}
-                </span>
-              </label>
-            ))}
-            <p className="font-semibold">
-              {totalQty} {t("pcs")} · {formatPriceNok(totalOre)} kr
-            </p>
-            <PrimaryButton
-              type="button"
-              disabled={busy || chosen.length === 0}
-              onClick={() => void createDraft(legalEntityId, chosen)}
+      <h2 className="mt-8 text-xl font-semibold">{t("orders_invoice_waiting")}</h2>
+      {waiting.map((row) => (
+        <article key={row.orderId} className="surface-card mt-4 space-y-2 p-5">
+          <p className="font-semibold">
+            {row.customerName} · {row.orderNumber}
+          </p>
+          <p className="text-sm">
+            {t("orders_invoice_waiting")} · {row.quantity} {t("pcs")} ·{" "}
+            {formatPriceNok(row.amountOre)} kr {t("orders_invoice_ex_vat")}
+          </p>
+          <p className="text-sm">
+            {t("orders_invoice_next")}:{" "}
+            <Link
+              to="/admin/orders/$orderId"
+              params={{ orderId: row.orderId }}
+              className="font-semibold text-primary"
             >
-              {t("create_invoice_draft")}
-            </PrimaryButton>
-          </section>
-        );
-      })}
+              {t("orders_prepare_invoice")}
+            </Link>
+          </p>
+          <button
+            type="button"
+            className="text-sm font-semibold"
+            onClick={() =>
+              setOpenOrder((current) => {
+                const next = { ...current };
+                if (next[row.orderId]) delete next[row.orderId];
+                else next[row.orderId] = true;
+                return next;
+              })
+            }
+          >
+            {openOrder[row.orderId]
+              ? t("orders_invoice_hide_lines")
+              : t("orders_invoice_show_lines")}
+          </button>
+          {openOrder[row.orderId]
+            ? row.lines.map((line, index) => (
+                <p key={`${row.orderId}-${index}`} className="text-sm text-muted-foreground">
+                  {line.productName} · {line.quantity} × {formatPriceNok(line.unitPriceOre)} kr
+                </p>
+              ))
+            : null}
+        </article>
+      ))}
+
+      {ready.length > 0 ? (
+        <section className="surface-card mt-8 space-y-3 p-5">
+          <h2 className="text-xl font-semibold">{t("orders_invoice_legacy")}</h2>
+          <p className="text-sm text-muted-foreground">{t("orders_invoice_legacy_hint")}</p>
+          {ready.map((line) => (
+            <label key={line.id} className="flex items-start gap-3 text-sm">
+              <input
+                type="checkbox"
+                className="mt-1"
+                checked={Boolean(legacyChosen[line.id])}
+                onChange={() =>
+                  setLegacyChosen((current) => {
+                    const next = { ...current };
+                    if (next[line.id]) delete next[line.id];
+                    else next[line.id] = true;
+                    return next;
+                  })
+                }
+              />
+              <span>
+                {line.customerName} · {formatDate(line.deliveredAt, lang)} · {line.quantity} ×{" "}
+                {formatPriceNok(line.unitPriceOre)} kr · {line.productName}
+              </span>
+            </label>
+          ))}
+          <PrimaryButton
+            type="button"
+            disabled={busy || !ready.some((line) => legacyChosen[line.id])}
+            onClick={() => void createLegacyDrafts()}
+          >
+            {t("create_invoice_draft")}
+          </PrimaryButton>
+        </section>
+      ) : null}
 
       {bundle.data?.pendingSql ? (
         <p className="mt-6 text-sm text-muted-foreground">{t("dnb_pending_sql")}</p>
@@ -542,13 +623,49 @@ function AdminInvoices() {
                     : ""}
                 </p>
               ) : null}
+              <p className="text-sm">
+                {t("orders_invoice_next")}:{" "}
+                {transferStatus && draft.status === "draft" && transferStatus !== "transferred"
+                  ? t("dnb_transfer")
+                  : transferStatus === "transferred"
+                    ? t("orders_open_dnb")
+                    : t(statusKey(draft.status))}
+              </p>
               <p className="text-xs text-muted-foreground">{t("dnb_price_ex_vat")}</p>
-              {lines.map((line) => (
-                <p key={line.id} className="text-sm text-muted-foreground">
-                  {line.venue_name_snapshot} · {line.product_name_snapshot} · {line.quantity} ×{" "}
-                  {formatPriceNok(line.unit_price_ore)} kr
-                </p>
-              ))}
+              <button
+                type="button"
+                className="text-sm font-semibold"
+                onClick={() =>
+                  setOpenDraft((current) => {
+                    const next = { ...current };
+                    if (next[draft.id]) delete next[draft.id];
+                    else next[draft.id] = true;
+                    return next;
+                  })
+                }
+              >
+                {openDraft[draft.id]
+                  ? t("orders_invoice_hide_lines")
+                  : t("orders_invoice_show_lines")}
+              </button>
+              {openDraft[draft.id]
+                ? lines.map((line) => (
+                    <p key={line.id} className="text-sm text-muted-foreground">
+                      {line.venue_name_snapshot} · {line.product_name_snapshot} · {line.quantity} ×{" "}
+                      {formatPriceNok(line.unit_price_ore)} kr
+                    </p>
+                  ))
+                : null}
+              {"accounting_invoice_id" in draft && draft.accounting_invoice_id ? (
+                <a
+                  href={dnbInvoiceHref(draft.accounting_invoice_id)}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex text-sm font-semibold text-primary"
+                >
+                  {t("orders_open_dnb")}
+                </a>
+              ) : null}
               {"transfer_error" in draft && draft.transfer_error ? (
                 <p className="text-sm text-destructive">{draft.transfer_error}</p>
               ) : null}
@@ -635,22 +752,6 @@ function AdminInvoices() {
       </div>
     </main>
   );
-}
-
-function groupSales(
-  lines: SaleLine[],
-  links: { id: string; parentLegalEntityId: string | null }[],
-): Map<string, SaleLine[]> {
-  const groups = new Map<string, SaleLine[]>();
-  for (const line of lines) {
-    const recipient = billingLegalEntityId(
-      { legalEntityId: line.legalEntityId, billingLegalEntityId: line.billingLegalEntityId },
-      links,
-    );
-    if (!recipient) continue;
-    groups.set(recipient, [...(groups.get(recipient) ?? []), line]);
-  }
-  return groups;
 }
 
 function one<T>(value: T | T[] | null | undefined): T | null {

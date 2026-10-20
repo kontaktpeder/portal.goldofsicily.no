@@ -21,7 +21,10 @@ import {
   followUpNotice,
   dnbDocumentKey,
   goodsInvoicePrepareLabel,
+  invoiceReviewLines,
+  orderGoodsReview,
   orderInvoiceSteps,
+  waitingInvoiceOrders,
   remainingQuantity,
   suggestedDeliveryQuantity,
   visibleOrderNotices,
@@ -648,4 +651,142 @@ test("the next-step sql requires who delivered and does not guess history", () =
   assert.doesNotMatch(sql, /net\.http|unimicro|send.?mail/i);
   assert.equal(deliveryErrorKind("delivery driver is missing"), "driver");
   assert.equal(isOrderSchemaError("column follow_up_on does not exist"), true);
+});
+
+test("one order reviews 20 pieces at 25 kr and reuses the same basis", () => {
+  const portions = [
+    { quantity: 10, unitPriceOre: 2500 },
+    { quantity: 10, unitPriceOre: 2500 },
+  ];
+  assert.deepEqual(orderGoodsReview(portions), { quantity: 20, amountOre: 50_000 });
+
+  const fresh = invoiceReviewLines({
+    fulfillmentIds: ["f1", "f2"],
+    reuseDraftId: null,
+    fulfillments: [
+      { id: "f1", quantity: 10, unitPriceOre: 2500 },
+      { id: "f2", quantity: 10, unitPriceOre: 2500 },
+    ],
+    invoiceLines: [],
+  });
+  assert.deepEqual(fresh, { quantity: 20, amountOre: 50_000 });
+
+  const again = invoiceReviewLines({
+    fulfillmentIds: ["f1", "f2"],
+    reuseDraftId: "draft-1",
+    fulfillments: [
+      { id: "f1", quantity: 10, unitPriceOre: 2500 },
+      { id: "f2", quantity: 10, unitPriceOre: 2500 },
+    ],
+    invoiceLines: [
+      {
+        draftId: "draft-1",
+        fulfillmentId: "f1",
+        quantity: 10,
+        unitPriceOre: 2500,
+        active: true,
+      },
+      {
+        draftId: "draft-1",
+        fulfillmentId: "f2",
+        quantity: 10,
+        unitPriceOre: 2500,
+        active: true,
+      },
+      {
+        draftId: "old",
+        fulfillmentId: "legacy",
+        quantity: 400,
+        unitPriceOre: 2500,
+        active: true,
+      },
+    ],
+  });
+  assert.deepEqual(again, { quantity: 20, amountOre: 50_000 });
+  assert.equal(deliveryErrorKind("missing price snapshot"), "price");
+  assert.equal(deliveryErrorKind("confirmed order price is missing"), "price");
+});
+
+test("fully delivered uninvoiced orders stay waiting and partial orders do not", () => {
+  const rows = waitingInvoiceOrders([
+    {
+      orderId: "o2",
+      orderNumber: "O-0002",
+      customerName: "Villa Import",
+      orderedQuantity: 20,
+      fulfilledQuantity: 20,
+      lines: [
+        { productName: "Nduja", quantity: 10, unitPriceOre: 2500 },
+        { productName: "Nduja", quantity: 10, unitPriceOre: 2500 },
+      ],
+    },
+    {
+      orderId: "o3",
+      orderNumber: "O-0003",
+      customerName: "Villa Grossista",
+      orderedQuantity: 20,
+      fulfilledQuantity: 10,
+      lines: [{ productName: "Nduja", quantity: 10, unitPriceOre: 2500 }],
+    },
+    {
+      orderId: "done",
+      orderNumber: "O-0001",
+      customerName: "Villa Import",
+      orderedQuantity: 20,
+      fulfilledQuantity: 20,
+      lines: [],
+    },
+  ]);
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0]?.orderNumber, "O-0002");
+  assert.equal(rows[0]?.customerName, "Villa Import");
+  assert.equal(rows[0]?.quantity, 20);
+  assert.equal(rows[0]?.amountOre, 50_000);
+});
+
+test("invoice review sql keeps the draft column and prices an order delivery from the order", () => {
+  const sql = readFileSync(
+    new URL("../../sql/28_order_invoice_review.sql", import.meta.url),
+    "utf8",
+  );
+  const migration = readFileSync(
+    new URL("../../supabase/migrations/20261020200000_order_invoice_review.sql", import.meta.url),
+    "utf8",
+  );
+  assert.equal(sql, migration);
+  assert.match(sql, /#variable_conflict use_column/);
+  assert.match(sql, /d\.transfer_status/);
+  assert.match(sql, /gos\.order_delivery/);
+  assert.match(sql, /confirmed order price is missing/);
+  assert.match(sql, /missing price snapshot/);
+  assert.match(sql, /unit_price_ore/);
+  assert.doesNotMatch(sql, /UPDATE public\.deliveries/);
+  assert.doesNotMatch(sql, /UPDATE public\.customers/);
+  assert.doesNotMatch(sql, /INSERT INTO public\.invoice_draft_lines/);
+  assert.doesNotMatch(sql, /vat_percent\s*=\s*0/);
+  assert.doesNotMatch(sql, /net\.http|unimicro|send.?mail/i);
+
+  const desk = readFileSync(
+    new URL("../routes/_authenticated/admin.invoices.tsx", import.meta.url),
+    "utf8",
+  );
+  assert.match(desk, /orders_invoice_waiting/);
+  assert.match(desk, /orders_invoice_legacy/);
+  assert.match(desk, /legacyChosen/);
+  assert.doesNotMatch(desk, /groupSales/);
+  assert.doesNotMatch(desk, /\[\.\.\.orderReady, \.\.\.ready\]/);
+
+  const orderPage = readFileSync(
+    new URL("../routes/_authenticated/admin.orders.$orderId.tsx", import.meta.url),
+    "utf8",
+  );
+  assert.match(orderPage, /invoiceReviewLines/);
+  assert.match(orderPage, /InvoiceReview/);
+  const review = readFileSync(
+    new URL("../components/order-invoice-step.tsx", import.meta.url),
+    "utf8",
+  );
+  assert.match(review, /orders_invoice_ex_vat/);
+  assert.match(review, /orders_invoice_only_order/);
+  assert.match(review, /orders_advance_agreed/);
 });

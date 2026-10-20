@@ -12,6 +12,7 @@ export function InvoiceStepView({
   busy,
   onPrepare,
   onTransfer,
+  onReview,
   prepareLabel,
   companyName,
 }: {
@@ -21,6 +22,7 @@ export function InvoiceStepView({
   busy: boolean;
   onPrepare: () => void;
   onTransfer: (draftId: string) => void;
+  onReview?: () => void;
   prepareLabel?: string;
   companyName: string | null;
 }) {
@@ -30,9 +32,12 @@ export function InvoiceStepView({
   }
 
   const preparing = step.kind === "prepare" || step.kind === "append";
+  const opensReview = Boolean(onReview) && (preparing || step.kind === "transfer");
   const label =
     step.kind === "transfer"
-      ? t("dnb_transfer")
+      ? onReview
+        ? t("orders_invoice_open_basis")
+        : t("dnb_transfer")
       : step.kind === "open_dnb"
         ? t("orders_open_dnb")
         : preparing && prepareLabel
@@ -86,7 +91,7 @@ export function InvoiceStepView({
         <PrimaryButton
           type="button"
           disabled={busy}
-          onClick={() => act(step, onPrepare, onTransfer)}
+          onClick={() => openOrAct(step, opensReview, onReview, onPrepare, onTransfer)}
         >
           {label}
         </PrimaryButton>
@@ -101,7 +106,7 @@ export function InvoiceStepView({
         type="button"
         className="rounded-full border border-border px-4 py-2 text-sm font-semibold"
         disabled={busy}
-        onClick={() => act(step, onPrepare, onTransfer)}
+        onClick={() => openOrAct(step, opensReview, onReview, onPrepare, onTransfer)}
       >
         {label}
       </button>
@@ -133,7 +138,82 @@ export function InvoiceFact({ step }: { step: OrderInvoiceStep }) {
   );
 }
 
-function act(step: OrderInvoiceStep, onPrepare: () => void, onTransfer: (draftId: string) => void) {
+function openOrAct(
+  step: OrderInvoiceStep,
+  opensReview: boolean,
+  onReview: (() => void) | undefined,
+  onPrepare: () => void,
+  onTransfer: (draftId: string) => void,
+) {
+  if (opensReview && onReview) {
+    onReview();
+    return;
+  }
   if (step.kind === "prepare" || step.kind === "append") onPrepare();
   if (step.kind === "transfer") onTransfer(step.draftId);
+}
+
+export function InvoiceReview({
+  customerName,
+  orderNumber,
+  quantity,
+  amountOre,
+  advanceOre,
+  busy,
+  canCreate,
+  canTransfer,
+  transferStatus,
+  onCreate,
+  onTransfer,
+}: {
+  customerName: string;
+  orderNumber: string;
+  quantity: number;
+  amountOre: number;
+  advanceOre: number | null;
+  busy: boolean;
+  canCreate: boolean;
+  canTransfer: boolean;
+  transferStatus: string | null;
+  onCreate: () => void;
+  onTransfer: () => void;
+}) {
+  const { t } = useI18n();
+  if (quantity <= 0) {
+    return <p className="text-sm font-semibold">{t("orders_price_missing")}</p>;
+  }
+  const transferProblem =
+    canTransfer && transferStatus && transferStatus !== "not_transferred"
+      ? t(dnbDocumentKey(null, transferStatus))
+      : null;
+  return (
+    <div className="space-y-2 rounded-2xl border border-border px-4 py-4">
+      <p className="text-sm font-semibold">
+        {customerName} · {orderNumber} · {quantity} {t("pcs")} · {formatPriceNok(amountOre)} kr{" "}
+        {t("orders_invoice_ex_vat")}
+      </p>
+      <p className="text-sm text-muted-foreground">{t("orders_invoice_only_order")}</p>
+      {advanceOre != null ? (
+        <p className="text-sm">
+          {t("orders_advance_agreed")}: {formatPriceNok(advanceOre)} kr
+        </p>
+      ) : null}
+      {transferProblem ? <p className="text-sm font-semibold">{transferProblem}</p> : null}
+      {canCreate ? (
+        <PrimaryButton type="button" disabled={busy || quantity <= 0} onClick={onCreate}>
+          {t("create_invoice_draft")}
+        </PrimaryButton>
+      ) : null}
+      {canTransfer ? (
+        <button
+          type="button"
+          className="rounded-full border border-border px-4 py-2 text-sm font-semibold"
+          disabled={busy}
+          onClick={onTransfer}
+        >
+          {t("dnb_transfer")}
+        </button>
+      ) : null}
+    </div>
+  );
 }
