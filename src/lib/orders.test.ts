@@ -782,6 +782,8 @@ test("invoice review sql keeps the draft column and prices an order delivery fro
   );
   assert.match(orderPage, /invoiceReviewLines/);
   assert.match(orderPage, /InvoiceReview/);
+  assert.match(orderPage, /orders_invoice_fetch_failed"\)\} \$\{error\}/);
+  assert.doesNotMatch(orderPage, /orders_invoice_sql28/);
   const review = readFileSync(
     new URL("../components/order-invoice-step.tsx", import.meta.url),
     "utf8",
@@ -789,4 +791,22 @@ test("invoice review sql keeps the draft column and prices an order delivery fro
   assert.match(review, /orders_invoice_ex_vat/);
   assert.match(review, /orders_invoice_only_order/);
   assert.match(review, /orders_advance_agreed/);
+});
+
+test("the invoice line sql adds transfer_status and reads it without a name clash", () => {
+  const sql = readFileSync(
+    new URL("../../sql/29_invoice_lines_status.sql", import.meta.url),
+    "utf8",
+  );
+  const migration = readFileSync(
+    new URL("../../supabase/migrations/20261020220000_invoice_lines_status.sql", import.meta.url),
+    "utf8",
+  );
+  assert.equal(sql, migration);
+  assert.match(sql, /ADD COLUMN IF NOT EXISTS transfer_status/);
+  assert.match(sql, /DROP FUNCTION IF EXISTS public\.order_invoice_lines\(UUID\)/);
+  assert.match(sql, /RETURN QUERY EXECUTE/);
+  assert.doesNotMatch(sql, /UPDATE public\.deliveries/);
+  assert.doesNotMatch(sql, /UPDATE public\.customers/);
+  assert.doesNotMatch(sql, /UPDATE public\.invoice_drafts/);
 });

@@ -906,11 +906,12 @@ function OrderPage() {
       if (fresh.error) {
         setBusy(false);
         toast.error(
-          /transfer_status/i.test(fresh.error.message)
-            ? t("orders_invoice_sql28")
-            : isOrderSchemaError(fresh.error.message)
-              ? t("orders_pending_sql")
-              : fresh.error.message,
+          isOrderSchemaError(fresh.error.message) &&
+            /does not exist|schema cache|Could not find the function|Could not find the table/i.test(
+              fresh.error.message,
+            )
+            ? t("orders_pending_sql")
+            : fresh.error.message,
         );
         return;
       }
@@ -1978,7 +1979,6 @@ function invoiceFailureText(
 ): string | null {
   if (!error) return null;
   if (error === "unexpected") return t("orders_invoice_unexpected");
-  if (/transfer_status/i.test(error)) return t("orders_invoice_sql28");
   return `${t("orders_invoice_fetch_failed")} ${error}`;
 }
 
