@@ -7,6 +7,7 @@ import {
   FESTKLAR_QR_PATH,
   festklarLabelsDocument,
   festklarPackLine,
+  parseFestklarPackSize,
   festklarPreviewDocument,
   festklarTestPrintInput,
   formatFestklarDate,
@@ -57,6 +58,14 @@ test("best before uses the lot production date and shelf life, in dd.mm.yyyy", (
   assert.equal(formatFestklarDate("2027-03-06"), "06.03.2027");
   assert.equal(formatFestklarDate("2026-02-31"), null);
   assert.equal(suggestFestklarBestBefore("not-a-date", 180), null);
+});
+
+test("typing 6 or 50 selects the pack size", () => {
+  assert.equal(parseFestklarPackSize("6"), 6);
+  assert.equal(parseFestklarPackSize("50"), 50);
+  assert.equal(parseFestklarPackSize(" 50 "), 50);
+  assert.equal(parseFestklarPackSize("25"), null);
+  assert.equal(parseFestklarPackSize("500"), null);
 });
 
 test("pack size is the box contents, not the produced quantity", () => {

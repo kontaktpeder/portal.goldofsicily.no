@@ -179,6 +179,13 @@ export function suggestFestklarBestBefore(productionDate: string, shelfLifeDays:
   }
 }
 
+export function parseFestklarPackSize(value: string): FestklarPackSize | null {
+  const trimmed = value.trim();
+  if (trimmed === "6") return 6;
+  if (trimmed === "50") return 50;
+  return null;
+}
+
 export function parseFestklarCopies(value: string): number | null {
   const trimmed = value.trim();
   if (!/^\d+$/.test(trimmed)) return null;

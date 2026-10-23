@@ -956,14 +956,16 @@ function LotPackingSection({
         <PrimaryButton onClick={runPacking} disabled={busy || locked || packing == null || Boolean(snapshot && !canPackSizes)}>
           {busy ? "…" : storedPlan ? t("packing_rerun") : t("packing_run")}
         </PrimaryButton>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <PrimaryButton onClick={() => printLabels("package")} disabled={!storedPlan}>
-            {t("print_package_labels")}
-          </PrimaryButton>
-          <PrimaryButton onClick={() => printLabels("carton")} disabled={!storedPlan}>
-            {t("print_carton_labels")}
-          </PrimaryButton>
-        </div>
+        {storedPlan ? (
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <PrimaryButton onClick={() => printLabels("package")}>
+              {t("print_package_labels")}
+            </PrimaryButton>
+            <PrimaryButton onClick={() => printLabels("carton")}>
+              {t("print_carton_labels")}
+            </PrimaryButton>
+          </div>
+        ) : null}
         {storedPlan ? (
           <div className="flex flex-wrap gap-3">
             <Link

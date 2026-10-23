@@ -722,6 +722,7 @@ const dict = {
   },
   festklar_variant: { no: "Produktvariant", en: "Product variant" },
   festklar_pack: { no: "Pakningsstørrelse", en: "Pack size" },
+  festklar_pack_type: { no: "Skriv 6 eller 50", en: "Type 6 or 50" },
   festklar_copies: { no: "Antall etiketter", en: "Number of labels" },
   festklar_pack_note: {
     no: "6 stk og 50 stk er innholdet i esken. Samme produkt kan skrives ut som begge. Dette er ikke «arancini per pose».",

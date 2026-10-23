@@ -12,6 +12,7 @@ import {
   inferFestklarVariant,
   openFestklarPrintWindow,
   parseFestklarCopies,
+  parseFestklarPackSize,
   resolveFestklarPrint,
   suggestFestklarBestBefore,
   type FestklarIssue,
@@ -19,6 +20,7 @@ import {
   type FestklarProductHint,
   type FestklarVariantId,
 } from "@/lib/festklar-label";
+import { parseGoldLotCode } from "@/lib/gold-lot";
 import { useI18n, type TranslationKey } from "@/lib/i18n";
 
 const ISSUE_KEYS: Record<FestklarIssue, TranslationKey> = {
@@ -41,22 +43,19 @@ export function LotFestklarPanel({
   product: FestklarProductHint;
 }) {
   const { t } = useI18n();
-  const inferred = inferFestklarVariant(product);
+  const inferred =
+    inferFestklarVariant(product) ??
+    inferFestklarVariant({ lotLetter: parseGoldLotCode(lotCode)?.letter });
   const suggestedBestBefore = useMemo(
     () => suggestFestklarBestBefore(productionDate, shelfLifeDays) ?? "",
     [productionDate, shelfLifeDays],
   );
   const [variantId, setVariantId] = useState<FestklarVariantId | "">(inferred ?? "");
-  const [packSize, setPackSize] = useState<FestklarPackSize | null>(null);
+  const [packDraft, setPackDraft] = useState("");
   const [bestBefore, setBestBefore] = useState(suggestedBestBefore);
   const [bestBeforeTouched, setBestBeforeTouched] = useState(false);
-  const [copies, setCopies] = useState("");
-  const [origin, setOrigin] = useState("");
+  const [copies, setCopies] = useState("1");
   const [printing, setPrinting] = useState(false);
-
-  useEffect(() => {
-    setOrigin(window.location.origin);
-  }, []);
 
   useEffect(() => {
     if (!bestBeforeTouched) setBestBefore(suggestedBestBefore);
@@ -68,6 +67,7 @@ export function LotFestklarPanel({
     }
   }, [inferred]);
 
+  const packSize = parseFestklarPackSize(packDraft);
   const parsedCopies = parseFestklarCopies(copies);
   const input = {
     lotCode,
@@ -77,8 +77,13 @@ export function LotFestklarPanel({
     copies: parsedCopies ?? 0,
   };
   const resolved = resolveFestklarPrint(input);
-  const previewHtml = origin ? festklarPreviewDocument(input, origin) : null;
+  const previewHtml =
+    typeof window === "undefined" ? null : festklarPreviewDocument(input, window.location.origin);
   const shownDate = formatFestklarDate(bestBefore);
+
+  function choosePack(size: FestklarPackSize) {
+    setPackDraft(String(size));
+  }
 
   async function printHtml(html: string) {
     setPrinting(true);
@@ -89,27 +94,35 @@ export function LotFestklarPanel({
   }
 
   async function printLabels() {
-    if (!resolved.ok || !origin) return;
-    await printHtml(festklarLabelsDocument(input, origin));
+    if (!resolved.ok) return;
+    await printHtml(festklarLabelsDocument(input, window.location.origin));
   }
 
   async function printTestLabel() {
-    if (!origin) return;
-    await printHtml(festklarLabelsDocument(festklarTestPrintInput(), origin));
+    await printHtml(festklarLabelsDocument(festklarTestPrintInput(), window.location.origin));
   }
 
   return (
     <div className="surface-card mt-4 space-y-5 p-5">
         <div>
           <p className="eyebrow mb-2">{t("festklar_pack")}</p>
-          <BigChoice
-            value={packSize == null ? null : String(packSize)}
-            onChange={(value) => setPackSize(value === "50" ? 50 : 6)}
-            options={FESTKLAR_PACK_SIZES.map((size) => ({
-              value: String(size),
-              label: `${size} stk`,
-            }))}
+          <TextField
+            label={t("festklar_pack_type")}
+            type="number"
+            value={packDraft}
+            placeholder="6"
+            onChange={setPackDraft}
           />
+          <div className="mt-3">
+            <BigChoice
+              value={packSize == null ? null : String(packSize)}
+              onChange={(value) => choosePack(value === "50" ? 50 : 6)}
+              options={FESTKLAR_PACK_SIZES.map((size) => ({
+                value: String(size),
+                label: `${size} stk`,
+              }))}
+            />
+          </div>
           <p className="mt-2 text-sm text-muted-foreground">{t("festklar_pack_note")}</p>
           {variantId === "mix" && packSize === 6 ? (
             <p className="mt-1 text-sm text-muted-foreground">{t("festklar_mix_six")}</p>
@@ -182,14 +195,14 @@ export function LotFestklarPanel({
           )}
         </div>
 
-        <PrimaryButton onClick={() => void printLabels()} disabled={!resolved.ok || printing || !origin}>
+        <PrimaryButton onClick={() => void printLabels()} disabled={!resolved.ok || printing}>
           {printing ? "…" : t("festklar_print")}
         </PrimaryButton>
         <p className="text-sm text-muted-foreground">{t("festklar_print_hint")}</p>
         <button
           type="button"
           onClick={() => void printTestLabel()}
-          disabled={printing || !origin}
+          disabled={printing}
           className="text-sm font-semibold text-muted-foreground underline-offset-2 hover:underline disabled:opacity-60"
         >
           {t("festklar_test")}
