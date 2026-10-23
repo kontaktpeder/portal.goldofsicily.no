@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useRouterState } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState, useEffect } from "react";
 import { toast } from "sonner";
@@ -184,6 +184,8 @@ function AdminLotDetail() {
   const { lotId } = Route.useParams();
   const { t, lang } = useI18n();
   const queryClient = useQueryClient();
+  const hash = useRouterState({ select: (state) => state.location.hash });
+  const labelView = hash === "etikett" || hash === "#etikett";
 
   const { data: lot, error } = useQuery({
     queryKey: ["gold-lot", lotId],
@@ -345,12 +347,32 @@ function AdminLotDetail() {
   const productName = lang === "en" ? (lot.products?.name_en ?? "") : (lot.products?.name_no ?? "");
   const produced = displayProducedBy(producersFromQuery(lot.gold_lot_producers), lot.produced_by);
 
+  const packingBlock = (
+    <div id={labelView ? "etikett" : undefined}>
+      <LotPackingSection lot={lot} packing={packing} onSaved={refresh} />
+    </div>
+  );
+
   return (
-    <main className="mx-auto w-full max-w-5xl px-5 pb-16">
+    <main className={`mx-auto w-full px-5 pb-16 ${labelView ? "max-w-6xl" : "max-w-5xl"}`}>
       <p className="pt-6 text-sm">
-        <Link to="/admin/lots" className="font-semibold text-muted-foreground">
-          ← {t("lots_title")}
-        </Link>
+        {labelView ? (
+          <Link
+            to="/admin/lots"
+            search={{ tab: "active" }}
+            className="font-semibold text-muted-foreground"
+          >
+            ← {t("nav_packing")}
+          </Link>
+        ) : (
+          <Link
+            to="/admin/lots"
+            search={{ tab: "active" }}
+            className="font-semibold text-muted-foreground"
+          >
+            ← {t("lots_title")}
+          </Link>
+        )}
       </p>
       <h1 className="mt-3 font-mono text-3xl font-semibold">{lot.lot_code}</h1>
       <p className="mt-1 text-lg">{productName}</p>
@@ -358,6 +380,7 @@ function AdminLotDetail() {
         {t("production_date")}: {formatDate(lot.production_date, lang)}
         {packing?.version ? ` · ${t("product_version")} v${packing.version.version_number}` : ""}
       </p>
+      {labelView ? packingBlock : null}
       <div className="mt-4">
         <p className="eyebrow">{t("produced_by")}</p>
         {produced.names.length > 0 ? (
@@ -404,7 +427,7 @@ function AdminLotDetail() {
 
       <LotMetaForm lot={lot} onSaved={refresh} />
 
-      <LotPackingSection lot={lot} packing={packing} onSaved={refresh} />
+      {labelView ? null : packingBlock}
 
       <section className="mt-10">
         <h2 className="text-2xl font-semibold">{t("ingredients")}</h2>

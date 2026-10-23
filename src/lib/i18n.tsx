@@ -114,6 +114,13 @@ const dict = {
   dashboard: { no: "Drift", en: "Ops" },
   nav_home: { no: "Hjem", en: "Home" },
   nav_production: { no: "Produksjon", en: "Production" },
+  nav_register_lot: { no: "Registrer LOT", en: "Register LOT" },
+  nav_packing: { no: "Pakking", en: "Packing" },
+  nav_delivery: { no: "Levering", en: "Delivery" },
+  packing_pick: {
+    no: "Velg en LOT. Forhåndsvisningen viser etiketten som skrives ut, med LOT, variant, antall og best før.",
+    en: "Choose a LOT. The preview shows the label that will be printed, with the LOT, variant, count and best before.",
+  },
   nav_customers: { no: "Kunder", en: "Customers" },
   nav_followup: { no: "Oppfølging", en: "Follow-up" },
   nav_menu: { no: "Meny", en: "Menu" },
@@ -764,8 +771,12 @@ const dict = {
   },
   festklar_preview: { no: "Forhåndsvisning", en: "Preview" },
   festklar_preview_empty: {
-    no: "Velg produktvariant, pakningsstørrelse, best før og antall etiketter.",
-    en: "Choose product variant, pack size, best before and how many labels.",
+    no: "Velg produktvariant, pakningsstørrelse og best før. Da vises etiketten med de tallene som skrives ut.",
+    en: "Choose product variant, pack size and best before. The label then shows the numbers that will be printed.",
+  },
+  festklar_preview_sheet: {
+    no: "Dette arket sendes til skriveren. Antall etiketter styrer hvor mange like ark som kommer ut.",
+    en: "This sheet is sent to the printer. The label count decides how many identical sheets are printed.",
   },
   festklar_missing: { no: "Mangler", en: "Missing" },
   festklar_missing_lot: { no: "LOT", en: "LOT" },

@@ -191,7 +191,12 @@ function TaskLink({ task, children }: { task: HomeTask; children: React.ReactNod
   }
   if (target.to === "/admin/lots/$lotId") {
     return (
-      <Link to="/admin/lots/$lotId" params={{ lotId: target.lotId }} className={className}>
+      <Link
+        to="/admin/lots/$lotId"
+        params={{ lotId: target.lotId }}
+        {...(task.id === "label" ? { hash: "etikett" } : {})}
+        className={className}
+      >
         {children}
       </Link>
     );

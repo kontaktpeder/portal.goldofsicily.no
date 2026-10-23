@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { BigChoice, PrimaryButton, TextField } from "@/components/field";
 import {
@@ -77,8 +77,11 @@ export function LotFestklarPanel({
     copies: parsedCopies ?? 0,
   };
   const resolved = resolveFestklarPrint(input);
+  const preview = resolveFestklarPrint({ ...input, copies: 1 });
   const previewHtml =
-    typeof window === "undefined" ? null : festklarPreviewDocument(input, window.location.origin);
+    typeof window === "undefined" || !preview.ok
+      ? null
+      : festklarPreviewDocument(input, window.location.origin);
   const shownDate = formatFestklarDate(bestBefore);
 
   function choosePack(size: FestklarPackSize) {
@@ -103,7 +106,8 @@ export function LotFestklarPanel({
   }
 
   return (
-    <div className="surface-card mt-4 space-y-5 p-5">
+    <div className="mt-4 grid items-start gap-6 lg:grid-cols-[minmax(0,22rem)_minmax(0,1fr)]">
+      <div className="surface-card space-y-5 p-5">
         <div>
           <p className="eyebrow mb-2">{t("festklar_pack")}</p>
           <TextField
@@ -173,27 +177,18 @@ export function LotFestklarPanel({
           />
         </div>
 
-        <div>
-          <p className="eyebrow mb-2">{t("festklar_preview")}</p>
-          {previewHtml ? (
-            <LabelPreview html={previewHtml} />
-          ) : (
-            <div className="flex min-h-36 items-center justify-center rounded-2xl border border-dashed border-border px-6 py-8 text-center text-sm text-muted-foreground">
-              {t("festklar_preview_empty")}
-            </div>
-          )}
-          {resolved.ok ? (
-            <p className="mt-2 text-sm text-muted-foreground">
-              {resolved.copies === 1
-                ? t("festklar_pages_one")
-                : t("festklar_pages_many").replace("{count}", String(resolved.copies))}
-            </p>
-          ) : (
-            <p className="mt-2 text-sm text-muted-foreground">
-              {t("festklar_missing")}: {resolved.issues.map((issue) => t(ISSUE_KEYS[issue])).join(", ")}.
-            </p>
-          )}
-        </div>
+        {resolved.ok ? (
+          <p className="text-sm text-muted-foreground">
+            {resolved.copies === 1
+              ? t("festklar_pages_one")
+              : t("festklar_pages_many").replace("{count}", String(resolved.copies))}
+          </p>
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            {t("festklar_missing")}:{" "}
+            {resolved.issues.map((issue) => t(ISSUE_KEYS[issue])).join(", ")}.
+          </p>
+        )}
 
         <PrimaryButton onClick={() => void printLabels()} disabled={!resolved.ok || printing}>
           {printing ? "…" : t("festklar_print")}
@@ -208,6 +203,57 @@ export function LotFestklarPanel({
           {t("festklar_test")}
         </button>
         <p className="text-sm text-muted-foreground">{t("festklar_test_note")}</p>
+      </div>
+
+      <LabelSheet previewHtml={previewHtml} label={preview.ok ? preview.label : null} />
+    </div>
+  );
+}
+
+const SHEET_WIDTH = (150 * 96) / 25.4;
+const SHEET_HEIGHT = (100 * 96) / 25.4;
+
+function LabelSheet({
+  previewHtml,
+  label,
+}: {
+  previewHtml: string | null;
+  label: { displayName: string; packLine: string; lotCode: string; bestBefore: string } | null;
+}) {
+  const { t } = useI18n();
+  return (
+    <div className="lg:sticky lg:top-20">
+      <p className="eyebrow mb-3">{t("festklar_preview")}</p>
+      {previewHtml && label ? (
+        <>
+          <div className="rounded-2xl bg-muted/70 p-4 sm:p-6">
+            <LabelPreview html={previewHtml} />
+          </div>
+          <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+            <div>
+              <dt className="text-xs text-muted-foreground">{t("festklar_variant")}</dt>
+              <dd className="font-semibold">{label.displayName}</dd>
+            </div>
+            <div>
+              <dt className="text-xs text-muted-foreground">{t("festklar_pack")}</dt>
+              <dd className="font-semibold">{label.packLine}</dd>
+            </div>
+            <div>
+              <dt className="text-xs text-muted-foreground">LOT</dt>
+              <dd className="font-mono font-semibold">{label.lotCode}</dd>
+            </div>
+            <div>
+              <dt className="text-xs text-muted-foreground">{t("best_before")}</dt>
+              <dd className="font-mono font-semibold">{label.bestBefore}</dd>
+            </div>
+          </dl>
+          <p className="mt-3 text-sm text-muted-foreground">{t("festklar_preview_sheet")}</p>
+        </>
+      ) : (
+        <div className="flex aspect-[15/10] items-center justify-center rounded-2xl border border-dashed border-border bg-muted/40 px-6 text-center text-sm text-muted-foreground">
+          {t("festklar_preview_empty")}
+        </div>
+      )}
     </div>
   );
 }
@@ -215,43 +261,36 @@ export function LotFestklarPanel({
 function LabelPreview({ html }: { html: string }) {
   const frame = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(1);
-  const [natural, setNatural] = useState({ width: 0, height: 0 });
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const node = frame.current;
-    if (!node || natural.width <= 0) return;
+    if (!node) return;
     const apply = () => {
-      const next = Math.min(1, node.clientWidth / natural.width);
-      setScale((current) => (Math.abs(current - next) > 0.01 ? next : current));
+      const width = node.clientWidth;
+      if (width <= 0) return;
+      const next = Math.min(1, width / SHEET_WIDTH);
+      setScale((current) => (Math.abs(current - next) > 0.005 ? next : current));
     };
     apply();
     const observer = new ResizeObserver(apply);
     observer.observe(node);
     return () => observer.disconnect();
-  }, [natural.width]);
-
-  const previewWidth = natural.width > 0 ? natural.width * scale : undefined;
-  const previewHeight = natural.height > 0 ? natural.height * scale : undefined;
+  }, []);
 
   return (
     <div ref={frame} className="w-full">
       <div
-        className="overflow-hidden rounded-xl border border-border bg-white"
-        style={{ width: previewWidth, height: previewHeight }}
+        className="relative overflow-hidden rounded-sm bg-white shadow-[0_16px_40px_rgba(28,22,16,0.22)] ring-1 ring-black/10"
+        style={{ width: "100%", maxWidth: SHEET_WIDTH, aspectRatio: "15 / 10" }}
       >
         <iframe
           title="Festklar"
           srcDoc={html}
-          onLoad={(event) => {
-            const width = event.currentTarget.offsetWidth;
-            const height = event.currentTarget.offsetHeight;
-            if (width > 0 && height > 0) setNatural({ width, height });
-          }}
+          scrolling="no"
+          className="pointer-events-none absolute top-0 left-0 overflow-hidden border-0 bg-white"
           style={{
-            width: "150mm",
-            height: "100mm",
-            border: 0,
-            background: "#fff",
+            width: SHEET_WIDTH,
+            height: SHEET_HEIGHT,
             transform: `scale(${scale})`,
             transformOrigin: "top left",
           }}

@@ -267,11 +267,19 @@ function AdminLots() {
 
   const showForm = tab === "production";
   const blocked = !prereq.ok;
+  const pageTitle =
+    tab === "active"
+      ? t("nav_packing")
+      : tab === "production"
+        ? t("nav_production")
+        : tab === "history"
+          ? t("history")
+          : t("lot_tab_recall");
 
   return (
     <main className="mx-auto w-full max-w-5xl px-5 pb-16">
       <div className="flex items-center justify-between pt-8">
-        <h1 className="text-3xl font-semibold">{t("lots_title")}</h1>
+        <h1 className="text-3xl font-semibold">{pageTitle}</h1>
         {tab !== "recall" ? (
           <Link
             to="/admin/lots"
@@ -283,7 +291,9 @@ function AdminLots() {
           </Link>
         ) : null}
       </div>
-      <p className="mt-2 max-w-2xl text-sm text-muted-foreground">{t("lots_intro")}</p>
+      <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
+        {tab === "active" ? t("packing_pick") : t("lots_intro")}
+      </p>
       <LotPrerequisitesBanner check={prereq} />
 
       <nav className="mt-6 flex gap-1 overflow-x-auto">
@@ -374,6 +384,7 @@ function AdminLots() {
                     key={lot.id}
                     to="/admin/lots/$lotId"
                     params={{ lotId: lot.id }}
+                    {...(tab === "active" ? { hash: "etikett" } : {})}
                     className="surface-card block p-4"
                   >
                     <div className="flex items-start justify-between gap-3">

@@ -4,11 +4,13 @@ import {
   ChevronDown,
   BarChart3,
   ClipboardList,
+  Factory,
   FileText,
   Home,
   LogOut,
   Menu,
-  Package,
+  Tag,
+  Truck,
   Users,
   X,
 } from "lucide-react";
@@ -42,7 +44,15 @@ export function AdminShell({
   children: ReactNode;
 }) {
   const { t } = useI18n();
-  const path = useRouterState({ select: (state) => state.location.pathname });
+  const location = useRouterState({ select: (state) => state.location });
+  const path = location.pathname;
+  const tab = searchTab(location.search);
+  const labelHash = hashIsEtikett(location.hash);
+  const onLotsIndex = path === "/admin/lots";
+  const onLotDetail = path.startsWith("/admin/lots/");
+  const packingActive =
+    (onLotsIndex && (tab === "active" || tab == null)) || (onLotDetail && labelHash);
+  const productionActive = (onLotsIndex || onLotDetail) && !packingActive;
   const [menuOpen, setMenuOpen] = useState(false);
   const salesActive =
     path.startsWith("/admin/orders") ||
@@ -50,7 +60,6 @@ export function AdminShell({
     path.startsWith("/admin/venues") ||
     path.startsWith("/admin/wholesalers") ||
     path.startsWith("/admin/products");
-  const productionActive = path.startsWith("/admin/lots") || path.startsWith("/admin/deliveries");
   const [salesOpen, setSalesOpen] = useState(salesActive);
   const [productionOpen, setProductionOpen] = useState(productionActive);
 
@@ -154,20 +163,60 @@ export function AdminShell({
           {operations ? (
             <Section
               label={t("nav_production")}
-              icon={Package}
+              icon={Factory}
               open={productionOpen}
               active={productionActive}
               onToggle={() => setProductionOpen((open) => !open)}
             >
-              <SideLink to="/admin/lots" label={t("lots")} path={path} onNavigate={close} nested />
               <SideLink
-                to="/admin/deliveries"
-                label={t("deliveries")}
+                to="/admin/lots"
+                search={{ tab: "production" }}
+                label={t("nav_register_lot")}
                 path={path}
+                active={onLotsIndex && tab === "production"}
+                onNavigate={close}
+                nested
+              />
+              <SideLink
+                to="/admin/lots"
+                search={{ tab: "history" }}
+                label={t("history")}
+                path={path}
+                active={onLotsIndex && tab === "history"}
+                onNavigate={close}
+                nested
+              />
+              <SideLink
+                to="/admin/lots"
+                search={{ tab: "recall" }}
+                label={t("lot_tab_recall")}
+                path={path}
+                active={onLotsIndex && tab === "recall"}
                 onNavigate={close}
                 nested
               />
             </Section>
+          ) : null}
+          {operations ? (
+            <SideLink
+              to="/admin/lots"
+              search={{ tab: "active" }}
+              label={t("nav_packing")}
+              path={path}
+              icon={Tag}
+              active={packingActive}
+              onNavigate={close}
+            />
+          ) : null}
+          {operations ? (
+            <SideLink
+              to="/admin/deliveries"
+              search={{ lot: "" }}
+              label={t("nav_delivery")}
+              path={path}
+              icon={Truck}
+              onNavigate={close}
+            />
           ) : null}
 
           {commercial ? (
@@ -290,37 +339,54 @@ export function AdminShortcuts({
   return <nav className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">{links}</nav>;
 }
 
+function searchTab(search: unknown): string | undefined {
+  if (!search || typeof search !== "object" || !("tab" in search)) return undefined;
+  const tab = (search as { tab?: unknown }).tab;
+  return typeof tab === "string" ? tab : undefined;
+}
+
+function hashIsEtikett(hash: string) {
+  return hash === "etikett" || hash === "#etikett";
+}
+
 function pathIs(path: string, to: string, exact?: boolean) {
   if (exact) return path === to;
   return path === to || path.startsWith(`${to}/`);
 }
 
+type SideSearch = { tab: "active" | "production" | "history" | "recall" } | { lot: string };
+
 function SideLink({
   to,
+  search,
   label,
   exact,
+  active,
   path,
   icon: Icon,
   nested,
   onNavigate,
 }: {
   to: AdminPath;
+  search?: SideSearch;
   label: string;
   exact?: boolean;
+  active?: boolean;
   path: string;
   icon?: typeof Home;
   nested?: boolean;
   onNavigate: () => void;
 }) {
-  const active = pathIs(path, to, exact);
+  const on = active ?? pathIs(path, to, exact);
   return (
     <Link
       to={to}
+      {...(search ? { search } : {})}
       onClick={onNavigate}
       className={cn(
         "flex items-center gap-3 rounded-lg py-2 text-sm",
         nested ? "px-3 pl-9" : "px-3 font-semibold",
-        active
+        on
           ? "bg-sidebar-accent font-semibold text-sidebar-accent-foreground"
           : "text-sidebar-foreground/80 hover:bg-sidebar-accent/70 hover:text-sidebar-foreground",
       )}
