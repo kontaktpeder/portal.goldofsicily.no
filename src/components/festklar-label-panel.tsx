@@ -99,25 +99,7 @@ export function LotFestklarPanel({
   }
 
   return (
-    <section className="mt-10">
-      <h2 className="text-2xl font-semibold">{t("festklar_title")}</h2>
-      <p className="mt-1 max-w-2xl text-sm text-muted-foreground">{t("festklar_intro")}</p>
-      <div className="surface-card mt-4 space-y-5 p-5">
-        <div>
-          <p className="eyebrow mb-2">{t("festklar_variant")}</p>
-          <BigChoice
-            value={variantId || null}
-            onChange={(value) => setVariantId(value)}
-            options={FESTKLAR_VARIANT_IDS.map((id) => ({
-              value: id,
-              label: festklarVariant(id).displayName,
-            }))}
-          />
-          {inferred && variantId === inferred ? (
-            <p className="mt-2 text-sm text-muted-foreground">{t("festklar_suggested")}</p>
-          ) : null}
-        </div>
-
+    <div className="surface-card mt-4 space-y-5 p-5">
         <div>
           <p className="eyebrow mb-2">{t("festklar_pack")}</p>
           <BigChoice
@@ -133,6 +115,26 @@ export function LotFestklarPanel({
             <p className="mt-1 text-sm text-muted-foreground">{t("festklar_mix_six")}</p>
           ) : null}
         </div>
+
+        <div>
+          <p className="eyebrow mb-2">{t("festklar_variant")}</p>
+          <BigChoice
+            value={variantId || null}
+            onChange={(value) => setVariantId(value)}
+            options={FESTKLAR_VARIANT_IDS.map((id) => ({
+              value: id,
+              label: festklarVariant(id).displayName,
+            }))}
+          />
+          {inferred && variantId === inferred ? (
+            <p className="mt-2 text-sm text-muted-foreground">{t("festklar_suggested")}</p>
+          ) : null}
+        </div>
+
+        <p className="text-sm">
+          <span className="eyebrow mr-2">LOT</span>
+          <span className="font-mono font-semibold">{lotCode}</span>
+        </p>
 
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
@@ -193,8 +195,7 @@ export function LotFestklarPanel({
           {t("festklar_test")}
         </button>
         <p className="text-sm text-muted-foreground">{t("festklar_test_note")}</p>
-      </div>
-    </section>
+    </div>
   );
 }
 

@@ -406,19 +406,6 @@ function AdminLotDetail() {
 
       <LotPackingSection lot={lot} packing={packing} onSaved={refresh} />
 
-      <LotFestklarPanel
-        key={lot.id}
-        lotCode={lot.lot_code}
-        productionDate={lot.production_date}
-        shelfLifeDays={packing?.version?.shelf_life_days ?? lot.products?.shelf_life_days ?? DEFAULT_SHELF_LIFE_DAYS}
-        product={{
-          slug: lot.products?.slug ?? null,
-          lotLetter: lot.products?.lot_letter ?? null,
-          nameNo: lot.products?.name_no ?? null,
-          nameEn: lot.products?.name_en ?? null,
-        }}
-      />
-
       <section className="mt-10">
         <h2 className="text-2xl font-semibold">{t("ingredients")}</h2>
         <p className="mt-1 max-w-2xl text-sm text-muted-foreground">{t("ingredients_hint")}</p>
@@ -737,11 +724,27 @@ function LotPackingSection({
     setApprovedQty(String(lot.approved_qty ?? lot.produced_qty));
   }, [lot.approved_qty, lot.produced_qty]);
 
+  const labelPanel = (
+    <LotFestklarPanel
+      lotCode={lot.lot_code}
+      productionDate={lot.production_date}
+      shelfLifeDays={packing?.version?.shelf_life_days ?? lot.products?.shelf_life_days ?? DEFAULT_SHELF_LIFE_DAYS}
+      product={{
+        slug: lot.products?.slug ?? null,
+        lotLetter: lot.products?.lot_letter ?? null,
+        nameNo: lot.products?.name_no ?? null,
+        nameEn: lot.products?.name_en ?? null,
+      }}
+    />
+  );
+
   if (packing?.schemaMissing) {
     return (
       <section className="mt-10">
         <h2 className="text-2xl font-semibold">{t("packing")}</h2>
-        <p className="mt-2 max-w-2xl text-sm text-muted-foreground">{t("packing_schema_missing")}</p>
+        <p className="mt-1 max-w-2xl text-sm text-muted-foreground">{t("festklar_intro")}</p>
+        {labelPanel}
+        <p className="mt-6 max-w-2xl text-sm text-muted-foreground">{t("packing_schema_missing")}</p>
       </section>
     );
   }
@@ -910,6 +913,9 @@ function LotPackingSection({
   return (
     <section className="mt-10">
       <h2 className="text-2xl font-semibold">{t("packing")}</h2>
+      <p className="mt-1 max-w-2xl text-sm text-muted-foreground">{t("festklar_intro")}</p>
+      {labelPanel}
+      <h3 className="mt-10 text-xl font-semibold">{t("regulatory_labels")}</h3>
       <p className="mt-1 max-w-2xl text-sm text-muted-foreground">{t("packing_intro")}</p>
       {!canPackSizes && snapshot ? (
         <p className="mt-3 text-sm text-muted-foreground">{t("packing_missing")}</p>

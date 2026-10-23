@@ -95,6 +95,8 @@ test("every variant and pack size renders inside a 150 × 100 mm sheet", () => {
       assert.match(html, /L-20261023-T-01/);
       assert.match(html, /21\.04\.2027/);
       assert.match(html, /@page \{ size: 150mm 100mm; margin: 0; \}/);
+      assert.match(html, /width: 150mm/);
+      assert.match(html, /height: 100mm/);
       assert.match(html, /class="sheet"/);
       assert.match(html, new RegExp(FESTKLAR_QR_PATH.replaceAll("/", "\\/")));
       assert.match(html, new RegExp(FESTKLAR_COPY.storage));
@@ -136,4 +138,12 @@ test("label printing has no delivery, handover or stock writes", () => {
   assert.match(lib, /Zebra Browser Print or QZ Tray/);
   assert.match(lib, /document\.fonts/);
   assert.match(panel, /openFestklarPrintWindow/);
+  assert.doesNotMatch(panel, /units_per_package|packages_per_carton/);
+  const page = readFileSync(new URL("../routes/_authenticated/admin.lots.$lotId.tsx", import.meta.url), "utf8");
+  const packingAt = page.indexOf("function LotPackingSection");
+  const panelAt = page.indexOf("<LotFestklarPanel", packingAt);
+  const bagsAt = page.indexOf("regulatory_labels", packingAt);
+  assert.ok(packingAt > 0 && panelAt > packingAt && bagsAt > panelAt);
+  const i18n = readFileSync(new URL("./i18n.tsx", import.meta.url), "utf8");
+  assert.match(i18n, /Skriv ut produktetiketter/);
 });

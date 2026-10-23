@@ -5,8 +5,10 @@ import { DEFAULT_SHELF_LIFE_DAYS } from "./product-version.ts";
  * Festklar box label, 150 × 100 mm landscape.
  *
  * Printed through the browser dialog (`window.print`) for a Zebra ZD220
- * installed as a normal printer. This file does not write lots, deliveries,
- * handovers, or stock. Dialog-free printing can be added later with Zebra Browser Print or QZ Tray
+ * installed as a normal printer. Chrome should use paper 100 × 150 mm, landscape,
+ * 100% scale and no margins. This file does not write lots, deliveries,
+ * handovers, or stock, and pack size is chosen per print — it is not stored on the product.
+ * Dialog-free printing can be added later with Zebra Browser Print or QZ Tray
  * if operators need to skip the system dialog.
  *
  * The order QR is a static image. Swap `FESTKLAR_QR_PATH` when the final
@@ -263,7 +265,7 @@ function festklarCss(assetBase: string): string {
   font-display: block;
   src: url("${sans}") format("woff2");
 }
-@page { size: ${page.width}mm ${page.height}mm; margin: 0; }
+@page { size: 150mm 100mm; margin: 0; }
 * { box-sizing: border-box; }
 html, body {
   margin: 0;
