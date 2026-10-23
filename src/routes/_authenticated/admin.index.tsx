@@ -1,84 +1,85 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { ChevronRight } from "lucide-react";
-import { LotPrerequisitesBanner } from "@/components/lot-prerequisites";
+import { AdminShortcuts } from "@/components/admin-shell";
 import { useLotPrerequisites } from "@/hooks/use-lot-prerequisites";
 import { useOpsHome } from "@/hooks/use-ops-home";
+import { useSessionInfo } from "@/hooks/use-session";
+import { canApproveOrders } from "@/lib/access";
 import { useI18n, type TranslationKey } from "@/lib/i18n";
-import type { FlavorStock, NextNeedItem } from "@/lib/ops-home";
+import { homeTasks, type FlavorStock, type HomeTask, type NextNeedItem } from "@/lib/ops-home";
 
 export const Route = createFileRoute("/_authenticated/admin/")({
   head: () => ({
     meta: [
-      { title: "Drift — Gold of Sicily" },
+      { title: "Hjem — Gold of Sicily" },
       {
         name: "description",
-        content: "Produce, hand over to Villa, and deliver Gold LOT stock.",
+        content: "The jobs waiting in Gold of Sicily, then stock.",
       },
-      { property: "og:title", content: "Drift — Gold of Sicily" },
+      { property: "og:title", content: "Hjem — Gold of Sicily" },
       {
         property: "og:description",
-        content: "Produce, hand over to Villa, and deliver Gold LOT stock.",
+        content: "The jobs waiting in Gold of Sicily, then stock.",
       },
     ],
   }),
   component: OpsHome,
 });
 
+const TASK_TITLE: Record<HomeTask["id"], TranslationKey> = {
+  approve: "home_approve",
+  produce: "ops_start_production",
+  label: "home_label_task",
+  handover: "ops_handover_villa",
+  deliver: "ops_register_delivery",
+};
+
 function OpsHome() {
   const { t, lang } = useI18n();
   const prereq = useLotPrerequisites();
-  const { data } = useOpsHome(lang);
+  const { data, isPending } = useOpsHome(lang);
+  const { data: info } = useSessionInfo();
+  const tasks = homeTasks({
+    approvals: data?.approval ?? [],
+    productionShortfall: data?.productionShortfall ?? 0,
+    lotsAtGold: data?.lotsAtGold ?? [],
+    openDeliveries: data?.openDeliveries ?? [],
+  });
 
   return (
     <main className="mx-auto w-full max-w-5xl px-5 pb-16">
-      <h1 className="pt-8 text-3xl font-semibold">{t("ops_today")}</h1>
-      <p className="mt-2 max-w-2xl text-sm text-muted-foreground">{t("ops_intro")}</p>
-      <LotPrerequisitesBanner check={prereq} />
+      <h1 className="pt-8 text-3xl font-semibold">{t("nav_home")}</h1>
 
-      {(data?.approval.length ?? 0) > 0 ? (
-        <section className="mt-6 space-y-3">
-          <h2 className="eyebrow">{t("orders_queue")}</h2>
-          {data?.approval.map((order) => (
-            <Link
-              key={order.id}
-              to="/admin/orders/$orderId"
-              params={{ orderId: order.id }}
-              className="surface-card flex items-center justify-between gap-3 p-5"
-            >
-              <TaskCopy
-                title={`${order.ordererName} · ${order.orderNumber}`}
-                hint={t("orders_status_pending_confirmation")}
-              />
-              <ChevronRight className="size-5 shrink-0 text-muted-foreground" />
-            </Link>
-          ))}
+      <div className="mt-6 grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_17rem]">
+        <div className="space-y-4">
+          {!prereq.loading && !prereq.ok ? <GetStarted /> : null}
+          <section className="surface-card p-5">
+            <h2 className="text-lg font-semibold">{t("home_list")}</h2>
+            {isPending ? null : tasks.length === 0 ? (
+              <p className="mt-3 text-sm text-muted-foreground">{t("home_list_empty")}</p>
+            ) : (
+              <div className="mt-3 space-y-2">
+                {tasks.map((task) => (
+                  <TaskLink key={task.id} task={task}>
+                    <TaskCopy title={t(TASK_TITLE[task.id])} hint={taskHint(task, data, t)} />
+                  </TaskLink>
+                ))}
+              </div>
+            )}
+          </section>
+        </div>
+
+        <section className="surface-card p-5">
+          <h2 className="text-lg font-semibold">{t("home_shortcuts")}</h2>
+          <div className="mt-2">
+            <AdminShortcuts
+              operations={Boolean(info?.canManageOperations)}
+              approver={canApproveOrders(info?.roles ?? [])}
+              commercial={Boolean(info?.canManageCommercial)}
+              layout="card"
+            />
+          </div>
         </section>
-      ) : null}
-
-      <div className="mt-6 space-y-3">
-        <Link
-          to="/admin/lots"
-          search={{ tab: "production" }}
-          className="surface-card flex items-center justify-between gap-3 p-5 transition-shadow hover:shadow-[var(--shadow-lift)]"
-        >
-          <TaskCopy title={t("ops_start_production")} hint={t("ops_start_production_hint")} />
-        </Link>
-        <Link
-          to="/admin/lots"
-          search={{ tab: "active" }}
-          className="surface-card flex items-center justify-between gap-3 p-5 transition-shadow hover:shadow-[var(--shadow-lift)]"
-        >
-          <TaskCopy
-            title={t("ops_handover_villa")}
-            hint={handoverHint(data?.readyForHandover ?? 0, t)}
-          />
-        </Link>
-        <Link
-          to="/admin/deliveries"
-          className="surface-card flex items-center justify-between gap-3 p-5 transition-shadow hover:shadow-[var(--shadow-lift)]"
-        >
-          <TaskCopy title={t("ops_register_delivery")} hint={t("ops_register_delivery_hint")} />
-        </Link>
       </div>
 
       <h2 className="eyebrow mt-10">{t("ops_stock")}</h2>
@@ -119,18 +120,109 @@ function OpsHome() {
   );
 }
 
-function handoverHint(count: number, t: (key: TranslationKey) => string) {
-  if (count <= 0) return t("ops_handover_none");
-  if (count === 1) return t("ops_handover_one");
-  return `${count} ${t("ops_handover_many")}`;
+function GetStarted() {
+  const { t, lang } = useI18n();
+  const prereq = useLotPrerequisites();
+  return (
+    <section className="surface-card p-5">
+      <h2 className="text-lg font-semibold">{t("home_get_started")}</h2>
+      <p className="mt-1 text-sm text-muted-foreground">{t("home_get_started_hint")}</p>
+      {prereq.schemaMissing ? (
+        <p className="mt-3 text-sm">{t("lot_schema_missing")}</p>
+      ) : (
+        <div className="mt-3 rounded-xl border border-border px-4 py-3">
+          <p className="font-medium">{t("home_letters")}</p>
+          <ul className="mt-1 text-sm text-muted-foreground">
+            {prereq.missingLetters.map((product) => (
+              <li key={product.id}>{lang === "en" ? product.name_en : product.name_no}</li>
+            ))}
+          </ul>
+          <Link
+            to="/admin/products"
+            className="mt-3 inline-flex rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground"
+          >
+            {t("open_products")}
+          </Link>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function taskHint(
+  task: HomeTask,
+  data:
+    | {
+        approval: { ordererName: string; orderNumber: string }[];
+        openDeliveries: { customerName: string; orderNumber: string }[];
+      }
+    | undefined,
+  t: (key: TranslationKey) => string,
+) {
+  if (task.id === "approve" && task.count === 1 && data?.approval[0]) {
+    const order = data.approval[0];
+    return `${order.ordererName} · ${order.orderNumber}`;
+  }
+  if (task.id === "approve") return `${task.count} ${t("home_orders_waiting")}`;
+  if (task.id === "produce") return `${t("orders_shortfall")} ${task.count}`;
+  if (task.id === "label") {
+    return task.count === 1 ? t("home_label_one") : `${task.count} ${t("home_label_many")}`;
+  }
+  if (task.id === "handover") {
+    return task.count === 1 ? t("ops_handover_one") : `${task.count} ${t("ops_handover_many")}`;
+  }
+  if (task.count === 1 && data?.openDeliveries[0]) {
+    const order = data.openDeliveries[0];
+    return `${order.customerName} · ${order.orderNumber}`;
+  }
+  return `${task.count} ${t("home_deliver_many")}`;
+}
+
+function TaskLink({ task, children }: { task: HomeTask; children: React.ReactNode }) {
+  const className =
+    "flex items-center justify-between gap-3 rounded-xl border border-border px-4 py-3 transition-shadow hover:shadow-[var(--shadow-lift)]";
+  const target = task.target;
+  if (target.to === "/admin/orders/$orderId") {
+    return (
+      <Link to="/admin/orders/$orderId" params={{ orderId: target.orderId }} className={className}>
+        {children}
+      </Link>
+    );
+  }
+  if (target.to === "/admin/lots/$lotId") {
+    return (
+      <Link to="/admin/lots/$lotId" params={{ lotId: target.lotId }} className={className}>
+        {children}
+      </Link>
+    );
+  }
+  if (target.to === "/admin/lots") {
+    return (
+      <Link to="/admin/lots" search={{ tab: target.tab }} className={className}>
+        {children}
+      </Link>
+    );
+  }
+  if (target.to === "/admin/deliveries") {
+    return (
+      <Link to="/admin/deliveries" search={{ lot: target.lot }} className={className}>
+        {children}
+      </Link>
+    );
+  }
+  return (
+    <Link to="/admin/orders" className={className}>
+      {children}
+    </Link>
+  );
 }
 
 function TaskCopy({ title, hint }: { title: string; hint: string }) {
   return (
     <>
       <div>
-        <p className="text-lg font-semibold">{title}</p>
-        <p className="mt-1 text-sm text-muted-foreground">{hint}</p>
+        <p className="font-semibold">{title}</p>
+        <p className="mt-0.5 text-sm text-muted-foreground">{hint}</p>
       </div>
       <ChevronRight className="size-5 shrink-0 text-muted-foreground" />
     </>

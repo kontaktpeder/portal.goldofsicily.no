@@ -1,6 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildNextNeed, flavorStock, lotsReadyForHandover, type OpsLot } from "./ops-home.ts";
+import {
+  buildNextNeed,
+  flavorStock,
+  homeTasks,
+  lotsReadyForHandover,
+  type OpsLot,
+} from "./ops-home.ts";
 
 const lots: OpsLot[] = [
   {
@@ -105,4 +111,50 @@ test("next need lists venue demand and Villa remaining", () => {
   });
   assert.equal(items.find((item) => item.id === "villa:nduja")?.quantity, 240);
   assert.equal(items.find((item) => item.id === "villa:truffle")?.quantity, 300);
+});
+
+test("the home list keeps only jobs that are waiting and opens the single job", () => {
+  assert.deepEqual(
+    homeTasks({
+      approvals: [{ id: "order-1" }],
+      productionShortfall: 0,
+      lotsAtGold: [{ id: "lot-1" }],
+      openDeliveries: [],
+    }).map((task) => ({ id: task.id, count: task.count, target: task.target })),
+    [
+      { id: "approve", count: 1, target: { to: "/admin/orders/$orderId", orderId: "order-1" } },
+      { id: "label", count: 1, target: { to: "/admin/lots/$lotId", lotId: "lot-1" } },
+      { id: "handover", count: 1, target: { to: "/admin/lots/$lotId", lotId: "lot-1" } },
+    ],
+  );
+});
+
+test("several waiting jobs open the list instead of one record", () => {
+  const tasks = homeTasks({
+    approvals: [{ id: "a" }, { id: "b" }],
+    productionShortfall: 12,
+    lotsAtGold: [{ id: "lot-1" }, { id: "lot-2" }],
+    openDeliveries: [{ id: "d1" }, { id: "d2" }],
+  });
+  assert.deepEqual(
+    tasks.map((task) => task.target),
+    [
+      { to: "/admin/orders" },
+      { to: "/admin/lots", tab: "production" },
+      { to: "/admin/lots", tab: "active" },
+      { to: "/admin/lots", tab: "active" },
+      { to: "/admin/deliveries", lot: "" },
+    ],
+  );
+  assert.deepEqual(
+    tasks.map((task) => task.count),
+    [2, 12, 2, 2, 2],
+  );
+});
+
+test("an empty day has an empty home list", () => {
+  assert.deepEqual(
+    homeTasks({ approvals: [], productionShortfall: 0, lotsAtGold: [], openDeliveries: [] }),
+    [],
+  );
 });

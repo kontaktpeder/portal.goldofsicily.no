@@ -90,6 +90,78 @@ export function flavorStock(products: OpsProduct[], lots: OpsLot[]): FlavorStock
   });
 }
 
+export type HomeTaskId = "approve" | "produce" | "label" | "handover" | "deliver";
+
+export type HomeTaskTarget =
+  | { to: "/admin/orders" }
+  | { to: "/admin/orders/$orderId"; orderId: string }
+  | { to: "/admin/lots"; tab: "production" | "active" }
+  | { to: "/admin/lots/$lotId"; lotId: string }
+  | { to: "/admin/deliveries"; lot: "" };
+
+export type HomeTask = {
+  id: HomeTaskId;
+  count: number;
+  target: HomeTaskTarget;
+};
+
+/** Jobs that are actually waiting. Empty work stays off the list. */
+export function homeTasks(input: {
+  approvals: readonly { id: string }[];
+  productionShortfall: number;
+  lotsAtGold: readonly { id: string }[];
+  openDeliveries: readonly { id: string }[];
+}): HomeTask[] {
+  const tasks: HomeTask[] = [];
+  const approval = input.approvals[0];
+  if (input.approvals.length === 1 && approval) {
+    tasks.push({
+      id: "approve",
+      count: 1,
+      target: { to: "/admin/orders/$orderId", orderId: approval.id },
+    });
+  } else if (input.approvals.length > 1) {
+    tasks.push({
+      id: "approve",
+      count: input.approvals.length,
+      target: { to: "/admin/orders" },
+    });
+  }
+  if (input.productionShortfall > 0) {
+    tasks.push({
+      id: "produce",
+      count: input.productionShortfall,
+      target: { to: "/admin/lots", tab: "production" },
+    });
+  }
+  const lots = input.lotsAtGold;
+  const lot = lots[0];
+  if (lots.length === 1 && lot) {
+    const target = { to: "/admin/lots/$lotId" as const, lotId: lot.id };
+    tasks.push({ id: "label", count: 1, target });
+    tasks.push({ id: "handover", count: 1, target });
+  } else if (lots.length > 1) {
+    const target = { to: "/admin/lots" as const, tab: "active" as const };
+    tasks.push({ id: "label", count: lots.length, target });
+    tasks.push({ id: "handover", count: lots.length, target });
+  }
+  const delivery = input.openDeliveries[0];
+  if (input.openDeliveries.length === 1 && delivery) {
+    tasks.push({
+      id: "deliver",
+      count: 1,
+      target: { to: "/admin/orders/$orderId", orderId: delivery.id },
+    });
+  } else if (input.openDeliveries.length > 1) {
+    tasks.push({
+      id: "deliver",
+      count: input.openDeliveries.length,
+      target: { to: "/admin/deliveries", lot: "" },
+    });
+  }
+  return tasks;
+}
+
 export function buildNextNeed(
   reports: VenueNeedReport[],
   stock: FlavorStock[],

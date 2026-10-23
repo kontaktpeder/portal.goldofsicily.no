@@ -9,7 +9,7 @@ import {
   type OpsProduct,
   type VenueNeedReport,
 } from "@/lib/ops-home";
-import { productionNeed } from "@/lib/orders";
+import { productionNeed, remainingQuantity } from "@/lib/orders";
 
 type LotQueryRow = {
   id: string;
@@ -84,40 +84,48 @@ export function useOpsHome(lang: "no" | "en") {
   return useQuery({
     queryKey: ["ops-home", lang],
     queryFn: async () => {
-      const [productsRes, lotsRes, reportsRes, orderLinesRes, approvalRes] = await Promise.all([
-        supabase
-          .from("products")
-          .select("id, name_no, name_en")
-          .eq("active", true)
-          .order("sort_order"),
-        supabase
-          .from("gold_lots")
-          .select(
-            "id, product_id, produced_qty, status, gold_lot_handovers(quantity, ownership_after_handover), delivery_lines(quantity)",
-          )
-          .neq("status", "recalled")
-          .limit(400),
-        supabase
-          .from("shift_reports")
-          .select(
-            "customer_id, created_at, next_required_quantity, customers(name), shift_report_lines(product_id, next_required_quantity, products(name_no, name_en))",
-          )
-          .order("created_at", { ascending: false })
-          .limit(200),
-        supabase
-          .from("customer_order_lines")
-          .select(
-            "product_id, quantity, order_line_fulfillments(quantity), customer_orders!inner(status)",
-          ),
-        supabase
-          .from("customer_orders")
-          .select(
-            "id, order_number, ordered_by:customers!customer_orders_ordered_by_customer_id_fkey(name)",
-          )
-          .eq("status", "pending_confirmation")
-          .order("created_at", { ascending: true })
-          .limit(20),
-      ]);
+      const [productsRes, lotsRes, reportsRes, orderLinesRes, approvalRes, deliveryRes] =
+        await Promise.all([
+          supabase
+            .from("products")
+            .select("id, name_no, name_en")
+            .eq("active", true)
+            .order("sort_order"),
+          supabase
+            .from("gold_lots")
+            .select(
+              "id, product_id, produced_qty, status, gold_lot_handovers(quantity, ownership_after_handover), delivery_lines(quantity)",
+            )
+            .neq("status", "recalled")
+            .limit(400),
+          supabase
+            .from("shift_reports")
+            .select(
+              "customer_id, created_at, next_required_quantity, customers(name), shift_report_lines(product_id, next_required_quantity, products(name_no, name_en))",
+            )
+            .order("created_at", { ascending: false })
+            .limit(200),
+          supabase
+            .from("customer_order_lines")
+            .select(
+              "product_id, quantity, order_line_fulfillments(quantity), customer_orders!inner(status)",
+            ),
+          supabase
+            .from("customer_orders")
+            .select(
+              "id, order_number, ordered_by:customers!customer_orders_ordered_by_customer_id_fkey(name)",
+            )
+            .eq("status", "pending_confirmation")
+            .order("created_at", { ascending: true })
+            .limit(20),
+          supabase
+            .from("customer_orders")
+            .select(
+              "id, order_number, ordered_by:customers!customer_orders_ordered_by_customer_id_fkey(name), customer_order_lines(quantity, order_line_fulfillments(quantity))",
+            )
+            .eq("status", "confirmed")
+            .limit(80),
+        ]);
 
       if (productsRes.error) throw productsRes.error;
       if (lotsRes.error && !isGoldLotSchemaError(lotsRes.error)) throw lotsRes.error;
@@ -161,10 +169,39 @@ export function useOpsHome(lang: "no" | "en") {
             orderNumber: order.order_number,
             ordererName: asOne(order.ordered_by)?.name ?? "—",
           }));
+      const openDeliveries = deliveryRes.error
+        ? []
+        : (deliveryRes.data ?? []).flatMap((order) => {
+            const ordered = (order.customer_order_lines ?? []).reduce(
+              (sum, line) => sum + line.quantity,
+              0,
+            );
+            const fulfilled = (order.customer_order_lines ?? []).reduce(
+              (sum, line) =>
+                sum +
+                (line.order_line_fulfillments ?? []).reduce(
+                  (inner, item) => inner + item.quantity,
+                  0,
+                ),
+              0,
+            );
+            return remainingQuantity(ordered, fulfilled) > 0
+              ? [
+                  {
+                    id: order.id,
+                    orderNumber: order.order_number,
+                    customerName: asOne(order.ordered_by)?.name ?? "—",
+                  },
+                ]
+              : [];
+          });
 
       return {
         stock,
         readyForHandover: handoverLots.length,
+        lotsAtGold: handoverLots.map((lot) => ({ id: lot.id })),
+        openDeliveries,
+        productionShortfall: production.reduce((sum, row) => sum + row.shortfall, 0),
         nextNeed: buildNextNeed(reports, stock, lang),
         production,
         approval,
