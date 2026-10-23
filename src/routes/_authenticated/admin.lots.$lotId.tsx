@@ -4,6 +4,7 @@ import { useMemo, useState, useEffect } from "react";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
+import { LotFestklarPanel } from "@/components/festklar-label-panel";
 import { PrimaryButton, TextAreaField, TextField } from "@/components/field";
 import { ProducerPicker } from "@/components/producer-picker";
 import { listProductionStaff } from "@/lib/admin.functions";
@@ -32,6 +33,7 @@ import {
   planPacking,
 } from "@/lib/packing";
 import {
+  DEFAULT_SHELF_LIFE_DAYS,
   fieldsFromProductRow,
   isPackingSchemaError,
   packingConfigReady,
@@ -78,7 +80,13 @@ type LotDetail = {
   recalled_at: string | null;
   recalled_by: string | null;
   recall_reason: string | null;
-  products: { name_no: string; name_en: string } | null;
+  products: {
+    name_no: string;
+    name_en: string;
+    slug: string | null;
+    lot_letter: string | null;
+    shelf_life_days: number | null;
+  } | null;
   gold_lot_ingredients:
     | {
         id: string;
@@ -183,7 +191,7 @@ function AdminLotDetail() {
       const { data, error: loadError } = await supabase
         .from("gold_lots")
         .select(
-          "*, products(name_no, name_en), gold_lot_ingredients(*, ingredient_suppliers(name)), gold_lot_handovers(*), gold_lot_producers(user_id, full_name_snapshot, employee_number_snapshot)",
+          "*, products(name_no, name_en, slug, lot_letter, shelf_life_days), gold_lot_ingredients(*, ingredient_suppliers(name)), gold_lot_handovers(*), gold_lot_producers(user_id, full_name_snapshot, employee_number_snapshot)",
         )
         .eq("id", lotId)
         .single();
@@ -191,7 +199,7 @@ function AdminLotDetail() {
         const fallback = await supabase
           .from("gold_lots")
           .select(
-            "*, products(name_no, name_en), gold_lot_ingredients(*, ingredient_suppliers(name)), gold_lot_handovers(*)",
+            "*, products(name_no, name_en, slug, lot_letter, shelf_life_days), gold_lot_ingredients(*, ingredient_suppliers(name)), gold_lot_handovers(*)",
           )
           .eq("id", lotId)
           .single();
@@ -397,6 +405,19 @@ function AdminLotDetail() {
       <LotMetaForm lot={lot} onSaved={refresh} />
 
       <LotPackingSection lot={lot} packing={packing} onSaved={refresh} />
+
+      <LotFestklarPanel
+        key={lot.id}
+        lotCode={lot.lot_code}
+        productionDate={lot.production_date}
+        shelfLifeDays={packing?.version?.shelf_life_days ?? lot.products?.shelf_life_days ?? DEFAULT_SHELF_LIFE_DAYS}
+        product={{
+          slug: lot.products?.slug ?? null,
+          lotLetter: lot.products?.lot_letter ?? null,
+          nameNo: lot.products?.name_no ?? null,
+          nameEn: lot.products?.name_en ?? null,
+        }}
+      />
 
       <section className="mt-10">
         <h2 className="text-2xl font-semibold">{t("ingredients")}</h2>
