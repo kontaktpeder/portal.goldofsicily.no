@@ -1836,6 +1836,77 @@ export type Database = {
           },
         ]
       }
+      shop_waitlist: {
+        Row: {
+          id: string
+          email: string
+          flavor_slug: string
+          lang: string
+          discovery_source: string
+          newsletter_consent: boolean
+          created_at: string
+          notified_at: string | null
+        }
+        Insert: {
+          id?: string
+          email: string
+          flavor_slug: string
+          lang: string
+          discovery_source: string
+          newsletter_consent?: boolean
+          created_at?: string
+          notified_at?: string | null
+        }
+        Update: {
+          id?: string
+          email?: string
+          flavor_slug?: string
+          lang?: string
+          discovery_source?: string
+          newsletter_consent?: boolean
+          created_at?: string
+          notified_at?: string | null
+        }
+        Relationships: []
+      }
+      shop_reservations: {
+        Row: {
+          id: string
+          product_id: string
+          pieces: number
+          status: string
+          payment_kind: string | null
+          expires_at: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          product_id: string
+          pieces: number
+          status?: string
+          payment_kind?: string | null
+          expires_at: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          product_id?: string
+          pieces?: number
+          status?: string
+          payment_kind?: string | null
+          expires_at?: string
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "shop_reservations_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
@@ -1913,6 +1984,16 @@ export type Database = {
           p_confirmed_ore: number
         }
         Returns: number
+      }
+      reserve_shop_pieces: {
+        Args: {
+          p_product_id: string
+          p_pieces: number
+          p_physical_pieces: number
+          p_expires_at: string
+          p_payment_kind?: string
+        }
+        Returns: string
       }
       order_invoice_lines: {
         Args: { p_order_id: string }

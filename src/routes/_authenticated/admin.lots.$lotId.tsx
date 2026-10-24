@@ -8,6 +8,7 @@ import { LotFestklarPanel } from "@/components/festklar-label-panel";
 import { PrimaryButton, TextAreaField, TextField } from "@/components/field";
 import { ProducerPicker } from "@/components/producer-picker";
 import { listProductionStaff } from "@/lib/admin.functions";
+import { flushShopRestock } from "@/lib/shop.functions";
 import { useI18n, type TranslationKey } from "@/lib/i18n";
 import { handoverRecipient } from "@/lib/customer-domain";
 import { nowOsloDateTimeLocal, sumQuantities } from "@/lib/gold-lot";
@@ -746,6 +747,7 @@ function LotPackingSection({
   onSaved: () => Promise<void>;
 }) {
   const { t } = useI18n();
+  const flushRestock = useServerFn(flushShopRestock);
   const [approvedQty, setApprovedQty] = useState(String(lot.approved_qty ?? lot.produced_qty));
   const [busy, setBusy] = useState(false);
 
@@ -909,6 +911,7 @@ function LotPackingSection({
     });
     setBusy(false);
     toast.success(t("packing_done"));
+    void flushRestock().catch(() => undefined);
     if (!packedEvent.ok) {
       toast.error(packedEvent.schemaMissing ? t("lot_events_schema_missing") : packedEvent.message);
     }

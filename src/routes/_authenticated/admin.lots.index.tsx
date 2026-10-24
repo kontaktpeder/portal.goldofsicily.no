@@ -38,6 +38,7 @@ import {
 import { replaceLotProducers } from "@/lib/lot-producers-save";
 import { recordLotEvent } from "@/lib/lot-events-save";
 import { listProductionStaff } from "@/lib/admin.functions";
+import { flushShopRestock } from "@/lib/shop.functions";
 import { formatDate } from "@/lib/sign-out";
 import { cn, errorMessage } from "@/lib/utils";
 
@@ -194,6 +195,7 @@ function AdminLots() {
   const { tab, product: productFromSearch } = Route.useSearch();
   const queryClient = useQueryClient();
   const listStaff = useServerFn(listProductionStaff);
+  const flushRestock = useServerFn(flushShopRestock);
   const prereq = useLotPrerequisites();
   const [productId, setProductId] = useState(productFromSearch ?? "");
   const [productionDate, setProductionDate] = useState(todayOsloDate);
@@ -346,6 +348,7 @@ function AdminLots() {
       return;
     }
     toast.success(`${lotCode} ${t("lot_created").toLowerCase()}`);
+    void flushRestock().catch(() => undefined);
     if (!createdEvent.ok) {
       toast.error(
         createdEvent.schemaMissing ? t("lot_events_schema_missing") : createdEvent.message,

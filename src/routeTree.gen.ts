@@ -32,6 +32,7 @@ import { Route as AuthenticatedAdminVenuesIndexRouteImport } from './routes/_aut
 import { Route as AuthenticatedAdminVenuesVenueIdRouteImport } from './routes/_authenticated/admin.venues.$venueId'
 import { Route as AuthenticatedAdminWholesalersIndexRouteImport } from './routes/_authenticated/admin.wholesalers.index'
 import { Route as AuthenticatedAdminWholesalersCustomerIdRouteImport } from './routes/_authenticated/admin.wholesalers.$customerId'
+import { Route as ApiPublicV1ShopRouteImport } from './routes/api/public/v1/shop'
 import { Route as ApiPublicV1VenuesRouteImport } from './routes/api/public/v1/venues'
 import { Route as ApiPublicV1VenuesSlugRouteImport } from './routes/api/public/v1/venues.$slug'
 
@@ -164,6 +165,11 @@ const AuthenticatedAdminWholesalersCustomerIdRoute =
     path: '/wholesalers/$customerId',
     getParentRoute: () => AuthenticatedAdminRoute,
   } as any)
+const ApiPublicV1ShopRoute = ApiPublicV1ShopRouteImport.update({
+  id: '/api/public/v1/shop',
+  path: '/api/public/v1/shop',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicV1VenuesRoute = ApiPublicV1VenuesRouteImport.update({
   id: '/api/public/v1/venues',
   path: '/api/public/v1/venues',
@@ -193,6 +199,7 @@ export interface FileRoutesByFullPath {
   '/admin/sales/$customerId': typeof AuthenticatedAdminSalesCustomerIdRoute
   '/admin/venues/$venueId': typeof AuthenticatedAdminVenuesVenueIdRoute
   '/admin/wholesalers/$customerId': typeof AuthenticatedAdminWholesalersCustomerIdRoute
+  '/api/public/v1/shop': typeof ApiPublicV1ShopRoute
   '/api/public/v1/venues': typeof ApiPublicV1VenuesRouteWithChildren
   '/admin/lots/': typeof AuthenticatedAdminLotsIndexRoute
   '/admin/orders/': typeof AuthenticatedAdminOrdersIndexRoute
@@ -218,6 +225,7 @@ export interface FileRoutesByTo {
   '/admin/sales/$customerId': typeof AuthenticatedAdminSalesCustomerIdRoute
   '/admin/venues/$venueId': typeof AuthenticatedAdminVenuesVenueIdRoute
   '/admin/wholesalers/$customerId': typeof AuthenticatedAdminWholesalersCustomerIdRoute
+  '/api/public/v1/shop': typeof ApiPublicV1ShopRoute
   '/api/public/v1/venues': typeof ApiPublicV1VenuesRouteWithChildren
   '/admin/lots': typeof AuthenticatedAdminLotsIndexRoute
   '/admin/orders': typeof AuthenticatedAdminOrdersIndexRoute
@@ -246,6 +254,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/sales/$customerId': typeof AuthenticatedAdminSalesCustomerIdRoute
   '/_authenticated/admin/venues/$venueId': typeof AuthenticatedAdminVenuesVenueIdRoute
   '/_authenticated/admin/wholesalers/$customerId': typeof AuthenticatedAdminWholesalersCustomerIdRoute
+  '/api/public/v1/shop': typeof ApiPublicV1ShopRoute
   '/api/public/v1/venues': typeof ApiPublicV1VenuesRouteWithChildren
   '/_authenticated/admin/lots/': typeof AuthenticatedAdminLotsIndexRoute
   '/_authenticated/admin/orders/': typeof AuthenticatedAdminOrdersIndexRoute
@@ -274,6 +283,7 @@ export interface FileRouteTypes {
     | '/admin/sales/$customerId'
     | '/admin/venues/$venueId'
     | '/admin/wholesalers/$customerId'
+    | '/api/public/v1/shop'
     | '/api/public/v1/venues'
     | '/admin/lots/'
     | '/admin/orders/'
@@ -299,6 +309,7 @@ export interface FileRouteTypes {
     | '/admin/sales/$customerId'
     | '/admin/venues/$venueId'
     | '/admin/wholesalers/$customerId'
+    | '/api/public/v1/shop'
     | '/api/public/v1/venues'
     | '/admin/lots'
     | '/admin/orders'
@@ -326,6 +337,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/sales/$customerId'
     | '/_authenticated/admin/venues/$venueId'
     | '/_authenticated/admin/wholesalers/$customerId'
+    | '/api/public/v1/shop'
     | '/api/public/v1/venues'
     | '/_authenticated/admin/lots/'
     | '/_authenticated/admin/orders/'
@@ -339,6 +351,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   SetupRoute: typeof SetupRoute
+  ApiPublicV1ShopRoute: typeof ApiPublicV1ShopRoute
   ApiPublicV1VenuesRoute: typeof ApiPublicV1VenuesRouteWithChildren
 }
 
@@ -505,6 +518,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminWholesalersCustomerIdRouteImport
       parentRoute: typeof AuthenticatedAdminRoute
     }
+    '/api/public/v1/shop': {
+      id: '/api/public/v1/shop'
+      path: '/api/public/v1/shop'
+      fullPath: '/api/public/v1/shop'
+      preLoaderRoute: typeof ApiPublicV1ShopRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/v1/venues': {
       id: '/api/public/v1/venues'
       path: '/api/public/v1/venues'
@@ -598,6 +618,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   SetupRoute: SetupRoute,
+  ApiPublicV1ShopRoute: ApiPublicV1ShopRoute,
   ApiPublicV1VenuesRoute: ApiPublicV1VenuesRouteWithChildren,
 }
 export const routeTree = rootRouteImport
