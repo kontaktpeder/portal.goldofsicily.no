@@ -116,8 +116,8 @@ export type HomeInvoiceDraft = {
 export type HomeTaskTarget =
   | { to: "/admin/orders" }
   | { to: "/admin/orders/$orderId"; orderId: string }
-  | { to: "/admin/lots"; tab: "production" | "active"; open?: "handover" }
-  | { to: "/admin/lots/$lotId"; lotId: string; hash: "etikett" | "lot-handover" }
+  | { to: "/admin/lots"; tab: "production" | "active" }
+  | { to: "/admin/lots/$lotId"; lotId: string }
   | { to: "/admin/deliveries"; lot: "" }
   | { to: "/admin/invoices" };
 
@@ -177,23 +177,13 @@ export function homeTasks(input: {
     tasks.push({
       id: "label",
       count: 1,
-      target: { to: "/admin/lots/$lotId", lotId: lot.id, hash: "etikett" },
-    });
-    tasks.push({
-      id: "handover",
-      count: 1,
-      target: { to: "/admin/lots/$lotId", lotId: lot.id, hash: "lot-handover" },
+      target: { to: "/admin/lots/$lotId", lotId: lot.id },
     });
   } else if (lots.length > 1) {
     tasks.push({
       id: "label",
       count: lots.length,
       target: { to: "/admin/lots", tab: "active" },
-    });
-    tasks.push({
-      id: "handover",
-      count: lots.length,
-      target: { to: "/admin/lots", tab: "active", open: "handover" },
     });
   }
   const due = [...input.dueDeliveries].sort(byUrgency);

@@ -191,7 +191,7 @@ async function loadLotRows(): Promise<LotRow[]> {
 
 function AdminLots() {
   const { t, lang } = useI18n();
-  const { tab, product: productFromSearch, open } = Route.useSearch();
+  const { tab, product: productFromSearch } = Route.useSearch();
   const queryClient = useQueryClient();
   const listStaff = useServerFn(listProductionStaff);
   const prereq = useLotPrerequisites();
@@ -532,9 +532,6 @@ function AdminLots() {
                       <Link
                         to="/admin/lots/$lotId"
                         params={{ lotId: lot.id }}
-                        {...(tab === "active"
-                          ? { hash: open === "handover" ? "lot-handover" : "etikett" }
-                          : {})}
                         className={className}
                       >
                         {body}

@@ -64,7 +64,7 @@ export function RecordCard({
   const card = render(
     cn(
       "surface-card flex w-full min-w-0 items-center gap-3 p-4 text-left",
-      !quiet && "transition-shadow hover:shadow-[var(--shadow-lift)]",
+      !quiet && "cursor-pointer transition-shadow hover:shadow-[var(--shadow-lift)]",
     ),
     body,
   );

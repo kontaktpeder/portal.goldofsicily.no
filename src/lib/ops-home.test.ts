@@ -132,12 +132,7 @@ test("the home list keeps only jobs that are waiting and opens the single job", 
       {
         id: "label",
         count: 1,
-        target: { to: "/admin/lots/$lotId", lotId: "lot-1", hash: "etikett" },
-      },
-      {
-        id: "handover",
-        count: 1,
-        target: { to: "/admin/lots/$lotId", lotId: "lot-1", hash: "lot-handover" },
+        target: { to: "/admin/lots/$lotId", lotId: "lot-1" },
       },
     ],
   );
@@ -157,13 +152,12 @@ test("several waiting jobs open the list instead of one record", () => {
       { to: "/admin/orders" },
       { to: "/admin/lots", tab: "production" },
       { to: "/admin/lots", tab: "active" },
-      { to: "/admin/lots", tab: "active", open: "handover" },
       { to: "/admin/deliveries", lot: "" },
     ],
   );
   assert.deepEqual(
     tasks.map((task) => task.count),
-    [2, 12, 2, 2, 2],
+    [2, 12, 2, 2],
   );
 });
 
@@ -205,7 +199,7 @@ test("late and today sit above the delivery queue, and the Hjem count ignores th
   });
   assert.deepEqual(
     tasks.map((task) => task.id),
-    ["produce", "label", "handover", "due", "deliver", "followup", "invoice"],
+    ["produce", "label", "due", "deliver", "followup", "invoice"],
   );
   assert.equal(tasks.find((task) => task.id === "due")?.count, 2);
   assert.deepEqual(tasks.find((task) => task.id === "due")?.target, { to: "/admin/orders" });

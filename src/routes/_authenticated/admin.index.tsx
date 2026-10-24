@@ -306,23 +306,14 @@ function TaskLink({
   }
   if (target.to === "/admin/lots/$lotId") {
     return (
-      <Link
-        to="/admin/lots/$lotId"
-        params={{ lotId: target.lotId }}
-        hash={target.hash}
-        className={className}
-      >
+      <Link to="/admin/lots/$lotId" params={{ lotId: target.lotId }} className={className}>
         {children}
       </Link>
     );
   }
   if (target.to === "/admin/lots") {
     return (
-      <Link
-        to="/admin/lots"
-        search={target.open ? { tab: target.tab, open: target.open } : { tab: target.tab }}
-        className={className}
-      >
+      <Link to="/admin/lots" search={{ tab: target.tab }} className={className}>
         {children}
       </Link>
     );
