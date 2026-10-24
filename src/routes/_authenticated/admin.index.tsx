@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ChevronRight } from "lucide-react";
 import { AdminShortcuts } from "@/components/admin-shell";
+import { RecordCard } from "@/components/record-card";
 import { useLotPrerequisites } from "@/hooks/use-lot-prerequisites";
 import { useOpsHome } from "@/hooks/use-ops-home";
 import { useSessionInfo } from "@/hooks/use-session";
@@ -110,13 +110,14 @@ function OpsHome() {
           <p className="text-sm text-muted-foreground">{t("orders_production_empty")}</p>
         ) : (
           data?.production.map((row) => (
-            <article key={row.productId} className="surface-card p-5">
-              <p className="font-semibold">{lang === "en" ? row.nameEn : row.nameNo}</p>
-              <p className="mt-1 text-sm text-muted-foreground">
-                {t("orders_remaining")} {row.remaining} · {t("orders_on_hand")} {row.onHand} ·{" "}
-                {t("orders_shortfall")} {row.shortfall}
-              </p>
-            </article>
+            <RecordCard
+              key={row.productId}
+              quiet
+              title={lang === "en" ? row.nameEn : row.nameNo}
+              meta={`${t("orders_remaining")} ${row.remaining} · ${t("orders_shortfall")} ${row.shortfall}`}
+              figure={{ value: row.onHand, unit: t("pcs"), label: t("orders_on_hand") }}
+              render={(className, body) => <article className={className}>{body}</article>}
+            />
           ))
         )}
       </div>
@@ -184,12 +185,17 @@ function HomeTaskRows({
   return (
     <div className="mt-3 space-y-2">
       {tasks.map((task) => (
-        <TaskLink key={task.id} task={task}>
-          <TaskCopy
-            title={taskTitle(task, data?.dueDeliveries ?? [], t)}
-            hint={taskHint(task, data, lang, t)}
-          />
-        </TaskLink>
+        <RecordCard
+          key={task.id}
+          title={taskTitle(task, data?.dueDeliveries ?? [], t)}
+          meta={taskHint(task, data, lang, t)}
+          chevron
+          render={(className, body) => (
+            <TaskLink task={task} className={className}>
+              {body}
+            </TaskLink>
+          )}
+        />
       ))}
     </div>
   );
@@ -281,9 +287,15 @@ function taskHint(
   return `${task.count} ${t("home_deliver_many")}`;
 }
 
-function TaskLink({ task, children }: { task: HomeTask; children: React.ReactNode }) {
-  const className =
-    "flex items-center justify-between gap-3 rounded-xl border border-border px-4 py-3 transition-shadow hover:shadow-[var(--shadow-lift)]";
+function TaskLink({
+  task,
+  className,
+  children,
+}: {
+  task: HomeTask;
+  className: string;
+  children: React.ReactNode;
+}) {
   const target = task.target;
   if (target.to === "/admin/orders/$orderId") {
     return (
@@ -333,18 +345,6 @@ function TaskLink({ task, children }: { task: HomeTask; children: React.ReactNod
     <Link to="/admin/orders" className={className}>
       {children}
     </Link>
-  );
-}
-
-function TaskCopy({ title, hint }: { title: string; hint: string }) {
-  return (
-    <>
-      <div>
-        <p className="font-semibold">{title}</p>
-        <p className="mt-0.5 text-sm text-muted-foreground">{hint}</p>
-      </div>
-      <ChevronRight className="size-5 shrink-0 text-muted-foreground" />
-    </>
   );
 }
 

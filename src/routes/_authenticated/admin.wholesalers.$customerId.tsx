@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { ArrowLeft, ChevronRight } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useRequireCommercial } from "@/hooks/use-session";
@@ -13,6 +13,7 @@ import { LegalEntityCard } from "@/components/legal-entity-card";
 import { CustomerPrices } from "@/components/customer-prices";
 import { parsePriceGap, priceGapNames } from "@/lib/economy";
 import { PrimaryButton, TextAreaField, TextField } from "@/components/field";
+import { RecordCard } from "@/components/record-card";
 import type { PartnershipLevel } from "@/lib/customer-domain";
 
 export const Route = createFileRoute("/_authenticated/admin/wholesalers/$customerId")({
@@ -103,15 +104,20 @@ function WholesalerDetail() {
           <p className="text-sm text-muted-foreground">{t("no_supplied_venues")}</p>
         ) : (
           card?.venues.map((venue) => (
-            <Link
+            <RecordCard
               key={venue.id}
-              to="/admin/venues/$venueId"
-              params={{ venueId: venue.id }}
-              className="surface-card flex items-center justify-between p-4"
-            >
-              <span className="font-semibold">{venue.name}</span>
-              <ChevronRight className="size-4 text-muted-foreground" />
-            </Link>
+              title={venue.name}
+              chevron
+              render={(className, body) => (
+                <Link
+                  to="/admin/venues/$venueId"
+                  params={{ venueId: venue.id }}
+                  className={className}
+                >
+                  {body}
+                </Link>
+              )}
+            />
           ))
         )}
       </div>
@@ -234,7 +240,11 @@ function WholesalerForm({
         <span className="eyebrow mb-2 block">{t("notes")}</span>
         <TextAreaField value={notes} onChange={setNotes} />
       </label>
-      <button type="button" onClick={() => setActive((value) => !value)} className="text-sm font-semibold">
+      <button
+        type="button"
+        onClick={() => setActive((value) => !value)}
+        className="text-sm font-semibold"
+      >
         {active ? t("active") : t("inactive")}
       </button>
       <PrimaryButton type="submit" disabled={busy}>

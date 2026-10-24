@@ -2,7 +2,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useMemo, useState, type FormEvent, type ReactNode } from "react";
-import { ChevronRight, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useSessionInfo } from "@/hooks/use-session";
@@ -10,6 +10,7 @@ import { useI18n, type TranslationKey } from "@/lib/i18n";
 import { listStaffAccounts } from "@/lib/admin.functions";
 import { BrregSearch } from "@/components/brreg-search";
 import { PrimaryButton, TextField } from "@/components/field";
+import { RecordCard } from "@/components/record-card";
 import { errorMessage } from "@/lib/utils";
 import {
   CUSTOMER_SEGMENTS,
@@ -215,28 +216,30 @@ function SalesList() {
           <p className="text-sm text-muted-foreground">{t("sales_empty")}</p>
         ) : (
           visible.map((row) => (
-            <Link
+            <RecordCard
               key={row.id}
-              to="/admin/sales/$customerId"
-              params={{ customerId: row.id }}
-              className="surface-card flex items-center gap-4 p-4"
-            >
-              <div className="min-w-0 flex-1">
-                <p className="truncate font-semibold">{row.name}</p>
-                <p className="text-xs text-muted-foreground">
-                  {row.segment ? t(SEGMENT_KEY[row.segment]) : t("sales_segment_none")}
-                  {" · "}
-                  {row.contact ?? "—"}
-                  {" · "}
-                  {t(STATUS_KEY[row.salesStatus])}
-                  {" · "}
-                  {row.nextFollowUpOn ?? "—"}
-                  {row.salesOwnerId ? ` · ${ownerName.get(row.salesOwnerId) ?? ""}` : ""}
-                  {row.city ? ` · ${row.city}` : ""}
-                </p>
-              </div>
-              <ChevronRight className="size-4 text-muted-foreground" />
-            </Link>
+              title={row.name}
+              chevron
+              meta={[
+                row.segment ? t(SEGMENT_KEY[row.segment]) : t("sales_segment_none"),
+                row.contact ?? "—",
+                t(STATUS_KEY[row.salesStatus]),
+                row.nextFollowUpOn ?? "—",
+                row.salesOwnerId ? (ownerName.get(row.salesOwnerId) ?? "") : "",
+                row.city ?? "",
+              ]
+                .filter(Boolean)
+                .join(" · ")}
+              render={(className, body) => (
+                <Link
+                  to="/admin/sales/$customerId"
+                  params={{ customerId: row.id }}
+                  className={className}
+                >
+                  {body}
+                </Link>
+              )}
+            />
           ))
         )}
       </div>

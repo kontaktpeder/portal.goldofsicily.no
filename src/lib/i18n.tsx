@@ -276,6 +276,7 @@ const dict = {
   notes: { no: "Notat", en: "Notes" },
   venues_count: { no: "Aktive serveringssteder", en: "Active venues" },
   distributed_month: { no: "Distribuert denne måneden", en: "Distributed this month" },
+  distributed_month_short: { no: "Denne mnd", en: "This month" },
   unassigned_partner: { no: "Uten partner", en: "No partner" },
   direct_partner_hint: {
     no: "Opprett som Gold Partner — både partner og serveringssted (f.eks. Oslo Bar).",

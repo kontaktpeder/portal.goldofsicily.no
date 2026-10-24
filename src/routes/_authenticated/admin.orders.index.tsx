@@ -2,9 +2,9 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useState, type FormEvent } from "react";
-import { ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 import { PrimaryButton, TextField } from "@/components/field";
+import { RecordCard } from "@/components/record-card";
 import { supabase } from "@/integrations/supabase/client";
 import { listProductionStaff } from "@/lib/admin.functions";
 import { useSessionInfo } from "@/hooks/use-session";
@@ -408,26 +408,33 @@ function OrderGroup({
           const progress = progressOf(order);
           const orderer = one(order.ordered_by)?.name ?? "—";
           const when = order.confirmed_delivery_on || order.desired_delivery_on;
+          const meta = [
+            when ? formatAgreedDelivery(when, lang) : "—",
+            t(PROGRESS_KEY[progress]),
+            order.owner_name_snapshot ?? "",
+          ]
+            .filter(Boolean)
+            .join(" · ");
           return (
-            <Link
+            <RecordCard
               key={order.id}
-              to="/admin/orders/$orderId"
-              params={{ orderId: order.id }}
-              className="surface-card flex items-center justify-between gap-3 p-5"
-            >
-              <div className="min-w-0">
-                <p className="font-semibold">
-                  {orderer} · {order.order_number}
-                </p>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  {when ? formatAgreedDelivery(when, lang) : "—"}
-                  {` · ${t(PROGRESS_KEY[progress])}`}
-                  {` · ${t("orders_remaining")} ${Math.max(0, ordered - fulfilled)} ${t("pcs")}`}
-                  {order.owner_name_snapshot ? ` · ${order.owner_name_snapshot}` : ""}
-                </p>
-              </div>
-              <ChevronRight className="size-5 shrink-0 text-muted-foreground" />
-            </Link>
+              title={`${orderer} · ${order.order_number}`}
+              meta={meta}
+              figure={{
+                value: Math.max(0, ordered - fulfilled),
+                unit: t("pcs"),
+                label: t("orders_remaining"),
+              }}
+              render={(className, body) => (
+                <Link
+                  to="/admin/orders/$orderId"
+                  params={{ orderId: order.id }}
+                  className={className}
+                >
+                  {body}
+                </Link>
+              )}
+            />
           );
         })}
       </div>

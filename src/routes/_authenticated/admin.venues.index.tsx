@@ -2,7 +2,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useState } from "react";
-import { ChevronRight, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useSessionInfo } from "@/hooks/use-session";
@@ -12,6 +12,7 @@ import { createCustomerAccount } from "@/lib/admin.functions";
 import { isValidUsername, parseLoginIdentifier } from "@/lib/username";
 import { errorMessage } from "@/lib/utils";
 import { PrimaryButton, TextField } from "@/components/field";
+import { RecordCard } from "@/components/record-card";
 import { partnershipLabel } from "@/components/customer-agreement";
 import { BrregSearch } from "@/components/brreg-search";
 import type { PartnershipLevel, PublicProfile } from "@/lib/customer-domain";
@@ -297,27 +298,34 @@ function AdminCustomers() {
           <p className="text-sm text-muted-foreground">{t("no_customers")}</p>
         ) : (
           data?.rows.map((row) => (
-            <Link
+            <RecordCard
               key={row.id}
-              to="/admin/venues/$venueId"
-              params={{ venueId: row.id }}
-              className="surface-card flex items-center gap-4 p-4"
-            >
-              <span className={`size-3 shrink-0 rounded-full ${statusToken(row.status)}`} />
-              <div className="min-w-0 flex-1">
-                <p className="truncate font-semibold">{row.name}</p>
-                <p className="text-xs text-muted-foreground">
-                  {partnershipLabel(row.partnershipLevel, t)
-                    ? `${partnershipLabel(row.partnershipLevel, t)} · `
-                    : ""}
-                  {row.suppliedByName ? `${t("supplied_via")} ${row.suppliedByName}` : t("supplied_direct")} ·{" "}
-                  {row.location ?? row.city ?? "—"} ·{" "}
-                  {row.active ? t("active") : t("inactive")}
-                  {row.publicVisible ? ` · ${t("public_yes")}` : ""}
-                </p>
-              </div>
-              <ChevronRight className="size-4 text-muted-foreground" />
-            </Link>
+              title={row.name}
+              chevron
+              leading={
+                <span className={`size-3 shrink-0 rounded-full ${statusToken(row.status)}`} />
+              }
+              meta={[
+                partnershipLabel(row.partnershipLevel, t),
+                row.suppliedByName
+                  ? `${t("supplied_via")} ${row.suppliedByName}`
+                  : t("supplied_direct"),
+                row.location ?? row.city ?? "—",
+                row.active ? t("active") : t("inactive"),
+                row.publicVisible ? t("public_yes") : "",
+              ]
+                .filter(Boolean)
+                .join(" · ")}
+              render={(className, body) => (
+                <Link
+                  to="/admin/venues/$venueId"
+                  params={{ venueId: row.id }}
+                  className={className}
+                >
+                  {body}
+                </Link>
+              )}
+            />
           ))
         )}
       </div>

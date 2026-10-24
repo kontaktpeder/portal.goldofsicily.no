@@ -10,15 +10,22 @@ import { LotPrerequisitesBanner } from "@/components/lot-prerequisites";
 import { useLotPrerequisites } from "@/hooks/use-lot-prerequisites";
 import { RecallSearch } from "@/components/recall-search";
 import { ProducerPicker } from "@/components/producer-picker";
+import { LotCloseButton } from "@/components/lot-close-button";
+import { RecordCard } from "@/components/record-card";
 import { useI18n } from "@/lib/i18n";
 import {
   formatGoldLotCode,
   nextLotSequence,
-  remainingAtGold,
-  sumQuantities,
   todayOsloDate,
+  type GoldLotStatus,
 } from "@/lib/gold-lot";
-import { isGoldLotSchemaError, isOpenLot, lotRemaining, toStockLots } from "@/lib/lot-stock";
+import { canCloseLot } from "@/lib/lot-events";
+import {
+  isGoldLotSchemaError,
+  isOpenLot,
+  isVillaStockSchemaError,
+  toStockLots,
+} from "@/lib/lot-stock";
 import { ensureProductVersionForProduct } from "@/lib/lot-snapshot";
 import {
   displayProducedBy,
@@ -82,13 +89,21 @@ type LotRow = {
   lot_code: string;
   production_date: string;
   produced_qty: number;
+  approved_qty: number | null;
   carton_count: number;
   produced_by: string | null;
   status: string;
   product_id: string;
   products: { name_no: string; name_en: string } | null;
-  gold_lot_handovers: { quantity: number }[] | null;
-  delivery_lines: { quantity: number }[] | null;
+  gold_lot_handovers:
+    | {
+        id?: string;
+        quantity: number;
+        ownership_after_handover?: "gold" | "villa";
+        recipient_company?: string;
+      }[]
+    | null;
+  delivery_lines: { quantity: number; source_handover_id?: string | null }[] | null;
   gold_lot_producers:
     | {
         user_id: string;
@@ -97,6 +112,82 @@ type LotRow = {
       }[]
     | null;
 };
+
+const LOT_BASE =
+  "id, lot_code, production_date, produced_qty, carton_count, produced_by, status, product_id, products(name_no, name_en)";
+const LOT_STOCK =
+  "approved_qty, gold_lot_handovers(id, quantity, ownership_after_handover, recipient_company), delivery_lines(quantity, source_handover_id)";
+const LOT_STOCK_PLAIN = "gold_lot_handovers(quantity), delivery_lines(quantity)";
+const LOT_PRODUCERS = "gold_lot_producers(user_id, full_name_snapshot, employee_number_snapshot)";
+
+function isLotListColumnError(message: string): boolean {
+  return (
+    isVillaStockSchemaError(message) ||
+    /ownership_after_handover|approved_qty|recipient_company/.test(message)
+  );
+}
+
+function lotStatus(status: string): GoldLotStatus {
+  if (
+    status === "produced" ||
+    status === "packed" ||
+    status === "handed_over" ||
+    status === "closed" ||
+    status === "recalled"
+  ) {
+    return status;
+  }
+  return "produced";
+}
+
+function normalizeLotRows(data: unknown): LotRow[] {
+  return ((data ?? []) as LotRow[]).map((row) => ({
+    ...row,
+    gold_lot_producers: row.gold_lot_producers ?? [],
+    gold_lot_handovers: row.gold_lot_handovers ?? [],
+    delivery_lines: row.delivery_lines ?? [],
+    approved_qty: row.approved_qty ?? null,
+  }));
+}
+
+async function selectLots(columns: string) {
+  return supabase
+    .from("gold_lots")
+    .select(columns)
+    .order("lot_code", { ascending: false })
+    .limit(300);
+}
+
+async function loadLotRows(): Promise<LotRow[]> {
+  const full = await selectLots(`${LOT_BASE}, ${LOT_STOCK}, ${LOT_PRODUCERS}`);
+  if (!full.error) return normalizeLotRows(full.data);
+  if (isProducerSchemaError(full.error)) {
+    const next = await selectLots(`${LOT_BASE}, ${LOT_STOCK}`);
+    if (!next.error) return normalizeLotRows(next.data);
+    if (isLotListColumnError(next.error.message ?? "")) {
+      const plain = await selectLots(`${LOT_BASE}, ${LOT_STOCK_PLAIN}`);
+      if (!plain.error) return normalizeLotRows(plain.data);
+      if (isGoldLotSchemaError(plain.error)) return [];
+      throw plain.error;
+    }
+    if (isGoldLotSchemaError(next.error)) return [];
+    throw next.error;
+  }
+  if (isLotListColumnError(full.error.message ?? "")) {
+    const plain = await selectLots(`${LOT_BASE}, ${LOT_STOCK_PLAIN}, ${LOT_PRODUCERS}`);
+    if (!plain.error) return normalizeLotRows(plain.data);
+    if (isProducerSchemaError(plain.error)) {
+      const bare = await selectLots(`${LOT_BASE}, ${LOT_STOCK_PLAIN}`);
+      if (!bare.error) return normalizeLotRows(bare.data);
+      if (isGoldLotSchemaError(bare.error)) return [];
+      throw bare.error;
+    }
+    if (isGoldLotSchemaError(plain.error)) return [];
+    throw plain.error;
+  }
+  if (isGoldLotSchemaError(full.error)) return [];
+  throw full.error;
+}
 
 function AdminLots() {
   const { t, lang } = useI18n();
@@ -109,6 +200,8 @@ function AdminLots() {
   const [producedQty, setProducedQty] = useState("0");
   const [producerIds, setProducerIds] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
+  const [closingId, setClosingId] = useState<string | null>(null);
+  const [closedIds, setClosedIds] = useState<string[]>([]);
 
   useEffect(() => {
     if (productFromSearch) setProductId(productFromSearch);
@@ -137,35 +230,7 @@ function AdminLots() {
   const { data: lots } = useQuery({
     queryKey: ["gold-lots"],
     enabled: !prereq.schemaMissing,
-    queryFn: async () => {
-      const withProducers =
-        "id, lot_code, production_date, produced_qty, carton_count, produced_by, status, product_id, products(name_no, name_en), gold_lot_handovers(quantity), delivery_lines(quantity), gold_lot_producers(user_id, full_name_snapshot, employee_number_snapshot)";
-      const { data, error } = await supabase.from("gold_lots").select(withProducers).order("lot_code", {
-        ascending: false,
-      }).limit(300);
-      if (error) {
-        if (isGoldLotSchemaError(error)) return [] as LotRow[];
-        if (isProducerSchemaError(error)) {
-          const fallback = await supabase
-            .from("gold_lots")
-            .select(
-              "id, lot_code, production_date, produced_qty, carton_count, produced_by, status, product_id, products(name_no, name_en), gold_lot_handovers(quantity), delivery_lines(quantity)",
-            )
-            .order("lot_code", { ascending: false })
-            .limit(300);
-          if (fallback.error) {
-            if (isGoldLotSchemaError(fallback.error)) return [] as LotRow[];
-            throw fallback.error;
-          }
-          return ((fallback.data ?? []) as LotRow[]).map((row) => ({
-            ...row,
-            gold_lot_producers: row.gold_lot_producers ?? [],
-          }));
-        }
-        throw error;
-      }
-      return (data ?? []) as LotRow[];
-    },
+    queryFn: loadLotRows,
   });
 
   const selected = products?.find((product) => product.id === productId);
@@ -186,7 +251,30 @@ function AdminLots() {
     }
   }, [lots, productionDate, selected]);
 
-  const stock = useMemo(() => toStockLots(lots ?? []), [lots]);
+  const stock = useMemo(
+    () =>
+      toStockLots(
+        (lots ?? []).map((lot) => ({
+          id: lot.id,
+          lot_code: lot.lot_code,
+          product_id: lot.product_id,
+          produced_qty: lot.produced_qty,
+          approved_qty: lot.approved_qty,
+          status: lot.status,
+          delivery_lines: (lot.delivery_lines ?? []).map((line) => ({
+            quantity: line.quantity,
+            source_handover_id: line.source_handover_id ?? null,
+          })),
+          gold_lot_handovers: (lot.gold_lot_handovers ?? []).map((row, index) => ({
+            id: row.id ?? `${lot.id}-${index}`,
+            quantity: row.quantity,
+            ownership_after_handover: row.ownership_after_handover ?? "villa",
+            recipient_company: row.recipient_company ?? "",
+          })),
+        })),
+      ),
+    [lots],
+  );
 
   const visibleLots = useMemo(() => {
     const rows = lots ?? [];
@@ -259,12 +347,38 @@ function AdminLots() {
     }
     toast.success(`${lotCode} ${t("lot_created").toLowerCase()}`);
     if (!createdEvent.ok) {
-      toast.error(createdEvent.schemaMissing ? t("lot_events_schema_missing") : createdEvent.message);
+      toast.error(
+        createdEvent.schemaMissing ? t("lot_events_schema_missing") : createdEvent.message,
+      );
     }
     setProducedQty("0");
     setProducerIds([]);
     await queryClient.invalidateQueries({ queryKey: ["gold-lots"] });
     await queryClient.invalidateQueries({ queryKey: ["gold-lots-open"] });
+  }
+
+  async function closeListedLot(lotId: string) {
+    const lot = (lots ?? []).find((row) => row.id === lotId);
+    if (!lot || !canCloseLot(lotStatus(lot.status))) return;
+    setBusy(true);
+    const updated = await supabase.from("gold_lots").update({ status: "closed" }).eq("id", lotId);
+    if (updated.error) {
+      setBusy(false);
+      toast.error(updated.error.message);
+      return;
+    }
+    const closedEvent = await recordLotEvent({ lotId, eventType: "closed" });
+    setBusy(false);
+    setClosingId(null);
+    setClosedIds((ids) => [...ids, lotId]);
+    if (!closedEvent.ok) {
+      toast.error(closedEvent.schemaMissing ? t("lot_events_schema_missing") : closedEvent.message);
+    } else {
+      toast.success(t("lot_close_done"));
+    }
+    await queryClient.invalidateQueries({ queryKey: ["gold-lots"] });
+    await queryClient.invalidateQueries({ queryKey: ["gold-lots-open"] });
+    await queryClient.invalidateQueries({ queryKey: ["ops-home"] });
   }
 
   const showForm = tab === "production";
@@ -348,7 +462,9 @@ function AdminLots() {
               />
               {staffError ? (
                 <p className="text-sm text-muted-foreground">
-                  {isProducerSchemaError(staffError) ? t("producer_schema_missing") : staffError.message}
+                  {isProducerSchemaError(staffError)
+                    ? t("producer_schema_missing")
+                    : staffError.message}
                 </p>
               ) : (
                 <ProducerPicker
@@ -368,54 +484,63 @@ function AdminLots() {
               <p className="text-sm text-muted-foreground">{t("no_lots")}</p>
             ) : (
               visibleLots.map((lot) => {
-                const handed = sumQuantities(
-                  (lot.gold_lot_handovers ?? []).map((row) => row.quantity),
-                );
-                const used = sumQuantities((lot.delivery_lines ?? []).map((row) => row.quantity));
-                const remaining = lotRemaining(lot.produced_qty, used);
-                const goldLeft = remainingAtGold(lot.produced_qty, handed);
+                const onHand = stock.find((item) => item.id === lot.id)?.remaining ?? 0;
                 const name =
                   lang === "en" ? (lot.products?.name_en ?? "") : (lot.products?.name_no ?? "");
                 const shown = displayProducedBy(
                   producersFromQuery(lot.gold_lot_producers),
                   lot.produced_by,
                 );
-                const producedLabel = shown.names.length > 0 ? shown.names.join(", ") : shown.legacy;
+                const producedLabel =
+                  shown.names.length > 0 ? shown.names.join(", ") : shown.legacy;
+                const statusNote =
+                  lot.status === "closed"
+                    ? t("lot_status_closed")
+                    : lot.status === "recalled"
+                      ? t("lot_status_recalled")
+                      : "";
+                const meta = [
+                  name,
+                  formatDate(lot.production_date, lang),
+                  producedLabel,
+                  statusNote,
+                ]
+                  .filter(Boolean)
+                  .join(" · ");
+                const closable = canCloseLot(lotStatus(lot.status)) && !closedIds.includes(lot.id);
                 return (
-                  <Link
+                  <RecordCard
                     key={lot.id}
-                    to="/admin/lots/$lotId"
-                    params={{ lotId: lot.id }}
-                    {...(tab === "active"
-                      ? { hash: open === "handover" ? "lot-handover" : "etikett" }
+                    title={lot.lot_code}
+                    titleMono
+                    meta={meta}
+                    figure={{ value: onHand, unit: t("pcs"), label: t("orders_on_hand") }}
+                    {...(closable
+                      ? {
+                          action: (
+                            <LotCloseButton
+                              armed={closingId === lot.id}
+                              busy={busy && closingId === lot.id}
+                              onArm={() => setClosingId(lot.id)}
+                              onCancel={() => setClosingId(null)}
+                              onConfirm={() => void closeListedLot(lot.id)}
+                            />
+                          ),
+                        }
                       : {})}
-                    className="surface-card block p-4"
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="font-mono text-lg font-semibold">{lot.lot_code}</p>
-                        <p className="mt-1 text-sm">{name}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {formatDate(lot.production_date, lang)}
-                          {producedLabel ? ` · ${producedLabel}` : ""}
-                        </p>
-                      </div>
-                      <div className="text-right text-xs text-muted-foreground">
-                        <p className="text-lg font-semibold text-foreground tabular-nums">
-                          {lot.produced_qty} <span className="text-xs font-normal">{t("pcs")}</span>
-                        </p>
-                        <p>
-                          {t("lot_used")}: {used}
-                        </p>
-                        <p>
-                          {t("lot_remaining")}: {remaining}
-                        </p>
-                        <p>
-                          {t("remaining_gold")}: {goldLeft}
-                        </p>
-                      </div>
-                    </div>
-                  </Link>
+                    render={(className, body) => (
+                      <Link
+                        to="/admin/lots/$lotId"
+                        params={{ lotId: lot.id }}
+                        {...(tab === "active"
+                          ? { hash: open === "handover" ? "lot-handover" : "etikett" }
+                          : {})}
+                        className={className}
+                      >
+                        {body}
+                      </Link>
+                    )}
+                  />
                 );
               })
             )}

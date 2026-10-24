@@ -9,6 +9,7 @@ import { useI18n } from "@/lib/i18n";
 import { slugify } from "@/lib/slug";
 import { errorMessage } from "@/lib/utils";
 import { PrimaryButton, TextAreaField, TextField } from "@/components/field";
+import { RecordCard } from "@/components/record-card";
 
 export const Route = createFileRoute("/_authenticated/admin/products")({
   head: () => ({
@@ -117,36 +118,41 @@ function AdminProducts() {
                 onCancel={() => setEditingId(null)}
               />
             ) : (
-              <article
+              <RecordCard
                 key={product.id}
-                className="surface-card flex items-center justify-between gap-4 p-4"
-              >
-                <button
-                  type="button"
-                  onClick={() => {
-                    setOpen(false);
-                    setEditingId(product.id);
-                  }}
-                  className="min-w-0 flex-1 text-left"
-                >
-                  <p className="font-semibold">{product.name_no}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {product.name_en}
-                    {product.sku ? ` · ${product.sku}` : ""}
-                    {product.lot_letter ? ` · L-${product.lot_letter}` : ""}
-                    {product.units_per_package && product.packages_per_carton
-                      ? ` · ${product.units_per_package} × ${product.packages_per_carton}`
-                      : ""}
-                  </p>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => toggleActive(product.id, !product.active)}
-                  className="text-xs font-semibold text-muted-foreground"
-                >
-                  {product.active ? t("active") : t("inactive")}
-                </button>
-              </article>
+                title={product.name_no}
+                meta={[
+                  product.name_en,
+                  product.sku,
+                  product.lot_letter ? `L-${product.lot_letter}` : "",
+                  product.units_per_package && product.packages_per_carton
+                    ? `${product.units_per_package} × ${product.packages_per_carton}`
+                    : "",
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}
+                action={
+                  <button
+                    type="button"
+                    onClick={() => toggleActive(product.id, !product.active)}
+                    className="rounded-full border border-border bg-card px-3 py-2 text-sm font-semibold whitespace-nowrap shadow-[var(--shadow-card)]"
+                  >
+                    {product.active ? t("active") : t("inactive")}
+                  </button>
+                }
+                render={(className, body) => (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOpen(false);
+                      setEditingId(product.id);
+                    }}
+                    className={className}
+                  >
+                    {body}
+                  </button>
+                )}
+              />
             ),
           )
         )}
@@ -206,7 +212,9 @@ function ProductForm({
     setImageUrl(existing?.image_url ?? "");
     setLotLetter(existing?.lot_letter ?? "");
     setUnitsPerPackage(existing?.units_per_package ? String(existing.units_per_package) : "25");
-    setPackagesPerCarton(existing?.packages_per_carton ? String(existing.packages_per_carton) : "4");
+    setPackagesPerCarton(
+      existing?.packages_per_carton ? String(existing.packages_per_carton) : "4",
+    );
     setUnitWeightG(existing?.unit_weight_g ? String(existing.unit_weight_g) : "100");
     setLegalDesignation(existing?.legal_designation_no ?? "");
     setIngredientsNo(existing?.ingredients_no ?? "");
@@ -276,7 +284,14 @@ function ProductForm({
       <TextField
         label={t("lot_letter")}
         value={lotLetter}
-        onChange={(value) => setLotLetter(value.toUpperCase().replace(/[^A-Z]/g, "").slice(0, 1))}
+        onChange={(value) =>
+          setLotLetter(
+            value
+              .toUpperCase()
+              .replace(/[^A-Z]/g, "")
+              .slice(0, 1),
+          )
+        }
         placeholder="T"
       />
       <p className="-mt-2 text-xs text-muted-foreground">{t("lot_letter_hint")}</p>
@@ -302,7 +317,11 @@ function ProductForm({
         />
       </div>
       <p className="eyebrow pt-2">{t("label_fields")}</p>
-      <TextField label={t("legal_designation")} value={legalDesignation} onChange={setLegalDesignation} />
+      <TextField
+        label={t("legal_designation")}
+        value={legalDesignation}
+        onChange={setLegalDesignation}
+      />
       <label className="block">
         <span className="eyebrow mb-2 block">{t("ingredients_list")}</span>
         <TextAreaField value={ingredientsNo} onChange={setIngredientsNo} />
@@ -322,7 +341,11 @@ function ProductForm({
       <TextField label={t("storage_instructions")} value={storageNo} onChange={setStorageNo} />
       <TextField label={t("do_not_refreeze")} value={doNotRefreeze} onChange={setDoNotRefreeze} />
       <TextField label={t("producer_name")} value={producerName} onChange={setProducerName} />
-      <TextField label={t("producer_address")} value={producerAddress} onChange={setProducerAddress} />
+      <TextField
+        label={t("producer_address")}
+        value={producerAddress}
+        onChange={setProducerAddress}
+      />
       <TextField
         label={t("shelf_life_days")}
         type="number"

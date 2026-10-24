@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { ChevronRight, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useRequireCommercial } from "@/hooks/use-session";
@@ -10,6 +10,7 @@ import { useAdminOverview } from "@/lib/admin-data";
 import { partnershipLabel } from "@/components/customer-agreement";
 import { BrregSearch } from "@/components/brreg-search";
 import { PrimaryButton, TextField } from "@/components/field";
+import { RecordCard } from "@/components/record-card";
 import type { PartnershipLevel } from "@/lib/customer-domain";
 
 export const Route = createFileRoute("/_authenticated/admin/wholesalers/")({
@@ -133,28 +134,33 @@ function AdminWholesalers() {
           <p className="text-sm text-muted-foreground">{t("no_wholesalers")}</p>
         ) : (
           data?.wholesalers.map((wholesaler) => (
-            <Link
+            <RecordCard
               key={wholesaler.id}
-              to="/admin/wholesalers/$customerId"
-              params={{ customerId: wholesaler.id }}
-              className="surface-card flex items-center gap-4 p-4"
-            >
-              <div className="min-w-0 flex-1">
-                <p className="truncate font-semibold">{wholesaler.name}</p>
-                <p className="text-xs text-muted-foreground">
-                  {t("customer_type_wholesaler")}
-                  {partnershipLabel(wholesaler.partnershipLevel, t)
-                    ? ` · ${partnershipLabel(wholesaler.partnershipLevel, t)}`
-                    : ""}
-                  {" · "}
-                  {wholesaler.venueCount} {t("venues_under")}
-                  {" · "}
-                  {wholesaler.distributedThisMonth.toLocaleString(lang === "no" ? "nb-NO" : "en-GB")}{" "}
-                  {t("pcs")}
-                </p>
-              </div>
-              <ChevronRight className="size-4 text-muted-foreground" />
-            </Link>
+              title={wholesaler.name}
+              meta={[
+                t("customer_type_wholesaler"),
+                partnershipLabel(wholesaler.partnershipLevel, t),
+                `${wholesaler.venueCount} ${t("venues_under")}`,
+              ]
+                .filter(Boolean)
+                .join(" · ")}
+              figure={{
+                value: wholesaler.distributedThisMonth.toLocaleString(
+                  lang === "no" ? "nb-NO" : "en-GB",
+                ),
+                unit: t("pcs"),
+                label: t("distributed_month_short"),
+              }}
+              render={(className, body) => (
+                <Link
+                  to="/admin/wholesalers/$customerId"
+                  params={{ customerId: wholesaler.id }}
+                  className={className}
+                >
+                  {body}
+                </Link>
+              )}
+            />
           ))
         )}
       </div>
