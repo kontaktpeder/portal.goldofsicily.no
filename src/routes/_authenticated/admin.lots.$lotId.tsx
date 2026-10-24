@@ -186,6 +186,7 @@ function AdminLotDetail() {
   const queryClient = useQueryClient();
   const hash = useRouterState({ select: (state) => state.location.hash });
   const labelView = hash === "etikett" || hash === "#etikett";
+  const handoverView = hash === "lot-handover" || hash === "#lot-handover";
 
   const { data: lot, error } = useQuery({
     queryKey: ["gold-lot", lotId],
@@ -303,6 +304,11 @@ function AdminLotDetail() {
       };
     },
   });
+
+  useEffect(() => {
+    if (!handoverView || !lot) return;
+    document.getElementById("lot-handover")?.scrollIntoView({ block: "start" });
+  }, [handoverView, lot]);
 
   async function refresh() {
     await queryClient.invalidateQueries({ queryKey: ["gold-lot", lotId] });

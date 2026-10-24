@@ -6,7 +6,15 @@ import { useOpsHome } from "@/hooks/use-ops-home";
 import { useSessionInfo } from "@/hooks/use-session";
 import { canApproveOrders } from "@/lib/access";
 import { useI18n, type TranslationKey } from "@/lib/i18n";
-import { homeTasks, type FlavorStock, type HomeTask, type NextNeedItem } from "@/lib/ops-home";
+import {
+  homeTasks,
+  type FlavorStock,
+  type HomeDatedOrder,
+  type HomeInvoiceDraft,
+  type HomeLotRef,
+  type HomeTask,
+  type NextNeedItem,
+} from "@/lib/ops-home";
 
 export const Route = createFileRoute("/_authenticated/admin/")({
   head: () => ({
@@ -31,19 +39,30 @@ const TASK_TITLE: Record<HomeTask["id"], TranslationKey> = {
   produce: "ops_start_production",
   label: "home_label_task",
   handover: "ops_handover_villa",
+  due: "home_due_mixed",
   deliver: "ops_register_delivery",
+  followup: "home_follow",
+  invoice: "home_invoice",
 };
 
 function OpsHome() {
   const { t, lang } = useI18n();
   const prereq = useLotPrerequisites();
-  const { data, isPending } = useOpsHome(lang);
   const { data: info } = useSessionInfo();
+  const viewer = {
+    userId: info?.session?.user.id ?? null,
+    lead: Boolean(info?.canManageCommercial),
+    commercial: Boolean(info?.canManageCommercial),
+  };
+  const { data, isPending } = useOpsHome(lang, viewer);
   const tasks = homeTasks({
     approvals: data?.approval ?? [],
     productionShortfall: data?.productionShortfall ?? 0,
     lotsAtGold: data?.lotsAtGold ?? [],
     openDeliveries: data?.openDeliveries ?? [],
+    dueDeliveries: data?.dueDeliveries ?? [],
+    followUps: data?.followUps ?? [],
+    invoiceDrafts: data?.invoiceDrafts ?? [],
   });
 
   return (
@@ -58,13 +77,7 @@ function OpsHome() {
             {isPending ? null : tasks.length === 0 ? (
               <p className="mt-3 text-sm text-muted-foreground">{t("home_list_empty")}</p>
             ) : (
-              <div className="mt-3 space-y-2">
-                {tasks.map((task) => (
-                  <TaskLink key={task.id} task={task}>
-                    <TaskCopy title={t(TASK_TITLE[task.id])} hint={taskHint(task, data, t)} />
-                  </TaskLink>
-                ))}
-              </div>
+              <HomeTaskRows tasks={tasks} data={data} lang={lang} />
             )}
           </section>
         </div>
@@ -149,14 +162,70 @@ function GetStarted() {
   );
 }
 
+function HomeTaskRows({
+  tasks,
+  data,
+  lang,
+}: {
+  tasks: HomeTask[];
+  data:
+    | {
+        approval: { ordererName: string; orderNumber: string }[];
+        openDeliveries: { customerName: string; orderNumber: string }[];
+        lotsAtGold: HomeLotRef[];
+        dueDeliveries: HomeDatedOrder[];
+        followUps: HomeDatedOrder[];
+        invoiceDrafts: HomeInvoiceDraft[];
+      }
+    | undefined;
+  lang: "no" | "en";
+}) {
+  const { t } = useI18n();
+  return (
+    <div className="mt-3 space-y-2">
+      {tasks.map((task) => (
+        <TaskLink key={task.id} task={task}>
+          <TaskCopy
+            title={taskTitle(task, data?.dueDeliveries ?? [], t)}
+            hint={taskHint(task, data, lang, t)}
+          />
+        </TaskLink>
+      ))}
+    </div>
+  );
+}
+
+function taskTitle(
+  task: HomeTask,
+  due: readonly HomeDatedOrder[],
+  t: (key: TranslationKey) => string,
+) {
+  if (task.id !== "due") return t(TASK_TITLE[task.id]);
+  const late = due.some((row) => row.state === "late");
+  const today = due.some((row) => row.state === "today");
+  if (late && !today) return t("home_due_late");
+  if (today && !late) return t("home_due_today");
+  return t("home_due_mixed");
+}
+
+function lotLine(lot: HomeLotRef, lang: "no" | "en") {
+  const name = lang === "en" ? lot.nameEn : lot.nameNo;
+  return name ? `${lot.lotCode} · ${name}` : lot.lotCode;
+}
+
 function taskHint(
   task: HomeTask,
   data:
     | {
         approval: { ordererName: string; orderNumber: string }[];
         openDeliveries: { customerName: string; orderNumber: string }[];
+        lotsAtGold: HomeLotRef[];
+        dueDeliveries: HomeDatedOrder[];
+        followUps: HomeDatedOrder[];
+        invoiceDrafts: HomeInvoiceDraft[];
       }
     | undefined,
+  lang: "no" | "en",
   t: (key: TranslationKey) => string,
 ) {
   if (task.id === "approve" && task.count === 1 && data?.approval[0]) {
@@ -165,11 +234,45 @@ function taskHint(
   }
   if (task.id === "approve") return `${task.count} ${t("home_orders_waiting")}`;
   if (task.id === "produce") return `${t("orders_shortfall")} ${task.count}`;
-  if (task.id === "label") {
-    return task.count === 1 ? t("home_label_one") : `${task.count} ${t("home_label_many")}`;
+  const lot = data?.lotsAtGold[0];
+  if (task.id === "label" && task.count === 1 && lot) {
+    return `${lotLine(lot, lang)} · ${t("home_label")}`;
   }
-  if (task.id === "handover") {
-    return task.count === 1 ? t("ops_handover_one") : `${task.count} ${t("ops_handover_many")}`;
+  if (task.id === "label") {
+    return `${task.count} ${t("home_label_many")}`;
+  }
+  if (task.id === "handover" && task.count === 1 && lot) {
+    return `${lotLine(lot, lang)} · ${t("home_at_gold")}`;
+  }
+  if (task.id === "handover") return `${task.count} ${t("ops_handover_many")}`;
+  if (task.id === "due") {
+    const due = data?.dueDeliveries ?? [];
+    const one = due[0];
+    if (task.count === 1 && one) {
+      const when = one.state === "late" ? t("orders_notice_late") : t("orders_notice_today");
+      return `${when} · ${one.customerName} · ${one.orderNumber}`;
+    }
+    const late = due.filter((row) => row.state === "late").length;
+    const today = due.filter((row) => row.state === "today").length;
+    return [
+      late > 0 ? `${late} ${t("home_due_late_count")}` : "",
+      today > 0 ? `${today} ${t("home_due_today_count")}` : "",
+    ]
+      .filter(Boolean)
+      .join(" · ");
+  }
+  if (task.id === "followup") {
+    const follow = data?.followUps[0];
+    if (task.count === 1 && follow) {
+      const note = follow.note ?? "";
+      return `${follow.customerName} · ${note.length > 80 ? `${note.slice(0, 80)}…` : note}`;
+    }
+    return `${task.count} ${t("home_follow_many")}`;
+  }
+  if (task.id === "invoice") {
+    const draft = data?.invoiceDrafts[0];
+    if (task.count === 1 && draft?.name) return draft.name;
+    return `${task.count} ${t("home_invoice_waiting")}`;
   }
   if (task.count === 1 && data?.openDeliveries[0]) {
     const order = data.openDeliveries[0];
@@ -194,7 +297,7 @@ function TaskLink({ task, children }: { task: HomeTask; children: React.ReactNod
       <Link
         to="/admin/lots/$lotId"
         params={{ lotId: target.lotId }}
-        {...(task.id === "label" ? { hash: "etikett" } : {})}
+        hash={target.hash}
         className={className}
       >
         {children}
@@ -203,7 +306,18 @@ function TaskLink({ task, children }: { task: HomeTask; children: React.ReactNod
   }
   if (target.to === "/admin/lots") {
     return (
-      <Link to="/admin/lots" search={{ tab: target.tab }} className={className}>
+      <Link
+        to="/admin/lots"
+        search={target.open ? { tab: target.tab, open: target.open } : { tab: target.tab }}
+        className={className}
+      >
+        {children}
+      </Link>
+    );
+  }
+  if (target.to === "/admin/invoices") {
+    return (
+      <Link to="/admin/invoices" className={className}>
         {children}
       </Link>
     );

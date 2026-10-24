@@ -4,6 +4,8 @@ import {
   buildNextNeed,
   flavorStock,
   homeTasks,
+  homeUrgentCount,
+  isUrgentDay,
   lotsReadyForHandover,
   type OpsLot,
 } from "./ops-home.ts";
@@ -113,18 +115,30 @@ test("next need lists venue demand and Villa remaining", () => {
   assert.equal(items.find((item) => item.id === "villa:truffle")?.quantity, 300);
 });
 
+const quiet = { dueDeliveries: [], followUps: [], invoiceDrafts: [] };
+const lot = (id: string) => ({ id, lotCode: `L-${id}`, nameNo: "’Nduja", nameEn: "’Nduja" });
+
 test("the home list keeps only jobs that are waiting and opens the single job", () => {
   assert.deepEqual(
     homeTasks({
       approvals: [{ id: "order-1" }],
       productionShortfall: 0,
-      lotsAtGold: [{ id: "lot-1" }],
+      lotsAtGold: [lot("lot-1")],
       openDeliveries: [],
+      ...quiet,
     }).map((task) => ({ id: task.id, count: task.count, target: task.target })),
     [
       { id: "approve", count: 1, target: { to: "/admin/orders/$orderId", orderId: "order-1" } },
-      { id: "label", count: 1, target: { to: "/admin/lots/$lotId", lotId: "lot-1" } },
-      { id: "handover", count: 1, target: { to: "/admin/lots/$lotId", lotId: "lot-1" } },
+      {
+        id: "label",
+        count: 1,
+        target: { to: "/admin/lots/$lotId", lotId: "lot-1", hash: "etikett" },
+      },
+      {
+        id: "handover",
+        count: 1,
+        target: { to: "/admin/lots/$lotId", lotId: "lot-1", hash: "lot-handover" },
+      },
     ],
   );
 });
@@ -133,8 +147,9 @@ test("several waiting jobs open the list instead of one record", () => {
   const tasks = homeTasks({
     approvals: [{ id: "a" }, { id: "b" }],
     productionShortfall: 12,
-    lotsAtGold: [{ id: "lot-1" }, { id: "lot-2" }],
+    lotsAtGold: [lot("lot-1"), lot("lot-2")],
     openDeliveries: [{ id: "d1" }, { id: "d2" }],
+    ...quiet,
   });
   assert.deepEqual(
     tasks.map((task) => task.target),
@@ -142,7 +157,7 @@ test("several waiting jobs open the list instead of one record", () => {
       { to: "/admin/orders" },
       { to: "/admin/lots", tab: "production" },
       { to: "/admin/lots", tab: "active" },
-      { to: "/admin/lots", tab: "active" },
+      { to: "/admin/lots", tab: "active", open: "handover" },
       { to: "/admin/deliveries", lot: "" },
     ],
   );
@@ -154,7 +169,50 @@ test("several waiting jobs open the list instead of one record", () => {
 
 test("an empty day has an empty home list", () => {
   assert.deepEqual(
-    homeTasks({ approvals: [], productionShortfall: 0, lotsAtGold: [], openDeliveries: [] }),
+    homeTasks({
+      approvals: [],
+      productionShortfall: 0,
+      lotsAtGold: [],
+      openDeliveries: [],
+      ...quiet,
+    }),
     [],
   );
+});
+
+test("late and today sit above the delivery queue, and the Hjem count ignores the rest", () => {
+  assert.equal(isUrgentDay("approaching"), false);
+  assert.equal(isUrgentDay(null), false);
+  const tasks = homeTasks({
+    approvals: [],
+    productionShortfall: 4,
+    lotsAtGold: [lot("lot-1")],
+    openDeliveries: [{ id: "d1" }, { id: "d2" }],
+    dueDeliveries: [
+      { id: "today", orderNumber: "O-2", customerName: "Villa", state: "today" },
+      { id: "late", orderNumber: "O-1", customerName: "Oslo", state: "late" },
+    ],
+    followUps: [
+      {
+        id: "f1",
+        orderNumber: "O-3",
+        customerName: "Villa",
+        state: "today",
+        note: "Avklar transport",
+      },
+    ],
+    invoiceDrafts: [{ id: "inv", name: "VILLA IMPORT AS" }],
+  });
+  assert.deepEqual(
+    tasks.map((task) => task.id),
+    ["produce", "label", "handover", "due", "deliver", "followup", "invoice"],
+  );
+  assert.equal(tasks.find((task) => task.id === "due")?.count, 2);
+  assert.deepEqual(tasks.find((task) => task.id === "due")?.target, { to: "/admin/orders" });
+  assert.deepEqual(tasks.find((task) => task.id === "followup")?.target, {
+    to: "/admin/orders/$orderId",
+    orderId: "f1",
+  });
+  assert.deepEqual(tasks.find((task) => task.id === "invoice")?.target, { to: "/admin/invoices" });
+  assert.equal(homeUrgentCount(tasks), 3);
 });

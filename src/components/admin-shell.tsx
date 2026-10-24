@@ -15,7 +15,10 @@ import {
   X,
 } from "lucide-react";
 import { LanguageToggle, Wordmark } from "@/components/brand";
+import { useOpsHome } from "@/hooks/use-ops-home";
+import { useSessionInfo } from "@/hooks/use-session";
 import { useI18n } from "@/lib/i18n";
+import { homeTasks, homeUrgentCount } from "@/lib/ops-home";
 import { signOutAndReturn } from "@/lib/sign-out";
 import { cn } from "@/lib/utils";
 
@@ -43,7 +46,30 @@ export function AdminShell({
   commercial: boolean;
   children: ReactNode;
 }) {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
+  const { data: info } = useSessionInfo();
+  const home = useOpsHome(
+    lang,
+    {
+      userId: info?.session?.user.id ?? null,
+      lead: Boolean(info?.canManageCommercial),
+      commercial: Boolean(info?.canManageCommercial),
+    },
+    operations,
+  );
+  const urgent = home.data
+    ? homeUrgentCount(
+        homeTasks({
+          approvals: home.data.approval,
+          productionShortfall: home.data.productionShortfall,
+          lotsAtGold: home.data.lotsAtGold,
+          openDeliveries: home.data.openDeliveries,
+          dueDeliveries: home.data.dueDeliveries,
+          followUps: home.data.followUps,
+          invoiceDrafts: home.data.invoiceDrafts,
+        }),
+      )
+    : 0;
   const location = useRouterState({ select: (state) => state.location });
   const path = location.pathname;
   const tab = searchTab(location.search);
@@ -99,6 +125,7 @@ export function AdminShell({
               exact
               path={path}
               icon={Home}
+              badge={urgent}
               onNavigate={close}
             />
           ) : null}
@@ -365,6 +392,7 @@ function SideLink({
   path,
   icon: Icon,
   nested,
+  badge,
   onNavigate,
 }: {
   to: AdminPath;
@@ -375,6 +403,7 @@ function SideLink({
   path: string;
   icon?: typeof Home;
   nested?: boolean;
+  badge?: number;
   onNavigate: () => void;
 }) {
   const on = active ?? pathIs(path, to, exact);
@@ -393,6 +422,11 @@ function SideLink({
     >
       {Icon ? <Icon className="size-4 shrink-0" /> : null}
       {label}
+      {badge && badge > 0 ? (
+        <span className="ml-auto min-w-5 rounded-full bg-foreground px-1.5 text-center text-xs font-semibold text-background tabular-nums">
+          {badge}
+        </span>
+      ) : null}
     </Link>
   );
 }

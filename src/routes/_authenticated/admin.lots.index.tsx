@@ -39,6 +39,7 @@ export type LotTab = "active" | "production" | "history" | "recall";
 export type LotSearch = {
   tab: LotTab;
   product?: string;
+  open?: "handover";
 };
 
 function parseLotSearch(search: Record<string, unknown>): LotSearch {
@@ -48,10 +49,11 @@ function parseLotSearch(search: Record<string, unknown>): LotSearch {
       ? raw
       : "active";
   const product = search["product"];
+  const open = search["open"] === "handover" ? "handover" : undefined;
   if (typeof product === "string" && product.length > 0) {
-    return { tab, product };
+    return open ? { tab, product, open } : { tab, product };
   }
-  return { tab };
+  return open ? { tab, open } : { tab };
 }
 
 export const Route = createFileRoute("/_authenticated/admin/lots/")({
@@ -98,7 +100,7 @@ type LotRow = {
 
 function AdminLots() {
   const { t, lang } = useI18n();
-  const { tab, product: productFromSearch } = Route.useSearch();
+  const { tab, product: productFromSearch, open } = Route.useSearch();
   const queryClient = useQueryClient();
   const listStaff = useServerFn(listProductionStaff);
   const prereq = useLotPrerequisites();
@@ -384,7 +386,9 @@ function AdminLots() {
                     key={lot.id}
                     to="/admin/lots/$lotId"
                     params={{ lotId: lot.id }}
-                    {...(tab === "active" ? { hash: "etikett" } : {})}
+                    {...(tab === "active"
+                      ? { hash: open === "handover" ? "lot-handover" : "etikett" }
+                      : {})}
                     className="surface-card block p-4"
                   >
                     <div className="flex items-start justify-between gap-3">
