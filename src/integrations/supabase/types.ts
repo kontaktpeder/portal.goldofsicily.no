@@ -2095,7 +2095,7 @@ export type Database = {
     Enums: {
       app_role: "admin" | "ops" | "employee" | "venue"
       feedback_rating: "positive" | "mixed" | "negative"
-      gold_lot_event_type: "created" | "packed" | "handover" | "closed" | "recalled"
+      gold_lot_event_type: "created" | "packed" | "handover" | "closed" | "reopened" | "recalled"
       gold_lot_status: "produced" | "packed" | "handed_over" | "closed" | "recalled"
       commercial_route: "direct" | "via_wholesaler"
       crm_activity_kind: "call" | "email" | "meeting" | "tasting" | "note"
@@ -2235,7 +2235,7 @@ export const Constants = {
     Enums: {
       app_role: ["admin", "ops", "employee", "venue"],
       feedback_rating: ["positive", "mixed", "negative"],
-      gold_lot_event_type: ["created", "packed", "handover", "closed", "recalled"],
+      gold_lot_event_type: ["created", "packed", "handover", "closed", "reopened", "recalled"],
       gold_lot_status: ["produced", "packed", "handed_over", "closed", "recalled"],
       commercial_route: ["direct", "via_wholesaler"],
       crm_activity_kind: ["call", "email", "meeting", "tasting", "note"],

@@ -12,6 +12,7 @@ import {
   Tag,
   Truck,
   Users,
+  Warehouse,
   X,
 } from "lucide-react";
 import { LanguageToggle, Wordmark } from "@/components/brand";
@@ -33,6 +34,7 @@ type AdminPath =
   | "/admin/invoices"
   | "/admin/products"
   | "/admin/lots"
+  | "/admin/stock"
   | "/admin/staff";
 
 export function AdminShell({
@@ -76,6 +78,7 @@ export function AdminShell({
   const labelHash = hashIsEtikett(location.hash);
   const onLotsIndex = path === "/admin/lots";
   const onLotDetail = path.startsWith("/admin/lots/");
+  const onStock = path === "/admin/stock";
   const packingActive =
     (onLotsIndex && (tab === "active" || tab == null)) || (onLotDetail && labelHash);
   const productionActive = (onLotsIndex || onLotDetail) && !packingActive;
@@ -237,6 +240,16 @@ export function AdminShell({
           ) : null}
           {operations ? (
             <SideLink
+              to="/admin/stock"
+              label={t("nav_stock")}
+              path={path}
+              icon={Warehouse}
+              active={onStock}
+              onNavigate={close}
+            />
+          ) : null}
+          {operations ? (
+            <SideLink
               to="/admin/deliveries"
               search={{ lot: "" }}
               label={t("nav_delivery")}
@@ -346,6 +359,11 @@ export function AdminShortcuts({
       {operations ? (
         <Link to="/admin/lots" search={{ tab: "active" }} className={itemClass}>
           {t("home_label")}
+        </Link>
+      ) : null}
+      {operations ? (
+        <Link to="/admin/stock" className={itemClass}>
+          {t("nav_stock")}
         </Link>
       ) : null}
       {operations ? (

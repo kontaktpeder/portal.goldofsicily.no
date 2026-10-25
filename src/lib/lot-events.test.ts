@@ -6,6 +6,9 @@ import {
   canCloseLot,
   canRecallLot,
   canRecordHandover,
+  canReopenLot,
+  previousStatusFromEvents,
+  statusToRestore,
   eventLine,
   handoverEventText,
   statusAfterHandover,
@@ -25,6 +28,41 @@ test("packing and handover derive status; recall can override closed", () => {
   assert.equal(canRecallLot("closed"), true);
   assert.equal(canRecallLot("recalled"), false);
   assert.equal(canRecordHandover("closed"), false);
+  assert.equal(canReopenLot("closed"), true);
+  assert.equal(canReopenLot("packed"), false);
+  assert.equal(canReopenLot("recalled"), false);
+});
+
+test("reopen restores the status from before the close", () => {
+  const events = [
+    {
+      eventType: "closed",
+      createdAt: "2026-10-01T10:00:00.000Z",
+      metadata: { previous_status: "produced" },
+    },
+    {
+      eventType: "closed",
+      createdAt: "2026-10-20T10:00:00.000Z",
+      metadata: { previous_status: "packed" },
+    },
+  ];
+  assert.equal(previousStatusFromEvents(events), "packed");
+  assert.equal(
+    statusToRestore({ previousStatus: "packed", approvedQty: 300, remainingAtGold: 250 }),
+    "packed",
+  );
+  assert.equal(
+    statusToRestore({ previousStatus: null, approvedQty: 300, remainingAtGold: 250 }),
+    "packed",
+  );
+  assert.equal(
+    statusToRestore({ previousStatus: null, approvedQty: null, remainingAtGold: 250 }),
+    "produced",
+  );
+  assert.equal(
+    statusToRestore({ previousStatus: null, approvedQty: 300, remainingAtGold: 0 }),
+    "handed_over",
+  );
 });
 
 test("handover event text names cartons and recipient without changing status by itself", () => {
@@ -32,7 +70,10 @@ test("handover event text names cartons and recipient without changing status by
     handoverEventText({ cartons: 4, quantity: 100, recipient_company: "Villa" }),
     "4 kartonger overlevert til Villa",
   );
-  assert.equal(handoverEventText({ quantity: 80, recipient_company: "Oslo Bar" }), "80 stk overlevert til Oslo Bar");
+  assert.equal(
+    handoverEventText({ quantity: 80, recipient_company: "Oslo Bar" }),
+    "80 stk overlevert til Oslo Bar",
+  );
   assert.deepEqual(
     affectedRecallRecipients({
       handovers: [{ recipientCompany: "Villa" }],
@@ -60,7 +101,12 @@ test("handover event text names cartons and recipient without changing status by
       createdAt: "2026-09-08T09:03:00.000Z",
       createdBy: "u1",
       reason: null,
-      metadata: { actor_name: "Denis Rossi", cartons: 4, quantity: 100, recipient_company: "Villa" },
+      metadata: {
+        actor_name: "Denis Rossi",
+        cartons: 4,
+        quantity: 100,
+        recipient_company: "Villa",
+      },
     }),
     "4 kartonger overlevert til Villa · Denis Rossi",
   );

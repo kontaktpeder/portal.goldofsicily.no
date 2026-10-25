@@ -3,6 +3,7 @@ import {
   activeReservedPieces,
   emptyPublicShop,
   isShopSchemaError,
+  physicalPiecesByProduct,
   publicShop,
   restockMessage,
   shopFlavors,
@@ -114,7 +115,7 @@ async function readPublicShop(): Promise<PublicShop> {
   const lotsRes = await admin
     .from("gold_lots")
     .select(LOT_SELECT)
-    .neq("status", "recalled")
+    .in("status", ["produced", "packed", "handed_over"])
     .limit(400);
   if (lotsRes.error) {
     if (isGoldLotSchemaError(lotsRes.error))
@@ -123,11 +124,13 @@ async function readPublicShop(): Promise<PublicShop> {
   }
 
   const stock = toStockLots((lotsRes.data ?? []) as Parameters<typeof toStockLots>[0]);
-  const physical = new Map<string, number>();
-  for (const lot of stock) {
-    if (lot.status === "recalled") continue;
-    physical.set(lot.productId, (physical.get(lot.productId) ?? 0) + lot.remaining);
-  }
+  const physical = physicalPiecesByProduct(
+    stock.map((lot) => ({
+      productId: lot.productId,
+      status: lot.status,
+      remaining: lot.remaining,
+    })),
+  );
 
   const holdsRes = await admin
     .from("shop_reservations")

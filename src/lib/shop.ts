@@ -169,10 +169,11 @@ export type ShopLotPiece = {
   remaining: number;
 };
 
+/** Open lots only. Closed food is blocked, and recalled food is out. */
 export function physicalPiecesByProduct(lots: readonly ShopLotPiece[]): Map<string, number> {
   const totals = new Map<string, number>();
   for (const lot of lots) {
-    if (lot.status === "recalled") continue;
+    if (lot.status === "recalled" || lot.status === "closed") continue;
     const pieces = Math.max(0, Math.floor(lot.remaining));
     totals.set(lot.productId, (totals.get(lot.productId) ?? 0) + pieces);
   }

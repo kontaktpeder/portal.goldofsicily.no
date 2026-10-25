@@ -370,7 +370,11 @@ function AdminLots() {
       toast.error(updated.error.message);
       return;
     }
-    const closedEvent = await recordLotEvent({ lotId, eventType: "closed" });
+    const closedEvent = await recordLotEvent({
+      lotId,
+      eventType: "closed",
+      metadata: { previous_status: lot.status },
+    });
     setBusy(false);
     setClosingId(null);
     setClosedIds((ids) => [...ids, lotId]);

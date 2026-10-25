@@ -46,15 +46,18 @@ import {
   canCloseLot,
   canRecallLot,
   canRecordHandover,
+  canReopenLot,
   eventFromRow,
   formatLotEventWhen,
   handoverEventText,
   isEventSchemaError,
+  previousStatusFromEvents,
   statusAfterHandover,
   statusAfterPacking,
+  statusToRestore,
   type LotEvent,
 } from "@/lib/lot-events";
-import { currentLotActor, recordLotEvent } from "@/lib/lot-events-save";
+import { currentLotActor, recordLotEvent, reopenClosedLot } from "@/lib/lot-events-save";
 
 export const Route = createFileRoute("/_authenticated/admin/lots/$lotId")({
   head: () => ({
@@ -167,6 +170,7 @@ const EVENT_ACTION_KEYS: Record<Exclude<LotEvent["eventType"], "handover">, Tran
   created: "lot_event_created",
   packed: "lot_event_packed",
   closed: "lot_event_closed",
+  reopened: "lot_event_reopened",
   recalled: "lot_event_recalled",
 };
 
@@ -430,7 +434,13 @@ function AdminLotDetail() {
 
       <LotHistory history={history} />
 
-      <LotActions lot={lot} deliveries={deliveries ?? []} onSaved={refresh} />
+      <LotActions
+        lot={lot}
+        deliveries={deliveries ?? []}
+        history={history?.rows ?? []}
+        remainingAtGold={flow.atGold}
+        onSaved={refresh}
+      />
 
       <LotMetaForm lot={lot} onSaved={refresh} />
 
@@ -559,6 +569,8 @@ function LotHistory({
 function LotActions({
   lot,
   deliveries,
+  history,
+  remainingAtGold,
   onSaved,
 }: {
   lot: LotDetail;
@@ -568,10 +580,13 @@ function LotActions({
       | { delivered_at: string; customers: { name: string } | null }[]
       | null;
   }>;
+  history: LotEvent[];
+  remainingAtGold: number;
   onSaved: () => Promise<void>;
 }) {
   const { t } = useI18n();
   const [confirmClose, setConfirmClose] = useState(false);
+  const [confirmReopen, setConfirmReopen] = useState(false);
   const [recallOpen, setRecallOpen] = useState(false);
   const [recallReason, setRecallReason] = useState("");
   const [busy, setBusy] = useState(false);
@@ -590,13 +605,40 @@ function LotActions({
       toast.error(updated.error.message);
       return;
     }
-    const closedEvent = await recordLotEvent({ lotId: lot.id, eventType: "closed" });
+    const closedEvent = await recordLotEvent({
+      lotId: lot.id,
+      eventType: "closed",
+      metadata: { previous_status: lot.status },
+    });
     setBusy(false);
     setConfirmClose(false);
     if (!closedEvent.ok) {
       toast.error(closedEvent.schemaMissing ? t("lot_events_schema_missing") : closedEvent.message);
     } else {
       toast.success(t("lot_close_done"));
+    }
+    await onSaved();
+  }
+
+  async function reopenLot() {
+    if (!canReopenLot(lot.status)) return;
+    const status = statusToRestore({
+      previousStatus: previousStatusFromEvents(history),
+      approvedQty: lot.approved_qty,
+      remainingAtGold,
+    });
+    setBusy(true);
+    const reopened = await reopenClosedLot({ lotId: lot.id, status });
+    setBusy(false);
+    setConfirmReopen(false);
+    if (!reopened.ok) {
+      toast.error(reopened.reason === "not_closed" ? t("lot_reopen_missing") : reopened.message);
+      return;
+    }
+    if (!reopened.logged) {
+      toast.error(reopened.schemaMissing ? t("lot_reopen_schema_missing") : reopened.message);
+    } else {
+      toast.success(t("lot_reopen_done"));
     }
     await onSaved();
   }
@@ -657,6 +699,27 @@ function LotActions({
           >
             {t("lot_goto_handover")}
           </PrimaryButton>
+        ) : null}
+
+        {canReopenLot(lot.status) ? (
+          confirmReopen ? (
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground">{t("lot_reopen_hint")}</p>
+              <PrimaryButton onClick={reopenLot} disabled={busy}>
+                {busy ? "…" : t("lot_reopen_confirm")}
+              </PrimaryButton>
+              <button
+                type="button"
+                className="text-sm font-semibold text-muted-foreground"
+                onClick={() => setConfirmReopen(false)}
+                disabled={busy}
+              >
+                {t("lot_close_cancel")}
+              </button>
+            </div>
+          ) : (
+            <PrimaryButton onClick={() => setConfirmReopen(true)}>{t("lot_reopen")}</PrimaryButton>
+          )
         ) : null}
 
         {canCloseLot(lot.status) ? (

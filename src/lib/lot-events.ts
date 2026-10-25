@@ -1,6 +1,13 @@
 import type { GoldLotStatus } from "./gold-lot.ts";
 
-export const LOT_EVENT_TYPES = ["created", "packed", "handover", "closed", "recalled"] as const;
+export const LOT_EVENT_TYPES = [
+  "created",
+  "packed",
+  "handover",
+  "closed",
+  "reopened",
+  "recalled",
+] as const;
 export type LotEventType = (typeof LOT_EVENT_TYPES)[number];
 
 export type LotEventMetadata = {
@@ -13,6 +20,8 @@ export type LotEventMetadata = {
   carton_count?: number;
   recipients?: string[];
   legacy?: boolean;
+  previous_status?: string;
+  restored_status?: string;
 };
 
 export type LotEvent = {
@@ -35,7 +44,10 @@ export function statusAfterPacking(current: GoldLotStatus): GoldLotStatus {
 }
 
 /** Handover records what moved. Status is where the LOT stands now. */
-export function statusAfterHandover(current: GoldLotStatus, remainingAtGold: number): GoldLotStatus {
+export function statusAfterHandover(
+  current: GoldLotStatus,
+  remainingAtGold: number,
+): GoldLotStatus {
   if (current === "recalled" || current === "closed") return current;
   if (remainingAtGold <= 0) return "handed_over";
   if (current === "packed") return "packed";
@@ -44,6 +56,44 @@ export function statusAfterHandover(current: GoldLotStatus, remainingAtGold: num
 
 export function canCloseLot(status: GoldLotStatus): boolean {
   return status !== "recalled" && status !== "closed";
+}
+
+export function canReopenLot(status: GoldLotStatus): boolean {
+  return status === "closed";
+}
+
+const RESTORABLE_STATUSES = ["produced", "packed", "handed_over"] as const;
+export type RestorableLotStatus = (typeof RESTORABLE_STATUSES)[number];
+
+export function isRestorableStatus(value: string | null | undefined): value is RestorableLotStatus {
+  return value === "produced" || value === "packed" || value === "handed_over";
+}
+
+/** Latest close event remembers the status from before the close. */
+export function previousStatusFromEvents(
+  events: readonly {
+    eventType: string;
+    createdAt: string;
+    metadata?: { previous_status?: unknown };
+  }[],
+): string | null {
+  const closed = events
+    .filter((event) => event.eventType === "closed")
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
+  const raw = closed?.metadata?.previous_status;
+  return typeof raw === "string" && raw.trim() ? raw : null;
+}
+
+/** Accidental close goes back to the status it had. Older closes are inferred. */
+export function statusToRestore(input: {
+  previousStatus: string | null | undefined;
+  approvedQty: number | null;
+  remainingAtGold: number;
+}): RestorableLotStatus {
+  if (isRestorableStatus(input.previousStatus)) return input.previousStatus;
+  if (input.remainingAtGold <= 0) return "handed_over";
+  if (input.approvedQty != null) return "packed";
+  return "produced";
 }
 
 export function canRecallLot(status: GoldLotStatus): boolean {
@@ -93,6 +143,7 @@ const EVENT_ACTION_NO: Record<Exclude<LotEventType, "handover">, string> = {
   created: "LOT opprettet",
   packed: "LOT pakket",
   closed: "LOT lukket",
+  reopened: "LOT åpnet igjen",
   recalled: "Tilbakekalt",
 };
 
@@ -100,7 +151,9 @@ const EVENT_ACTION_NO: Record<Exclude<LotEventType, "handover">, string> = {
 export function eventLine(event: LotEvent): string {
   const actor = actorNameFromEvent(event);
   const action =
-    event.eventType === "handover" ? handoverEventText(event.metadata) : EVENT_ACTION_NO[event.eventType];
+    event.eventType === "handover"
+      ? handoverEventText(event.metadata)
+      : EVENT_ACTION_NO[event.eventType];
   return actor ? `${action} · ${actor}` : action;
 }
 

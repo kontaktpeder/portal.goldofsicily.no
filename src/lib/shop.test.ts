@@ -39,10 +39,11 @@ test("fifty boxes share the piece count, and a short remainder cannot fill a box
   assert.equal(boxesFromPieces(0, PACK_FIFTY), 0);
 });
 
-test("closed stock still counts, recalled stock does not", () => {
+test("closed and recalled stock stay off the buy page", () => {
   const pieces = physicalPiecesByProduct([
-    { productId: "nduja", status: "closed", remaining: 50 },
+    { productId: "nduja", status: "closed", remaining: 250 },
     { productId: "nduja", status: "recalled", remaining: 100 },
+    { productId: "nduja", status: "packed", remaining: 50 },
     { productId: "truffle", status: "produced", remaining: 20 },
   ]);
   assert.equal(pieces.get("nduja"), 50);
