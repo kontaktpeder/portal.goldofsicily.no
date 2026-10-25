@@ -148,6 +148,52 @@ test("product text stays unverified, so checkout cannot open on a payment flag a
   assert.equal(shop.flavors[0]?.facts.ingredients, "ris");
   assert.ok(shop.purchaseGate.missing.includes("nduja:allergens"));
   assert.ok(shop.purchaseGate.missing.includes("truffle:storage"));
+
+  const confirmed = publicShop(
+    shopFlavors(
+      [
+        {
+          id: "p1",
+          slug: "nduja",
+          lotLetter: "N",
+          active: true,
+          facts: { verified: true, ...written, ingredientsEn: "rice" },
+        },
+        {
+          id: "p2",
+          slug: "truffle",
+          lotLetter: "T",
+          active: true,
+          facts: { verified: true, ...written },
+        },
+      ],
+      new Map(),
+    ),
+    true,
+  );
+  assert.equal(confirmed.paymentOpen, false);
+  assert.equal(confirmed.purchaseGate.open, false);
+  assert.equal(confirmed.flavors[0]?.facts.verified, true);
+  assert.equal(confirmed.flavors[0]?.facts.ingredientsEn, "rice");
+  assert.equal(confirmed.purchaseGate.missing.length, 0);
+  assert.equal(
+    publicShop(
+      shopFlavors(
+        [
+          {
+            id: "p1",
+            slug: "nduja",
+            lotLetter: "N",
+            active: true,
+            facts: { verified: true, ...written, allergens: " " },
+          },
+        ],
+        new Map(),
+      ),
+      true,
+    ).flavors[0]?.facts.verified,
+    false,
+  );
 });
 
 test("waitlist input keeps newsletter consent separate and rejects a missing choice", () => {

@@ -26,17 +26,54 @@ export type FlavorFacts = {
   allergens: string | null;
   storage: string | null;
   prep: string | null;
+  ingredientsEn: string | null;
+  allergensEn: string | null;
+  storageEn: string | null;
+  prepEn: string | null;
 };
 
 export type FactText = {
+  verified?: boolean;
   ingredients: string | null;
   allergens: string | null;
   storage: string | null;
   prep: string | null;
+  ingredientsEn?: string | null;
+  allergensEn?: string | null;
+  storageEn?: string | null;
+  prepEn?: string | null;
 };
 
-function blankFacts(): FactText {
-  return { ingredients: null, allergens: null, storage: null, prep: null };
+function blankFacts(): FlavorFacts {
+  return {
+    verified: false,
+    ingredients: null,
+    allergens: null,
+    storage: null,
+    prep: null,
+    ingredientsEn: null,
+    allergensEn: null,
+    storageEn: null,
+    prepEn: null,
+  };
+}
+
+function publishFacts(incoming: FactText): FlavorFacts {
+  const ingredients = filledFact(incoming.ingredients);
+  const allergens = filledFact(incoming.allergens);
+  const storage = filledFact(incoming.storage);
+  const prep = filledFact(incoming.prep);
+  return {
+    verified: incoming.verified === true && Boolean(ingredients && allergens && storage && prep),
+    ingredients,
+    allergens,
+    storage,
+    prep,
+    ingredientsEn: filledFact(incoming.ingredientsEn),
+    allergensEn: filledFact(incoming.allergensEn),
+    storageEn: filledFact(incoming.storageEn),
+    prepEn: filledFact(incoming.prepEn),
+  };
 }
 
 function filledFact(value: string | null | undefined): string | null {
@@ -45,7 +82,16 @@ function filledFact(value: string | null | undefined): string | null {
   return text.length > 0 ? text : null;
 }
 
-export function consumerFactGaps(slug: string, facts: FlavorFacts): string[] {
+export function consumerFactGaps(
+  slug: string,
+  facts: {
+    verified: boolean;
+    ingredients: string | null;
+    allergens: string | null;
+    storage: string | null;
+    prep: string | null;
+  },
+): string[] {
   const gaps: string[] = [];
   for (const key of CONSUMER_FACT_KEYS) {
     if (!facts.verified || !facts[key]?.trim()) gaps.push(`${slug}:${key}`);
@@ -54,7 +100,16 @@ export function consumerFactGaps(slug: string, facts: FlavorFacts): string[] {
 }
 
 /** A later payment flag is not enough. Mandatory facts must be verified and filled in. */
-export function canOpenCheckout(paymentRequested: boolean, facts: FlavorFacts): boolean {
+export function canOpenCheckout(
+  paymentRequested: boolean,
+  facts: {
+    verified: boolean;
+    ingredients: string | null;
+    allergens: string | null;
+    storage: string | null;
+    prep: string | null;
+  },
+): boolean {
   if (!paymentRequested || !facts.verified) return false;
   return CONSUMER_FACT_KEYS.every((key) => Boolean(facts[key]?.trim()));
 }
@@ -156,7 +211,7 @@ export function shopFlavors(
   piecesByProduct: ReadonlyMap<string, number>,
 ): ShopFlavorView[] {
   const pieces = new Map<ShopFlavorSlug, number>(SHOP_FLAVOR_SLUGS.map((slug) => [slug, 0]));
-  const texts = new Map<ShopFlavorSlug, FactText>(
+  const texts = new Map<ShopFlavorSlug, FlavorFacts>(
     SHOP_FLAVOR_SLUGS.map((slug) => [slug, blankFacts()]),
   );
   for (const product of products) {
@@ -166,12 +221,23 @@ export function shopFlavors(
     pieces.set(slug, (pieces.get(slug) ?? 0) + (piecesByProduct.get(product.id) ?? 0));
     const incoming = product.facts;
     if (!incoming) continue;
+    const next = publishFacts(incoming);
     const current = texts.get(slug) ?? blankFacts();
+    if (next.verified) {
+      texts.set(slug, next);
+      continue;
+    }
+    if (current.verified) continue;
     texts.set(slug, {
-      ingredients: current.ingredients ?? filledFact(incoming.ingredients),
-      allergens: current.allergens ?? filledFact(incoming.allergens),
-      storage: current.storage ?? filledFact(incoming.storage),
-      prep: current.prep ?? filledFact(incoming.prep),
+      verified: false,
+      ingredients: current.ingredients ?? next.ingredients,
+      allergens: current.allergens ?? next.allergens,
+      storage: current.storage ?? next.storage,
+      prep: current.prep ?? next.prep,
+      ingredientsEn: current.ingredientsEn ?? next.ingredientsEn,
+      allergensEn: current.allergensEn ?? next.allergensEn,
+      storageEn: current.storageEn ?? next.storageEn,
+      prepEn: current.prepEn ?? next.prepEn,
     });
   }
   return SHOP_FLAVOR_SLUGS.map((slug) => {
@@ -183,7 +249,7 @@ export function shopFlavors(
       nameEn: FLAVOR_LABEL[slug].nameEn,
       pieces: count,
       boxes50: boxesFromPieces(count, PACK_FIFTY),
-      facts: { verified: false, ...text },
+      facts: text,
     };
   });
 }

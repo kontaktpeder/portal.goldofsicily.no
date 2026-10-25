@@ -1094,13 +1094,16 @@ export type Database = {
       products: {
         Row: {
           active: boolean
+          allergens_en: string | null
           allergens_no: string | null
+          consumer_facts_verified: boolean
           created_at: string
           description_en: string | null
           description_no: string | null
           do_not_refreeze_no: string | null
           id: string
           image_url: string | null
+          ingredients_en: string | null
           ingredients_no: string | null
           legal_designation_no: string | null
           lot_letter: string | null
@@ -1110,11 +1113,13 @@ export type Database = {
           packages_per_carton: number | null
           prep_no: string | null
           producer_address: string | null
+          prep_en: string | null
           producer_name: string | null
           shelf_life_days: number | null
           sku: string
           slug: string
           sort_order: number
+          storage_en: string | null
           storage_no: string | null
           unit_weight_g: number | null
           units_per_package: number | null
@@ -1122,13 +1127,16 @@ export type Database = {
         }
         Insert: {
           active?: boolean
+          allergens_en?: string | null
           allergens_no?: string | null
+          consumer_facts_verified?: boolean
           created_at?: string
           description_en?: string | null
           description_no?: string | null
           do_not_refreeze_no?: string | null
           id?: string
           image_url?: string | null
+          ingredients_en?: string | null
           ingredients_no?: string | null
           legal_designation_no?: string | null
           lot_letter?: string | null
@@ -1136,6 +1144,7 @@ export type Database = {
           name_no: string
           nutrition_no?: string | null
           packages_per_carton?: number | null
+          prep_en?: string | null
           prep_no?: string | null
           producer_address?: string | null
           producer_name?: string | null
@@ -1143,6 +1152,7 @@ export type Database = {
           sku: string
           slug: string
           sort_order?: number
+          storage_en?: string | null
           storage_no?: string | null
           unit_weight_g?: number | null
           units_per_package?: number | null
@@ -1150,13 +1160,16 @@ export type Database = {
         }
         Update: {
           active?: boolean
+          allergens_en?: string | null
           allergens_no?: string | null
+          consumer_facts_verified?: boolean
           created_at?: string
           description_en?: string | null
           description_no?: string | null
           do_not_refreeze_no?: string | null
           id?: string
           image_url?: string | null
+          ingredients_en?: string | null
           ingredients_no?: string | null
           legal_designation_no?: string | null
           lot_letter?: string | null
@@ -1164,6 +1177,7 @@ export type Database = {
           name_no?: string
           nutrition_no?: string | null
           packages_per_carton?: number | null
+          prep_en?: string | null
           prep_no?: string | null
           producer_address?: string | null
           producer_name?: string | null
@@ -1171,6 +1185,7 @@ export type Database = {
           sku?: string
           slug?: string
           sort_order?: number
+          storage_en?: string | null
           storage_no?: string | null
           unit_weight_g?: number | null
           units_per_package?: number | null

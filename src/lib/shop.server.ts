@@ -14,6 +14,51 @@ import {
   type WaitlistSubscriber,
 } from "@/lib/shop";
 
+function toShopProduct(product: {
+  id: string;
+  slug: string;
+  lot_letter: string | null;
+  active: boolean;
+  ingredients_no: string | null;
+  allergens_no: string | null;
+  storage_no: string | null;
+  prep_no: string | null;
+  consumer_facts_verified?: boolean | null;
+  ingredients_en?: string | null;
+  allergens_en?: string | null;
+  storage_en?: string | null;
+  prep_en?: string | null;
+}): ShopProduct {
+  return {
+    id: product.id,
+    slug: product.slug,
+    lotLetter: product.lot_letter,
+    active: product.active,
+    facts: {
+      verified: product.consumer_facts_verified === true,
+      ingredients: product.ingredients_no,
+      allergens: product.allergens_no,
+      storage: product.storage_no,
+      prep: product.prep_no,
+      ingredientsEn: product.ingredients_en ?? null,
+      allergensEn: product.allergens_en ?? null,
+      storageEn: product.storage_en ?? null,
+      prepEn: product.prep_en ?? null,
+    },
+  };
+}
+
+function isMissingConsumerFactColumn(
+  error: { code?: string; message?: string } | null | undefined,
+): boolean {
+  if (!error) return false;
+  const message = error.message ?? "";
+  return (
+    error.code === "42703" ||
+    /consumer_facts_verified|ingredients_en|allergens_en|storage_en|prep_en/i.test(message)
+  );
+}
+
 const LOT_SELECT =
   "id, lot_code, product_id, produced_qty, approved_qty, status, gold_lot_handovers(id, quantity, ownership_after_handover, recipient_company), delivery_lines(quantity, source_handover_id)";
 
@@ -40,24 +85,25 @@ async function readPublicShop(): Promise<PublicShop> {
   const admin = await adminClient();
   if (!admin) return emptyPublicShop(false);
 
-  const productsRes = await admin
+  const wide = await admin
     .from("products")
-    .select("id, slug, lot_letter, active, ingredients_no, allergens_no, storage_no, prep_no")
+    .select(
+      "id, slug, lot_letter, active, ingredients_no, allergens_no, storage_no, prep_no, consumer_facts_verified, ingredients_en, allergens_en, storage_en, prep_en",
+    )
     .eq("active", true);
-  if (productsRes.error) return emptyPublicShop(false);
-
-  const products: ShopProduct[] = (productsRes.data ?? []).map((product) => ({
-    id: product.id,
-    slug: product.slug,
-    lotLetter: product.lot_letter,
-    active: product.active,
-    facts: {
-      ingredients: product.ingredients_no,
-      allergens: product.allergens_no,
-      storage: product.storage_no,
-      prep: product.prep_no,
-    },
-  }));
+  let products: ShopProduct[];
+  if (wide.error && isMissingConsumerFactColumn(wide.error)) {
+    const narrow = await admin
+      .from("products")
+      .select("id, slug, lot_letter, active, ingredients_no, allergens_no, storage_no, prep_no")
+      .eq("active", true);
+    if (narrow.error) return emptyPublicShop(false);
+    products = (narrow.data ?? []).map((product) => toShopProduct(product));
+  } else if (wide.error) {
+    return emptyPublicShop(false);
+  } else {
+    products = (wide.data ?? []).map((product) => toShopProduct(product));
+  }
 
   await admin
     .from("shop_reservations")
