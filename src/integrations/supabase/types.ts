@@ -10,398 +10,10 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.5"
+    PostgrestVersion: "14.17"
   }
   public: {
     Tables: {
-      customers: {
-        Row: {
-          active: boolean
-          address: string | null
-          city: string | null
-          contact_name: string | null
-          created_at: string
-          default_language: string
-          email: string | null
-          id: string
-          image_url: string | null
-          instagram: string | null
-          latitude: number | null
-          location: string | null
-          logo_url: string | null
-          longitude: number | null
-          menu_intro: string | null
-          legal_entity_id: string | null
-          billing_legal_entity_id: string | null
-          name: string
-          notes: string | null
-          partnership_level: Database["public"]["Enums"]["partnership_level"] | null
-          phone: string | null
-          public_profile: "partner" | "listing" | null
-          public_visible: boolean
-          supplied_by_customer_id: string | null
-          type: Database["public"]["Enums"]["customer_type"]
-          collaboration_text: string | null
-          serving_story: string | null
-          video_url: string | null
-          menu_material_path: string | null
-          menu_material_url: string | null
-          gallery_urls: string[]
-          serving_method: string | null
-          slug: string | null
-          updated_at: string
-          website_url: string | null
-          segment: Database["public"]["Enums"]["customer_segment"] | null
-          sales_status: Database["public"]["Enums"]["sales_status"] | null
-          sales_owner_id: string | null
-          next_follow_up_on: string | null
-          sales_status_changed_at: string | null
-          commercial_ready_at: string | null
-          delivery_address: string | null
-        }
-        Insert: {
-          active?: boolean
-          address?: string | null
-          city?: string | null
-          contact_name?: string | null
-          created_at?: string
-          default_language?: string
-          email?: string | null
-          id?: string
-          image_url?: string | null
-          instagram?: string | null
-          latitude?: number | null
-          location?: string | null
-          logo_url?: string | null
-          longitude?: number | null
-          menu_intro?: string | null
-          legal_entity_id?: string | null
-          billing_legal_entity_id?: string | null
-          name: string
-          notes?: string | null
-          partnership_level?: Database["public"]["Enums"]["partnership_level"] | null
-          phone?: string | null
-          public_profile?: "partner" | "listing" | null
-          public_visible?: boolean
-          supplied_by_customer_id?: string | null
-          type?: Database["public"]["Enums"]["customer_type"]
-          collaboration_text?: string | null
-          serving_story?: string | null
-          video_url?: string | null
-          menu_material_path?: string | null
-          menu_material_url?: string | null
-          gallery_urls?: string[]
-          serving_method?: string | null
-          slug?: string | null
-          updated_at?: string
-          website_url?: string | null
-          segment?: Database["public"]["Enums"]["customer_segment"] | null
-          sales_status?: Database["public"]["Enums"]["sales_status"] | null
-          sales_owner_id?: string | null
-          next_follow_up_on?: string | null
-          sales_status_changed_at?: string | null
-          commercial_ready_at?: string | null
-          delivery_address?: string | null
-        }
-        Update: {
-          active?: boolean
-          address?: string | null
-          city?: string | null
-          contact_name?: string | null
-          created_at?: string
-          default_language?: string
-          email?: string | null
-          id?: string
-          image_url?: string | null
-          instagram?: string | null
-          latitude?: number | null
-          location?: string | null
-          logo_url?: string | null
-          longitude?: number | null
-          menu_intro?: string | null
-          legal_entity_id?: string | null
-          billing_legal_entity_id?: string | null
-          name?: string
-          notes?: string | null
-          partnership_level?: Database["public"]["Enums"]["partnership_level"] | null
-          phone?: string | null
-          public_profile?: "partner" | "listing" | null
-          public_visible?: boolean
-          supplied_by_customer_id?: string | null
-          type?: Database["public"]["Enums"]["customer_type"]
-          collaboration_text?: string | null
-          serving_story?: string | null
-          video_url?: string | null
-          menu_material_path?: string | null
-          menu_material_url?: string | null
-          gallery_urls?: string[]
-          serving_method?: string | null
-          slug?: string | null
-          updated_at?: string
-          website_url?: string | null
-          segment?: Database["public"]["Enums"]["customer_segment"] | null
-          sales_status?: Database["public"]["Enums"]["sales_status"] | null
-          sales_owner_id?: string | null
-          next_follow_up_on?: string | null
-          sales_status_changed_at?: string | null
-          commercial_ready_at?: string | null
-          delivery_address?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "customers_supplied_by_customer_id_fkey"
-            columns: ["supplied_by_customer_id"]
-            isOneToOne: false
-            referencedRelation: "customers"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "customers_legal_entity_id_fkey"
-            columns: ["legal_entity_id"]
-            isOneToOne: false
-            referencedRelation: "legal_entities"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "customers_billing_legal_entity_id_fkey"
-            columns: ["billing_legal_entity_id"]
-            isOneToOne: false
-            referencedRelation: "legal_entities"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "customers_sales_owner_id_fkey"
-            columns: ["sales_owner_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      customer_contacts: {
-        Row: {
-          created_at: string
-          customer_id: string | null
-          email: string | null
-          id: string
-          legal_entity_id: string | null
-          name: string
-          phone: string | null
-          role: string | null
-        }
-        Insert: {
-          created_at?: string
-          customer_id?: string | null
-          email?: string | null
-          id?: string
-          legal_entity_id?: string | null
-          name: string
-          phone?: string | null
-          role?: string | null
-        }
-        Update: {
-          created_at?: string
-          customer_id?: string | null
-          email?: string | null
-          id?: string
-          legal_entity_id?: string | null
-          name?: string
-          phone?: string | null
-          role?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "customer_contacts_customer_id_fkey"
-            columns: ["customer_id"]
-            isOneToOne: false
-            referencedRelation: "customers"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "customer_contacts_legal_entity_id_fkey"
-            columns: ["legal_entity_id"]
-            isOneToOne: false
-            referencedRelation: "legal_entities"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      crm_activities: {
-        Row: {
-          body: string
-          created_at: string
-          created_by: string | null
-          customer_id: string
-          happened_at: string
-          id: string
-          kind: Database["public"]["Enums"]["crm_activity_kind"]
-        }
-        Insert: {
-          body: string
-          created_at?: string
-          created_by?: string | null
-          customer_id: string
-          happened_at?: string
-          id?: string
-          kind: Database["public"]["Enums"]["crm_activity_kind"]
-        }
-        Update: {
-          body?: string
-          created_at?: string
-          created_by?: string | null
-          customer_id?: string
-          happened_at?: string
-          id?: string
-          kind?: Database["public"]["Enums"]["crm_activity_kind"]
-        }
-        Relationships: [
-          {
-            foreignKeyName: "crm_activities_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "crm_activities_customer_id_fkey"
-            columns: ["customer_id"]
-            isOneToOne: false
-            referencedRelation: "customers"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      customer_orders: {
-        Row: {
-          billing_legal_entity_id: string | null
-          billing_legal_name_snapshot: string | null
-          billing_organization_number_snapshot: string | null
-          approved_at: string | null
-          approved_by: string | null
-          approved_name_snapshot: string | null
-          submitted_at: string | null
-          submitted_by: string | null
-          submitted_name_snapshot: string | null
-          confirmed_at: string | null
-          confirmed_delivery_on: string | null
-          contact_name: string | null
-          return_note: string | null
-          created_at: string
-          desired_delivery_on: string | null
-          deviation_note: string | null
-          due_on: string | null
-          follow_up_on: string | null
-          follow_up_note: string | null
-          advance_percent: number | null
-          advance_basis_ore: number | null
-          advance_agreed_ore: number | null
-          id: string
-          notes: string | null
-          order_number: string
-          ordered_by_customer_id: string
-          owner_id: string | null
-          owner_name_snapshot: string | null
-          ship_to_customer_id: string
-          status: Database["public"]["Enums"]["customer_order_status"]
-          updated_at: string
-        }
-        Insert: {
-          approved_at?: string | null
-          approved_by?: string | null
-          approved_name_snapshot?: string | null
-          submitted_at?: string | null
-          submitted_by?: string | null
-          submitted_name_snapshot?: string | null
-          billing_legal_entity_id?: string | null
-          billing_legal_name_snapshot?: string | null
-          billing_organization_number_snapshot?: string | null
-          confirmed_at?: string | null
-          confirmed_delivery_on?: string | null
-          contact_name?: string | null
-          created_at?: string
-          desired_delivery_on?: string | null
-          deviation_note?: string | null
-          due_on?: string | null
-          follow_up_on?: string | null
-          follow_up_note?: string | null
-          advance_percent?: number | null
-          advance_basis_ore?: number | null
-          advance_agreed_ore?: number | null
-          id?: string
-          notes?: string | null
-          order_number?: string
-          ordered_by_customer_id: string
-          owner_id?: string | null
-          owner_name_snapshot?: string | null
-          return_note?: string | null
-          ship_to_customer_id: string
-          status?: Database["public"]["Enums"]["customer_order_status"]
-          updated_at?: string
-        }
-        Update: {
-          approved_at?: string | null
-          approved_by?: string | null
-          approved_name_snapshot?: string | null
-          submitted_at?: string | null
-          submitted_by?: string | null
-          submitted_name_snapshot?: string | null
-          billing_legal_entity_id?: string | null
-          billing_legal_name_snapshot?: string | null
-          billing_organization_number_snapshot?: string | null
-          confirmed_at?: string | null
-          confirmed_delivery_on?: string | null
-          contact_name?: string | null
-          created_at?: string
-          desired_delivery_on?: string | null
-          deviation_note?: string | null
-          due_on?: string | null
-          follow_up_on?: string | null
-          follow_up_note?: string | null
-          advance_percent?: number | null
-          advance_basis_ore?: number | null
-          advance_agreed_ore?: number | null
-          id?: string
-          notes?: string | null
-          order_number?: string
-          ordered_by_customer_id?: string
-          owner_id?: string | null
-          owner_name_snapshot?: string | null
-          return_note?: string | null
-          ship_to_customer_id?: string
-          status?: Database["public"]["Enums"]["customer_order_status"]
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "customer_orders_ordered_by_customer_id_fkey"
-            columns: ["ordered_by_customer_id"]
-            isOneToOne: false
-            referencedRelation: "customers"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "customer_orders_ship_to_customer_id_fkey"
-            columns: ["ship_to_customer_id"]
-            isOneToOne: false
-            referencedRelation: "customers"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "customer_orders_billing_legal_entity_id_fkey"
-            columns: ["billing_legal_entity_id"]
-            isOneToOne: false
-            referencedRelation: "legal_entities"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "customer_orders_owner_id_fkey"
-            columns: ["owner_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       customer_order_lines: {
         Row: {
           created_at: string
@@ -447,41 +59,334 @@ export type Database = {
           },
         ]
       }
-      order_line_fulfillments: {
+      customer_orders: {
         Row: {
+          advance_agreed_ore: number | null
+          advance_basis_ore: number | null
+          advance_percent: number | null
+          approved_at: string | null
+          approved_by: string | null
+          approved_name_snapshot: string | null
+          billing_legal_entity_id: string | null
+          billing_legal_name_snapshot: string | null
+          billing_organization_number_snapshot: string | null
+          confirmed_at: string | null
+          confirmed_delivery_on: string | null
+          contact_name: string | null
           created_at: string
-          delivery_line_id: string
+          desired_delivery_on: string | null
+          deviation_note: string | null
+          due_on: string | null
+          follow_up_note: string | null
+          follow_up_on: string | null
           id: string
-          order_line_id: string
-          quantity: number
+          notes: string | null
+          order_number: string
+          ordered_by_customer_id: string
+          owner_id: string | null
+          owner_name_snapshot: string | null
+          return_note: string | null
+          ship_to_customer_id: string
+          status: Database["public"]["Enums"]["customer_order_status"]
+          submitted_at: string | null
+          submitted_by: string | null
+          submitted_name_snapshot: string | null
+          updated_at: string
         }
         Insert: {
+          advance_agreed_ore?: number | null
+          advance_basis_ore?: number | null
+          advance_percent?: number | null
+          approved_at?: string | null
+          approved_by?: string | null
+          approved_name_snapshot?: string | null
+          billing_legal_entity_id?: string | null
+          billing_legal_name_snapshot?: string | null
+          billing_organization_number_snapshot?: string | null
+          confirmed_at?: string | null
+          confirmed_delivery_on?: string | null
+          contact_name?: string | null
           created_at?: string
-          delivery_line_id: string
+          desired_delivery_on?: string | null
+          deviation_note?: string | null
+          due_on?: string | null
+          follow_up_note?: string | null
+          follow_up_on?: string | null
           id?: string
-          order_line_id: string
-          quantity: number
+          notes?: string | null
+          order_number?: string
+          ordered_by_customer_id: string
+          owner_id?: string | null
+          owner_name_snapshot?: string | null
+          return_note?: string | null
+          ship_to_customer_id: string
+          status?: Database["public"]["Enums"]["customer_order_status"]
+          submitted_at?: string | null
+          submitted_by?: string | null
+          submitted_name_snapshot?: string | null
+          updated_at?: string
         }
         Update: {
+          advance_agreed_ore?: number | null
+          advance_basis_ore?: number | null
+          advance_percent?: number | null
+          approved_at?: string | null
+          approved_by?: string | null
+          approved_name_snapshot?: string | null
+          billing_legal_entity_id?: string | null
+          billing_legal_name_snapshot?: string | null
+          billing_organization_number_snapshot?: string | null
+          confirmed_at?: string | null
+          confirmed_delivery_on?: string | null
+          contact_name?: string | null
           created_at?: string
-          delivery_line_id?: string
+          desired_delivery_on?: string | null
+          deviation_note?: string | null
+          due_on?: string | null
+          follow_up_note?: string | null
+          follow_up_on?: string | null
           id?: string
-          order_line_id?: string
-          quantity?: number
+          notes?: string | null
+          order_number?: string
+          ordered_by_customer_id?: string
+          owner_id?: string | null
+          owner_name_snapshot?: string | null
+          return_note?: string | null
+          ship_to_customer_id?: string
+          status?: Database["public"]["Enums"]["customer_order_status"]
+          submitted_at?: string | null
+          submitted_by?: string | null
+          submitted_name_snapshot?: string | null
+          updated_at?: string
         }
         Relationships: [
           {
-            foreignKeyName: "order_line_fulfillments_order_line_id_fkey"
-            columns: ["order_line_id"]
+            foreignKeyName: "customer_orders_approved_by_fkey"
+            columns: ["approved_by"]
             isOneToOne: false
-            referencedRelation: "customer_order_lines"
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "order_line_fulfillments_delivery_line_id_fkey"
-            columns: ["delivery_line_id"]
+            foreignKeyName: "customer_orders_billing_legal_entity_id_fkey"
+            columns: ["billing_legal_entity_id"]
             isOneToOne: false
-            referencedRelation: "delivery_lines"
+            referencedRelation: "legal_entities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "customer_orders_ordered_by_customer_id_fkey"
+            columns: ["ordered_by_customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "customer_orders_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "customer_orders_ship_to_customer_id_fkey"
+            columns: ["ship_to_customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "customer_orders_submitted_by_fkey"
+            columns: ["submitted_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      customer_product_prices: {
+        Row: {
+          created_at: string
+          customer_id: string
+          id: string
+          price_ore: number
+          product_id: string
+          valid_from: string
+          valid_to: string | null
+        }
+        Insert: {
+          created_at?: string
+          customer_id: string
+          id?: string
+          price_ore: number
+          product_id: string
+          valid_from: string
+          valid_to?: string | null
+        }
+        Update: {
+          created_at?: string
+          customer_id?: string
+          id?: string
+          price_ore?: number
+          product_id?: string
+          valid_from?: string
+          valid_to?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "customer_product_prices_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "customer_product_prices_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      customers: {
+        Row: {
+          active: boolean
+          address: string | null
+          billing_legal_entity_id: string | null
+          city: string | null
+          collaboration_text: string | null
+          contact_name: string | null
+          created_at: string
+          default_language: string
+          email: string | null
+          gallery_urls: string[]
+          id: string
+          image_url: string | null
+          instagram: string | null
+          latitude: number | null
+          legal_entity_id: string | null
+          location: string | null
+          logo_url: string | null
+          longitude: number | null
+          menu_intro: string | null
+          menu_material_path: string | null
+          menu_material_url: string | null
+          name: string
+          notes: string | null
+          partnership_level:
+            | Database["public"]["Enums"]["partnership_level"]
+            | null
+          phone: string | null
+          public_profile: string | null
+          public_visible: boolean
+          serving_method: string | null
+          serving_story: string | null
+          slug: string | null
+          supplied_by_customer_id: string | null
+          type: Database["public"]["Enums"]["customer_type"]
+          updated_at: string
+          video_url: string | null
+          website_url: string | null
+        }
+        Insert: {
+          active?: boolean
+          address?: string | null
+          billing_legal_entity_id?: string | null
+          city?: string | null
+          collaboration_text?: string | null
+          contact_name?: string | null
+          created_at?: string
+          default_language?: string
+          email?: string | null
+          gallery_urls?: string[]
+          id?: string
+          image_url?: string | null
+          instagram?: string | null
+          latitude?: number | null
+          legal_entity_id?: string | null
+          location?: string | null
+          logo_url?: string | null
+          longitude?: number | null
+          menu_intro?: string | null
+          menu_material_path?: string | null
+          menu_material_url?: string | null
+          name: string
+          notes?: string | null
+          partnership_level?:
+            | Database["public"]["Enums"]["partnership_level"]
+            | null
+          phone?: string | null
+          public_profile?: string | null
+          public_visible?: boolean
+          serving_method?: string | null
+          serving_story?: string | null
+          slug?: string | null
+          supplied_by_customer_id?: string | null
+          type?: Database["public"]["Enums"]["customer_type"]
+          updated_at?: string
+          video_url?: string | null
+          website_url?: string | null
+        }
+        Update: {
+          active?: boolean
+          address?: string | null
+          billing_legal_entity_id?: string | null
+          city?: string | null
+          collaboration_text?: string | null
+          contact_name?: string | null
+          created_at?: string
+          default_language?: string
+          email?: string | null
+          gallery_urls?: string[]
+          id?: string
+          image_url?: string | null
+          instagram?: string | null
+          latitude?: number | null
+          legal_entity_id?: string | null
+          location?: string | null
+          logo_url?: string | null
+          longitude?: number | null
+          menu_intro?: string | null
+          menu_material_path?: string | null
+          menu_material_url?: string | null
+          name?: string
+          notes?: string | null
+          partnership_level?:
+            | Database["public"]["Enums"]["partnership_level"]
+            | null
+          phone?: string | null
+          public_profile?: string | null
+          public_visible?: boolean
+          serving_method?: string | null
+          serving_story?: string | null
+          slug?: string | null
+          supplied_by_customer_id?: string | null
+          type?: Database["public"]["Enums"]["customer_type"]
+          updated_at?: string
+          video_url?: string | null
+          website_url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "customers_billing_legal_entity_id_fkey"
+            columns: ["billing_legal_entity_id"]
+            isOneToOne: false
+            referencedRelation: "legal_entities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "customers_legal_entity_id_fkey"
+            columns: ["legal_entity_id"]
+            isOneToOne: false
+            referencedRelation: "legal_entities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "customers_supplied_by_customer_id_fkey"
+            columns: ["supplied_by_customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
             referencedColumns: ["id"]
           },
         ]
@@ -495,28 +400,28 @@ export type Database = {
           delivered_at: string
           delivered_by: string | null
           delivered_by_name: string | null
-          registered_by: string | null
-          registered_at: string | null
-          registered_name_snapshot: string | null
           id: string
           note: string | null
           quantity: number
+          registered_at: string | null
+          registered_by: string | null
+          registered_name_snapshot: string | null
           wholesaler_customer_id: string | null
         }
         Insert: {
-          commercial_route?: Database["public"]["Enums"]["commercial_route"]
+          commercial_route: Database["public"]["Enums"]["commercial_route"]
           created_at?: string
           customer_id: string
-          customer_name_snapshot?: string
+          customer_name_snapshot: string
           delivered_at?: string
           delivered_by?: string | null
           delivered_by_name?: string | null
-          registered_by?: string | null
-          registered_at?: string | null
-          registered_name_snapshot?: string | null
           id?: string
           note?: string | null
           quantity: number
+          registered_at?: string | null
+          registered_by?: string | null
+          registered_name_snapshot?: string | null
           wholesaler_customer_id?: string | null
         }
         Update: {
@@ -527,12 +432,12 @@ export type Database = {
           delivered_at?: string
           delivered_by?: string | null
           delivered_by_name?: string | null
-          registered_by?: string | null
-          registered_at?: string | null
-          registered_name_snapshot?: string | null
           id?: string
           note?: string | null
           quantity?: number
+          registered_at?: string | null
+          registered_by?: string | null
+          registered_name_snapshot?: string | null
           wholesaler_customer_id?: string | null
         }
         Relationships: [
@@ -546,6 +451,13 @@ export type Database = {
           {
             foreignKeyName: "deliveries_delivered_by_fkey"
             columns: ["delivered_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "deliveries_registered_by_fkey"
+            columns: ["registered_by"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
@@ -577,7 +489,7 @@ export type Database = {
           gold_lot_id?: string | null
           id?: string
           product_id: string
-          product_name_snapshot?: string
+          product_name_snapshot: string
           quantity?: number
           source_handover_id?: string | null
           unit_price_ore?: number | null
@@ -609,17 +521,289 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "delivery_lines_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "delivery_lines_source_handover_id_fkey"
             columns: ["source_handover_id"]
             isOneToOne: false
             referencedRelation: "gold_lot_handovers"
             referencedColumns: ["id"]
           },
+        ]
+      }
+      gold_lot_cartons: {
+        Row: {
+          carton_code: string
+          carton_seq: number
+          created_at: string
+          gold_lot_id: string
+          id: string
+        }
+        Insert: {
+          carton_code: string
+          carton_seq: number
+          created_at?: string
+          gold_lot_id: string
+          id?: string
+        }
+        Update: {
+          carton_code?: string
+          carton_seq?: number
+          created_at?: string
+          gold_lot_id?: string
+          id?: string
+        }
+        Relationships: [
           {
-            foreignKeyName: "delivery_lines_product_id_fkey"
-            columns: ["product_id"]
+            foreignKeyName: "gold_lot_cartons_gold_lot_id_fkey"
+            columns: ["gold_lot_id"]
             isOneToOne: false
-            referencedRelation: "products"
+            referencedRelation: "gold_lots"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      gold_lot_events: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          event_type: Database["public"]["Enums"]["gold_lot_event_type"]
+          gold_lot_id: string
+          id: string
+          metadata: Json
+          reason: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          event_type: Database["public"]["Enums"]["gold_lot_event_type"]
+          gold_lot_id: string
+          id?: string
+          metadata?: Json
+          reason?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          event_type?: Database["public"]["Enums"]["gold_lot_event_type"]
+          gold_lot_id?: string
+          id?: string
+          metadata?: Json
+          reason?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gold_lot_events_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gold_lot_events_gold_lot_id_fkey"
+            columns: ["gold_lot_id"]
+            isOneToOne: false
+            referencedRelation: "gold_lots"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      gold_lot_handovers: {
+        Row: {
+          cartons: number
+          created_at: string
+          customer_id: string | null
+          gold_lot_id: string
+          handed_over_at: string
+          id: string
+          ownership_after_handover: Database["public"]["Enums"]["handover_ownership"]
+          quantity: number
+          recipient_company: string
+          recipient_person: string | null
+          storage_location: string | null
+        }
+        Insert: {
+          cartons?: number
+          created_at?: string
+          customer_id?: string | null
+          gold_lot_id: string
+          handed_over_at?: string
+          id?: string
+          ownership_after_handover?: Database["public"]["Enums"]["handover_ownership"]
+          quantity: number
+          recipient_company: string
+          recipient_person?: string | null
+          storage_location?: string | null
+        }
+        Update: {
+          cartons?: number
+          created_at?: string
+          customer_id?: string | null
+          gold_lot_id?: string
+          handed_over_at?: string
+          id?: string
+          ownership_after_handover?: Database["public"]["Enums"]["handover_ownership"]
+          quantity?: number
+          recipient_company?: string
+          recipient_person?: string | null
+          storage_location?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gold_lot_handovers_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gold_lot_handovers_gold_lot_id_fkey"
+            columns: ["gold_lot_id"]
+            isOneToOne: false
+            referencedRelation: "gold_lots"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      gold_lot_ingredients: {
+        Row: {
+          best_before: string | null
+          created_at: string
+          gold_lot_id: string
+          id: string
+          ingredient_name: string
+          quantity: number | null
+          quantity_unit: string
+          supplier_id: string
+          supplier_lot_code: string | null
+        }
+        Insert: {
+          best_before?: string | null
+          created_at?: string
+          gold_lot_id: string
+          id?: string
+          ingredient_name: string
+          quantity?: number | null
+          quantity_unit?: string
+          supplier_id: string
+          supplier_lot_code?: string | null
+        }
+        Update: {
+          best_before?: string | null
+          created_at?: string
+          gold_lot_id?: string
+          id?: string
+          ingredient_name?: string
+          quantity?: number | null
+          quantity_unit?: string
+          supplier_id?: string
+          supplier_lot_code?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gold_lot_ingredients_gold_lot_id_fkey"
+            columns: ["gold_lot_id"]
+            isOneToOne: false
+            referencedRelation: "gold_lots"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gold_lot_ingredients_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "ingredient_suppliers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      gold_lot_packages: {
+        Row: {
+          carton_id: string | null
+          created_at: string
+          gold_lot_id: string
+          id: string
+          package_code: string
+          package_seq: number
+          quantity: number
+        }
+        Insert: {
+          carton_id?: string | null
+          created_at?: string
+          gold_lot_id: string
+          id?: string
+          package_code: string
+          package_seq: number
+          quantity: number
+        }
+        Update: {
+          carton_id?: string | null
+          created_at?: string
+          gold_lot_id?: string
+          id?: string
+          package_code?: string
+          package_seq?: number
+          quantity?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gold_lot_packages_carton_id_fkey"
+            columns: ["carton_id"]
+            isOneToOne: false
+            referencedRelation: "gold_lot_cartons"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gold_lot_packages_gold_lot_id_fkey"
+            columns: ["gold_lot_id"]
+            isOneToOne: false
+            referencedRelation: "gold_lots"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      gold_lot_producers: {
+        Row: {
+          created_at: string
+          employee_number_snapshot: string | null
+          full_name_snapshot: string
+          gold_lot_id: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          employee_number_snapshot?: string | null
+          full_name_snapshot: string
+          gold_lot_id: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          employee_number_snapshot?: string | null
+          full_name_snapshot?: string
+          gold_lot_id?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gold_lot_producers_gold_lot_id_fkey"
+            columns: ["gold_lot_id"]
+            isOneToOne: false
+            referencedRelation: "gold_lots"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gold_lot_producers_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -703,278 +887,6 @@ export type Database = {
           },
         ]
       }
-      gold_lot_events: {
-        Row: {
-          created_at: string
-          created_by: string | null
-          event_type: Database["public"]["Enums"]["gold_lot_event_type"]
-          gold_lot_id: string
-          id: string
-          metadata: Json
-          reason: string | null
-        }
-        Insert: {
-          created_at?: string
-          created_by?: string | null
-          event_type: Database["public"]["Enums"]["gold_lot_event_type"]
-          gold_lot_id: string
-          id?: string
-          metadata?: Json
-          reason?: string | null
-        }
-        Update: {
-          created_at?: string
-          created_by?: string | null
-          event_type?: Database["public"]["Enums"]["gold_lot_event_type"]
-          gold_lot_id?: string
-          id?: string
-          metadata?: Json
-          reason?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "gold_lot_events_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "gold_lot_events_gold_lot_id_fkey"
-            columns: ["gold_lot_id"]
-            isOneToOne: false
-            referencedRelation: "gold_lots"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      gold_lot_producers: {
-        Row: {
-          created_at: string
-          employee_number_snapshot: string | null
-          full_name_snapshot: string
-          gold_lot_id: string
-          id: string
-          user_id: string
-        }
-        Insert: {
-          created_at?: string
-          employee_number_snapshot?: string | null
-          full_name_snapshot: string
-          gold_lot_id: string
-          id?: string
-          user_id: string
-        }
-        Update: {
-          created_at?: string
-          employee_number_snapshot?: string | null
-          full_name_snapshot?: string
-          gold_lot_id?: string
-          id?: string
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "gold_lot_producers_gold_lot_id_fkey"
-            columns: ["gold_lot_id"]
-            isOneToOne: false
-            referencedRelation: "gold_lots"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "gold_lot_producers_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      gold_lot_handovers: {
-        Row: {
-          cartons: number
-          created_at: string
-          gold_lot_id: string
-          handed_over_at: string
-          id: string
-          ownership_after_handover: Database["public"]["Enums"]["handover_ownership"]
-          quantity: number
-          recipient_company: string
-          customer_id: string | null
-          recipient_person: string | null
-          storage_location: string | null
-        }
-        Insert: {
-          cartons?: number
-          created_at?: string
-          gold_lot_id: string
-          handed_over_at?: string
-          id?: string
-          ownership_after_handover?: Database["public"]["Enums"]["handover_ownership"]
-          quantity: number
-          recipient_company: string
-          customer_id?: string | null
-          recipient_person?: string | null
-          storage_location?: string | null
-        }
-        Update: {
-          cartons?: number
-          created_at?: string
-          gold_lot_id?: string
-          handed_over_at?: string
-          id?: string
-          ownership_after_handover?: Database["public"]["Enums"]["handover_ownership"]
-          quantity?: number
-          recipient_company?: string
-          customer_id?: string | null
-          recipient_person?: string | null
-          storage_location?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "gold_lot_handovers_gold_lot_id_fkey"
-            columns: ["gold_lot_id"]
-            isOneToOne: false
-            referencedRelation: "gold_lots"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "gold_lot_handovers_customer_id_fkey"
-            columns: ["customer_id"]
-            isOneToOne: false
-            referencedRelation: "customers"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      gold_lot_ingredients: {
-        Row: {
-          best_before: string | null
-          created_at: string
-          gold_lot_id: string
-          id: string
-          ingredient_name: string
-          quantity: number | null
-          quantity_unit: string
-          supplier_id: string
-          supplier_lot_code: string | null
-        }
-        Insert: {
-          best_before?: string | null
-          created_at?: string
-          gold_lot_id: string
-          id?: string
-          ingredient_name: string
-          quantity?: number | null
-          quantity_unit?: string
-          supplier_id: string
-          supplier_lot_code?: string | null
-        }
-        Update: {
-          best_before?: string | null
-          created_at?: string
-          gold_lot_id?: string
-          id?: string
-          ingredient_name?: string
-          quantity?: number | null
-          quantity_unit?: string
-          supplier_id?: string
-          supplier_lot_code?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "gold_lot_ingredients_gold_lot_id_fkey"
-            columns: ["gold_lot_id"]
-            isOneToOne: false
-            referencedRelation: "gold_lots"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "gold_lot_ingredients_supplier_id_fkey"
-            columns: ["supplier_id"]
-            isOneToOne: false
-            referencedRelation: "ingredient_suppliers"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      gold_lot_cartons: {
-        Row: {
-          carton_code: string
-          carton_seq: number
-          created_at: string
-          gold_lot_id: string
-          id: string
-        }
-        Insert: {
-          carton_code: string
-          carton_seq: number
-          created_at?: string
-          gold_lot_id: string
-          id?: string
-        }
-        Update: {
-          carton_code?: string
-          carton_seq?: number
-          created_at?: string
-          gold_lot_id?: string
-          id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "gold_lot_cartons_gold_lot_id_fkey"
-            columns: ["gold_lot_id"]
-            isOneToOne: false
-            referencedRelation: "gold_lots"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      gold_lot_packages: {
-        Row: {
-          carton_id: string | null
-          created_at: string
-          gold_lot_id: string
-          id: string
-          package_code: string
-          package_seq: number
-          quantity: number
-        }
-        Insert: {
-          carton_id?: string | null
-          created_at?: string
-          gold_lot_id: string
-          id?: string
-          package_code: string
-          package_seq: number
-          quantity: number
-        }
-        Update: {
-          carton_id?: string | null
-          created_at?: string
-          gold_lot_id?: string
-          id?: string
-          package_code?: string
-          package_seq?: number
-          quantity?: number
-        }
-        Relationships: [
-          {
-            foreignKeyName: "gold_lot_packages_carton_id_fkey"
-            columns: ["carton_id"]
-            isOneToOne: false
-            referencedRelation: "gold_lot_cartons"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "gold_lot_packages_gold_lot_id_fkey"
-            columns: ["gold_lot_id"]
-            isOneToOne: false
-            referencedRelation: "gold_lots"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       ingredient_suppliers: {
         Row: {
           active: boolean
@@ -1010,6 +922,402 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      invoice_draft_lines: {
+        Row: {
+          active: boolean
+          created_at: string
+          delivery_line_id: string
+          id: string
+          invoice_draft_id: string
+          order_line_fulfillment_id: string | null
+          product_name_snapshot: string
+          quantity: number
+          unit_price_ore: number
+          venue_name_snapshot: string
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          delivery_line_id: string
+          id?: string
+          invoice_draft_id: string
+          order_line_fulfillment_id?: string | null
+          product_name_snapshot: string
+          quantity: number
+          unit_price_ore: number
+          venue_name_snapshot: string
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          delivery_line_id?: string
+          id?: string
+          invoice_draft_id?: string
+          order_line_fulfillment_id?: string | null
+          product_name_snapshot?: string
+          quantity?: number
+          unit_price_ore?: number
+          venue_name_snapshot?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "invoice_draft_lines_delivery_line_id_fkey"
+            columns: ["delivery_line_id"]
+            isOneToOne: false
+            referencedRelation: "delivery_lines"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoice_draft_lines_invoice_draft_id_fkey"
+            columns: ["invoice_draft_id"]
+            isOneToOne: false
+            referencedRelation: "invoice_drafts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoice_draft_lines_order_line_fulfillment_id_fkey"
+            columns: ["order_line_fulfillment_id"]
+            isOneToOne: false
+            referencedRelation: "order_line_fulfillments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      invoice_drafts: {
+        Row: {
+          accounting_invoice_id: string | null
+          accounting_invoice_number: string | null
+          created_at: string
+          dnb_paid_on: string | null
+          dnb_rest_ore: number | null
+          dnb_status: string | null
+          dnb_total_ore: number | null
+          dnb_vat_ore: number | null
+          id: string
+          legal_entity_id: string
+          legal_name_snapshot: string
+          organization_number_snapshot: string
+          payment_due_on: string | null
+          status: Database["public"]["Enums"]["invoice_draft_status"]
+          transfer_status: string
+          updated_at: string
+        }
+        Insert: {
+          accounting_invoice_id?: string | null
+          accounting_invoice_number?: string | null
+          created_at?: string
+          dnb_paid_on?: string | null
+          dnb_rest_ore?: number | null
+          dnb_status?: string | null
+          dnb_total_ore?: number | null
+          dnb_vat_ore?: number | null
+          id?: string
+          legal_entity_id: string
+          legal_name_snapshot: string
+          organization_number_snapshot: string
+          payment_due_on?: string | null
+          status?: Database["public"]["Enums"]["invoice_draft_status"]
+          transfer_status?: string
+          updated_at?: string
+        }
+        Update: {
+          accounting_invoice_id?: string | null
+          accounting_invoice_number?: string | null
+          created_at?: string
+          dnb_paid_on?: string | null
+          dnb_rest_ore?: number | null
+          dnb_status?: string | null
+          dnb_total_ore?: number | null
+          dnb_vat_ore?: number | null
+          id?: string
+          legal_entity_id?: string
+          legal_name_snapshot?: string
+          organization_number_snapshot?: string
+          payment_due_on?: string | null
+          status?: Database["public"]["Enums"]["invoice_draft_status"]
+          transfer_status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "invoice_drafts_legal_entity_id_fkey"
+            columns: ["legal_entity_id"]
+            isOneToOne: false
+            referencedRelation: "legal_entities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      legal_entities: {
+        Row: {
+          accounting_customer_id: string | null
+          accounting_synced_at: string | null
+          brreg_data: Json | null
+          brreg_synced_at: string | null
+          business_address: string | null
+          created_at: string
+          id: string
+          legal_name: string
+          organization_form: string | null
+          organization_number: string
+          parent_legal_entity_id: string | null
+          postal_address: string | null
+          updated_at: string
+          vat_registered: boolean
+        }
+        Insert: {
+          accounting_customer_id?: string | null
+          accounting_synced_at?: string | null
+          brreg_data?: Json | null
+          brreg_synced_at?: string | null
+          business_address?: string | null
+          created_at?: string
+          id?: string
+          legal_name: string
+          organization_form?: string | null
+          organization_number: string
+          parent_legal_entity_id?: string | null
+          postal_address?: string | null
+          updated_at?: string
+          vat_registered?: boolean
+        }
+        Update: {
+          accounting_customer_id?: string | null
+          accounting_synced_at?: string | null
+          brreg_data?: Json | null
+          brreg_synced_at?: string | null
+          business_address?: string | null
+          created_at?: string
+          id?: string
+          legal_name?: string
+          organization_form?: string | null
+          organization_number?: string
+          parent_legal_entity_id?: string | null
+          postal_address?: string | null
+          updated_at?: string
+          vat_registered?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "legal_entities_parent_legal_entity_id_fkey"
+            columns: ["parent_legal_entity_id"]
+            isOneToOne: false
+            referencedRelation: "legal_entities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      order_advance_claims: {
+        Row: {
+          accounting_invoice_id: string | null
+          accounting_invoice_number: string | null
+          amount_ore: number
+          claimed_at: string
+          dnb_received_ore: number | null
+          dnb_rest_ore: number | null
+          dnb_status: string | null
+          dnb_total_ore: number | null
+          dnb_vat_ore: number | null
+          id: string
+          order_id: string
+          payments_checked_at: string | null
+          surplus_ore: number | null
+        }
+        Insert: {
+          accounting_invoice_id?: string | null
+          accounting_invoice_number?: string | null
+          amount_ore: number
+          claimed_at?: string
+          dnb_received_ore?: number | null
+          dnb_rest_ore?: number | null
+          dnb_status?: string | null
+          dnb_total_ore?: number | null
+          dnb_vat_ore?: number | null
+          id?: string
+          order_id: string
+          payments_checked_at?: string | null
+          surplus_ore?: number | null
+        }
+        Update: {
+          accounting_invoice_id?: string | null
+          accounting_invoice_number?: string | null
+          amount_ore?: number
+          claimed_at?: string
+          dnb_received_ore?: number | null
+          dnb_rest_ore?: number | null
+          dnb_status?: string | null
+          dnb_total_ore?: number | null
+          dnb_vat_ore?: number | null
+          id?: string
+          order_id?: string
+          payments_checked_at?: string | null
+          surplus_ore?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "order_advance_claims_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: true
+            referencedRelation: "customer_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      order_advance_offsets: {
+        Row: {
+          amount_ore: number
+          claim_id: string
+          confirmed_at: string | null
+          confirmed_ore: number | null
+          created_at: string
+          id: string
+          invoice_draft_id: string
+        }
+        Insert: {
+          amount_ore: number
+          claim_id: string
+          confirmed_at?: string | null
+          confirmed_ore?: number | null
+          created_at?: string
+          id?: string
+          invoice_draft_id: string
+        }
+        Update: {
+          amount_ore?: number
+          claim_id?: string
+          confirmed_at?: string | null
+          confirmed_ore?: number | null
+          created_at?: string
+          id?: string
+          invoice_draft_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "order_advance_offsets_claim_id_fkey"
+            columns: ["claim_id"]
+            isOneToOne: false
+            referencedRelation: "order_advance_claims"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "order_advance_offsets_invoice_draft_id_fkey"
+            columns: ["invoice_draft_id"]
+            isOneToOne: false
+            referencedRelation: "invoice_drafts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      order_advance_payments: {
+        Row: {
+          amount_ore: number
+          claim_id: string
+          created_at: string
+          external_id: string | null
+          id: string
+          paid_on: string | null
+        }
+        Insert: {
+          amount_ore: number
+          claim_id: string
+          created_at?: string
+          external_id?: string | null
+          id?: string
+          paid_on?: string | null
+        }
+        Update: {
+          amount_ore?: number
+          claim_id?: string
+          created_at?: string
+          external_id?: string | null
+          id?: string
+          paid_on?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "order_advance_payments_claim_id_fkey"
+            columns: ["claim_id"]
+            isOneToOne: false
+            referencedRelation: "order_advance_claims"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      order_delivery_requests: {
+        Row: {
+          created_at: string
+          delivery_id: string | null
+          idempotency_key: string
+          order_id: string
+        }
+        Insert: {
+          created_at?: string
+          delivery_id?: string | null
+          idempotency_key: string
+          order_id: string
+        }
+        Update: {
+          created_at?: string
+          delivery_id?: string | null
+          idempotency_key?: string
+          order_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "order_delivery_requests_delivery_id_fkey"
+            columns: ["delivery_id"]
+            isOneToOne: false
+            referencedRelation: "deliveries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "order_delivery_requests_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "customer_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      order_line_fulfillments: {
+        Row: {
+          created_at: string
+          delivery_line_id: string
+          id: string
+          order_line_id: string
+          quantity: number
+        }
+        Insert: {
+          created_at?: string
+          delivery_line_id: string
+          id?: string
+          order_line_id: string
+          quantity: number
+        }
+        Update: {
+          created_at?: string
+          delivery_line_id?: string
+          id?: string
+          order_line_id?: string
+          quantity?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "order_line_fulfillments_delivery_line_id_fkey"
+            columns: ["delivery_line_id"]
+            isOneToOne: false
+            referencedRelation: "delivery_lines"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "order_line_fulfillments_order_line_id_fkey"
+            columns: ["order_line_id"]
+            isOneToOne: false
+            referencedRelation: "customer_order_lines"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       product_versions: {
         Row: {
@@ -1111,9 +1419,9 @@ export type Database = {
           name_no: string
           nutrition_no: string | null
           packages_per_carton: number | null
+          prep_en: string | null
           prep_no: string | null
           producer_address: string | null
-          prep_en: string | null
           producer_name: string | null
           shelf_life_days: number | null
           sku: string
@@ -1234,6 +1542,51 @@ export type Database = {
           },
         ]
       }
+      shift_report_lines: {
+        Row: {
+          created_at: string
+          id: string
+          next_required_quantity: number | null
+          product_id: string
+          remaining_stock: number
+          shift_report_id: string
+          sold: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          next_required_quantity?: number | null
+          product_id: string
+          remaining_stock?: number
+          shift_report_id: string
+          sold?: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          next_required_quantity?: number | null
+          product_id?: string
+          remaining_stock?: number
+          shift_report_id?: string
+          sold?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "shift_report_lines_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "shift_report_lines_shift_report_id_fkey"
+            columns: ["shift_report_id"]
+            isOneToOne: false
+            referencedRelation: "shift_reports"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       shift_reports: {
         Row: {
           actual_quantity_received: number | null
@@ -1312,50 +1665,127 @@ export type Database = {
           },
         ]
       }
-      shift_report_lines: {
+      shop_launch_notices: {
         Row: {
           created_at: string
+          discovery_source: string | null
+          email: string
           id: string
-          next_required_quantity: number | null
-          product_id: string
-          remaining_stock: number
-          shift_report_id: string
-          sold: number
+          lang: string
+          newsletter_consent: boolean
+          notified_at: string | null
         }
         Insert: {
           created_at?: string
+          discovery_source?: string | null
+          email: string
           id?: string
-          next_required_quantity?: number | null
-          product_id: string
-          remaining_stock?: number
-          shift_report_id: string
-          sold?: number
+          lang: string
+          newsletter_consent?: boolean
+          notified_at?: string | null
         }
         Update: {
           created_at?: string
+          discovery_source?: string | null
+          email?: string
           id?: string
-          next_required_quantity?: number | null
+          lang?: string
+          newsletter_consent?: boolean
+          notified_at?: string | null
+        }
+        Relationships: []
+      }
+      shop_reservations: {
+        Row: {
+          created_at: string
+          expires_at: string
+          id: string
+          payment_kind: string | null
+          pieces: number
+          product_id: string
+          status: string
+        }
+        Insert: {
+          created_at?: string
+          expires_at: string
+          id?: string
+          payment_kind?: string | null
+          pieces: number
+          product_id: string
+          status?: string
+        }
+        Update: {
+          created_at?: string
+          expires_at?: string
+          id?: string
+          payment_kind?: string | null
+          pieces?: number
           product_id?: string
-          remaining_stock?: number
-          shift_report_id?: string
-          sold?: number
+          status?: string
         }
         Relationships: [
           {
-            foreignKeyName: "shift_report_lines_product_id_fkey"
+            foreignKeyName: "shop_reservations_product_id_fkey"
             columns: ["product_id"]
             isOneToOne: false
             referencedRelation: "products"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "shift_report_lines_shift_report_id_fkey"
-            columns: ["shift_report_id"]
-            isOneToOne: false
-            referencedRelation: "shift_reports"
-            referencedColumns: ["id"]
-          },
         ]
+      }
+      shop_waitlist: {
+        Row: {
+          created_at: string
+          discovery_source: string | null
+          email: string
+          flavor_slug: string
+          id: string
+          lang: string
+          newsletter_consent: boolean
+          notified_at: string | null
+        }
+        Insert: {
+          created_at?: string
+          discovery_source?: string | null
+          email: string
+          flavor_slug: string
+          id?: string
+          lang: string
+          newsletter_consent?: boolean
+          notified_at?: string | null
+        }
+        Update: {
+          created_at?: string
+          discovery_source?: string | null
+          email?: string
+          flavor_slug?: string
+          id?: string
+          lang?: string
+          newsletter_consent?: boolean
+          notified_at?: string | null
+        }
+        Relationships: []
+      }
+      user_roles: {
+        Row: {
+          created_at: string
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
       }
       venue_menu_items: {
         Row: {
@@ -1414,549 +1844,24 @@ export type Database = {
           },
         ]
       }
-      user_roles: {
-        Row: {
-          created_at: string
-          id: string
-          role: Database["public"]["Enums"]["app_role"]
-          user_id: string
-        }
-        Insert: {
-          created_at?: string
-          id?: string
-          role: Database["public"]["Enums"]["app_role"]
-          user_id: string
-        }
-        Update: {
-          created_at?: string
-          id?: string
-          role?: Database["public"]["Enums"]["app_role"]
-          user_id?: string
-        }
-        Relationships: []
-      }
-      legal_entities: {
-        Row: {
-          accounting_customer_id: string | null
-          accounting_synced_at: string | null
-          brreg_data: Json | null
-          brreg_synced_at: string | null
-          business_address: string | null
-          created_at: string
-          id: string
-          legal_name: string
-          organization_form: string | null
-          organization_number: string
-          parent_legal_entity_id: string | null
-          postal_address: string | null
-          updated_at: string
-          vat_registered: boolean
-        }
-        Insert: {
-          accounting_customer_id?: string | null
-          accounting_synced_at?: string | null
-          brreg_data?: Json | null
-          brreg_synced_at?: string | null
-          business_address?: string | null
-          created_at?: string
-          id?: string
-          legal_name: string
-          organization_form?: string | null
-          organization_number: string
-          parent_legal_entity_id?: string | null
-          postal_address?: string | null
-          updated_at?: string
-          vat_registered?: boolean
-        }
-        Update: {
-          accounting_customer_id?: string | null
-          accounting_synced_at?: string | null
-          brreg_data?: Json | null
-          brreg_synced_at?: string | null
-          business_address?: string | null
-          created_at?: string
-          id?: string
-          legal_name?: string
-          organization_form?: string | null
-          organization_number?: string
-          parent_legal_entity_id?: string | null
-          postal_address?: string | null
-          updated_at?: string
-          vat_registered?: boolean
-        }
-        Relationships: [
-          {
-            foreignKeyName: "legal_entities_parent_legal_entity_id_fkey"
-            columns: ["parent_legal_entity_id"]
-            isOneToOne: false
-            referencedRelation: "legal_entities"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      customer_product_prices: {
-        Row: {
-          created_at: string
-          customer_id: string
-          id: string
-          price_ore: number
-          product_id: string
-          valid_from: string
-          valid_to: string | null
-        }
-        Insert: {
-          created_at?: string
-          customer_id: string
-          id?: string
-          price_ore: number
-          product_id: string
-          valid_from: string
-          valid_to?: string | null
-        }
-        Update: {
-          created_at?: string
-          customer_id?: string
-          id?: string
-          price_ore?: number
-          product_id?: string
-          valid_from?: string
-          valid_to?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "customer_product_prices_customer_id_fkey"
-            columns: ["customer_id"]
-            isOneToOne: false
-            referencedRelation: "customers"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "customer_product_prices_product_id_fkey"
-            columns: ["product_id"]
-            isOneToOne: false
-            referencedRelation: "products"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      invoice_drafts: {
-        Row: {
-          accounting_invoice_id: string | null
-          accounting_invoice_number: string | null
-          created_at: string
-          id: string
-          legal_entity_id: string
-          legal_name_snapshot: string
-          organization_number_snapshot: string
-          status: Database["public"]["Enums"]["invoice_draft_status"]
-          updated_at: string
-          transfer_status: string
-          transfer_reference: string | null
-          dnb_status: string | null
-          payment_due_on: string | null
-          vat_percent: number | null
-          transfer_error: string | null
-          transfer_attempted_at: string | null
-          transferred_at: string | null
-          dnb_paid_on: string | null
-          dnb_total_ore: number | null
-          dnb_rest_ore: number | null
-          dnb_vat_ore: number | null
-        }
-        Insert: {
-          accounting_invoice_id?: string | null
-          accounting_invoice_number?: string | null
-          created_at?: string
-          id?: string
-          legal_entity_id: string
-          legal_name_snapshot?: string
-          organization_number_snapshot?: string
-          status?: Database["public"]["Enums"]["invoice_draft_status"]
-          updated_at?: string
-          transfer_status?: string
-          transfer_reference?: string | null
-          dnb_status?: string | null
-          payment_due_on?: string | null
-          vat_percent?: number | null
-          transfer_error?: string | null
-          transfer_attempted_at?: string | null
-          transferred_at?: string | null
-          dnb_paid_on?: string | null
-          dnb_total_ore?: number | null
-          dnb_rest_ore?: number | null
-          dnb_vat_ore?: number | null
-        }
-        Update: {
-          accounting_invoice_id?: string | null
-          accounting_invoice_number?: string | null
-          created_at?: string
-          id?: string
-          legal_entity_id?: string
-          legal_name_snapshot?: string
-          organization_number_snapshot?: string
-          status?: Database["public"]["Enums"]["invoice_draft_status"]
-          updated_at?: string
-          transfer_status?: string
-          transfer_reference?: string | null
-          dnb_status?: string | null
-          payment_due_on?: string | null
-          vat_percent?: number | null
-          transfer_error?: string | null
-          transfer_attempted_at?: string | null
-          transferred_at?: string | null
-          dnb_paid_on?: string | null
-          dnb_total_ore?: number | null
-          dnb_rest_ore?: number | null
-          dnb_vat_ore?: number | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "invoice_drafts_legal_entity_id_fkey"
-            columns: ["legal_entity_id"]
-            isOneToOne: false
-            referencedRelation: "legal_entities"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      invoice_draft_lines: {
-        Row: {
-          active: boolean
-          created_at: string
-          delivery_line_id: string
-          id: string
-          invoice_draft_id: string
-          order_line_fulfillment_id: string | null
-          product_name_snapshot: string
-          quantity: number
-          unit_price_ore: number
-          venue_name_snapshot: string
-        }
-        Insert: {
-          active?: boolean
-          created_at?: string
-          delivery_line_id: string
-          id?: string
-          invoice_draft_id: string
-          order_line_fulfillment_id?: string | null
-          product_name_snapshot?: string
-          quantity?: number
-          unit_price_ore?: number
-          venue_name_snapshot?: string
-        }
-        Update: {
-          active?: boolean
-          created_at?: string
-          delivery_line_id?: string
-          id?: string
-          invoice_draft_id?: string
-          order_line_fulfillment_id?: string | null
-          product_name_snapshot?: string
-          quantity?: number
-          unit_price_ore?: number
-          venue_name_snapshot?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "invoice_draft_lines_invoice_draft_id_fkey"
-            columns: ["invoice_draft_id"]
-            isOneToOne: false
-            referencedRelation: "invoice_drafts"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "invoice_draft_lines_delivery_line_id_fkey"
-            columns: ["delivery_line_id"]
-            isOneToOne: false
-            referencedRelation: "delivery_lines"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "invoice_draft_lines_order_line_fulfillment_id_fkey"
-            columns: ["order_line_fulfillment_id"]
-            isOneToOne: false
-            referencedRelation: "order_line_fulfillments"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      invoice_transfer_events: {
-        Row: {
-          id: string
-          invoice_draft_id: string
-          outcome: string
-          external_invoice_id: string | null
-          detail: string | null
-          created_at: string
-        }
-        Insert: {
-          id?: string
-          invoice_draft_id: string
-          outcome: string
-          external_invoice_id?: string | null
-          detail?: string | null
-          created_at?: string
-        }
-        Update: {
-          id?: string
-          invoice_draft_id?: string
-          outcome?: string
-          external_invoice_id?: string | null
-          detail?: string | null
-          created_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "invoice_transfer_events_invoice_draft_id_fkey"
-            columns: ["invoice_draft_id"]
-            isOneToOne: false
-            referencedRelation: "invoice_drafts"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      order_advance_claims: {
-        Row: {
-          id: string
-          order_id: string
-          amount_ore: number
-          claimed_at: string
-          accounting_invoice_id: string | null
-          accounting_invoice_number: string | null
-          dnb_status: string | null
-          dnb_total_ore: number | null
-          dnb_rest_ore: number | null
-          dnb_vat_ore: number | null
-          dnb_received_ore: number | null
-          payments_checked_at: string | null
-          surplus_ore: number | null
-        }
-        Insert: {
-          id?: string
-          order_id: string
-          amount_ore: number
-          claimed_at?: string
-          accounting_invoice_id?: string | null
-          accounting_invoice_number?: string | null
-          dnb_status?: string | null
-          dnb_total_ore?: number | null
-          dnb_rest_ore?: number | null
-          dnb_vat_ore?: number | null
-          dnb_received_ore?: number | null
-          payments_checked_at?: string | null
-          surplus_ore?: number | null
-        }
-        Update: {
-          id?: string
-          order_id?: string
-          amount_ore?: number
-          claimed_at?: string
-          accounting_invoice_id?: string | null
-          accounting_invoice_number?: string | null
-          dnb_status?: string | null
-          dnb_total_ore?: number | null
-          dnb_rest_ore?: number | null
-          dnb_vat_ore?: number | null
-          dnb_received_ore?: number | null
-          payments_checked_at?: string | null
-          surplus_ore?: number | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "order_advance_claims_order_id_fkey"
-            columns: ["order_id"]
-            isOneToOne: true
-            referencedRelation: "customer_orders"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      order_advance_payments: {
-        Row: {
-          id: string
-          claim_id: string
-          amount_ore: number
-          paid_on: string | null
-          external_id: string | null
-          created_at: string
-        }
-        Insert: {
-          id?: string
-          claim_id: string
-          amount_ore: number
-          paid_on?: string | null
-          external_id?: string | null
-          created_at?: string
-        }
-        Update: {
-          id?: string
-          claim_id?: string
-          amount_ore?: number
-          paid_on?: string | null
-          external_id?: string | null
-          created_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "order_advance_payments_claim_id_fkey"
-            columns: ["claim_id"]
-            isOneToOne: false
-            referencedRelation: "order_advance_claims"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      order_advance_offsets: {
-        Row: {
-          id: string
-          claim_id: string
-          invoice_draft_id: string
-          amount_ore: number
-          created_at: string
-          confirmed_ore: number | null
-          confirmed_at: string | null
-        }
-        Insert: {
-          id?: string
-          claim_id: string
-          invoice_draft_id: string
-          amount_ore: number
-          created_at?: string
-          confirmed_ore?: number | null
-          confirmed_at?: string | null
-        }
-        Update: {
-          id?: string
-          claim_id?: string
-          invoice_draft_id?: string
-          amount_ore?: number
-          created_at?: string
-          confirmed_ore?: number | null
-          confirmed_at?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "order_advance_offsets_claim_id_fkey"
-            columns: ["claim_id"]
-            isOneToOne: false
-            referencedRelation: "order_advance_claims"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "order_advance_offsets_invoice_draft_id_fkey"
-            columns: ["invoice_draft_id"]
-            isOneToOne: false
-            referencedRelation: "invoice_drafts"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      shop_launch_notices: {
-        Row: {
-          id: string
-          email: string
-          lang: string
-          discovery_source: string | null
-          newsletter_consent: boolean
-          created_at: string
-          notified_at: string | null
-        }
-        Insert: {
-          id?: string
-          email: string
-          lang: string
-          discovery_source?: string | null
-          newsletter_consent?: boolean
-          created_at?: string
-          notified_at?: string | null
-        }
-        Update: {
-          id?: string
-          email?: string
-          lang?: string
-          discovery_source?: string | null
-          newsletter_consent?: boolean
-          created_at?: string
-          notified_at?: string | null
-        }
-        Relationships: []
-      }
-      shop_waitlist: {
-        Row: {
-          id: string
-          email: string
-          flavor_slug: string
-          lang: string
-          discovery_source: string | null
-          newsletter_consent: boolean
-          created_at: string
-          notified_at: string | null
-        }
-        Insert: {
-          id?: string
-          email: string
-          flavor_slug: string
-          lang: string
-          discovery_source?: string | null
-          newsletter_consent?: boolean
-          created_at?: string
-          notified_at?: string | null
-        }
-        Update: {
-          id?: string
-          email?: string
-          flavor_slug?: string
-          lang?: string
-          discovery_source?: string | null
-          newsletter_consent?: boolean
-          created_at?: string
-          notified_at?: string | null
-        }
-        Relationships: []
-      }
-      shop_reservations: {
-        Row: {
-          id: string
-          product_id: string
-          pieces: number
-          status: string
-          payment_kind: string | null
-          expires_at: string
-          created_at: string
-        }
-        Insert: {
-          id?: string
-          product_id: string
-          pieces: number
-          status?: string
-          payment_kind?: string | null
-          expires_at: string
-          created_at?: string
-        }
-        Update: {
-          id?: string
-          product_id?: string
-          pieces?: number
-          status?: string
-          payment_kind?: string | null
-          expires_at?: string
-          created_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "shop_reservations_product_id_fkey"
-            columns: ["product_id"]
-            isOneToOne: false
-            referencedRelation: "products"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
+      advance_received_ore: { Args: { p_claim_id: string }; Returns: number }
+      attach_advance_document: {
+        Args: {
+          p_accounting_invoice_id: string
+          p_accounting_invoice_number: string
+          p_order_id: string
+        }
+        Returns: undefined
+      }
+      can_approve_orders: { Args: never; Returns: boolean }
+      can_manage_commercial: { Args: never; Returns: boolean }
+      can_manage_operations: { Args: never; Returns: boolean }
+      can_register_orders: { Args: never; Returns: boolean }
       current_customer_id: { Args: never; Returns: string }
       has_role: {
         Args: {
@@ -1966,146 +1871,154 @@ export type Database = {
         Returns: boolean
       }
       is_admin: { Args: never; Returns: boolean }
-      can_manage_operations: { Args: never; Returns: boolean }
-      can_manage_commercial: { Args: never; Returns: boolean }
-      claim_dnb_transfer: { Args: { p_id: string }; Returns: boolean }
-      record_dnb_transfer: {
-        Args: {
-          p_id: string
-          p_transfer_status: string
-          p_dnb_status: string | null
-          p_accounting_invoice_id: string | null
-          p_accounting_invoice_number: string | null
-          p_transfer_error: string | null
-          p_outcome: string
-          p_detail: string | null
-          p_dnb_paid_on: string | null
-          p_dnb_total_ore: number | null
-          p_dnb_rest_ore: number | null
-          p_dnb_vat_ore: number | null
-        }
-        Returns: undefined
-      }
-      prepare_order_advance: {
-        Args: { p_order_id: string; p_percent: number; p_basis_ore: number }
-        Returns: string
-      }
-      attach_advance_document: {
-        Args: {
-          p_order_id: string
-          p_accounting_invoice_id: string
-          p_accounting_invoice_number: string
-        }
-        Returns: undefined
-      }
-      record_advance_offset: {
-        Args: {
-          p_order_id: string
-          p_invoice_draft_id: string
-          p_ceiling_ore: number
-          p_surplus_ore: number
-        }
-        Returns: number
-      }
-      record_advance_check: {
-        Args: {
-          p_order_id: string
-          p_payments: Json
-          p_use_balance: boolean
-          p_dnb_received_ore: number | null
-          p_has_rest: boolean
-          p_dnb_rest_ore: number | null
-          p_has_total: boolean
-          p_dnb_total_ore: number | null
-          p_has_vat: boolean
-          p_dnb_vat_ore: number | null
-        }
-        Returns: undefined
-      }
-      record_advance_confirmation: {
-        Args: {
-          p_order_id: string
-          p_invoice_draft_id: string
-          p_confirmed_ore: number
-        }
-        Returns: number
-      }
-      reserve_shop_pieces: {
-        Args: {
-          p_product_id: string
-          p_pieces: number
-          p_physical_pieces: number
-          p_expires_at: string
-          p_payment_kind?: string
-        }
+      next_gold_lot_code: {
+        Args: { p_lot_letter: string; p_production_date: string }
         Returns: string
       }
       order_invoice_lines: {
         Args: { p_order_id: string }
         Returns: {
+          accounting_invoice_id: string
+          accounting_invoice_number: string
+          active: boolean
+          dnb_paid_on: string
+          dnb_rest_ore: number
+          dnb_status: string
+          dnb_total_ore: number
+          dnb_vat_ore: number
           draft_id: string
           draft_status: string
-          transfer_status: string
-          dnb_status: string | null
-          accounting_invoice_id: string | null
-          accounting_invoice_number: string | null
-          payment_due_on: string | null
-          dnb_paid_on: string | null
-          dnb_total_ore: number | null
-          dnb_rest_ore: number | null
-          dnb_vat_ore: number | null
           fulfillment_id: string
+          payment_due_on: string
           quantity: number
+          transfer_status: string
           unit_price_ore: number
-          active: boolean
         }[]
       }
-      next_gold_lot_code: {
-        Args: { p_lot_letter: string; p_production_date: string }
+      prepare_order_advance: {
+        Args: { p_basis_ore: number; p_order_id: string; p_percent: number }
         Returns: string
       }
-      slugify_name: { Args: { input: string }; Returns: string }
+      price_ore_at: {
+        Args: { p_customer_id: string; p_on: string; p_product_id: string }
+        Returns: number
+      }
+      record_advance_check: {
+        Args: {
+          p_dnb_received_ore: number
+          p_dnb_rest_ore: number
+          p_dnb_total_ore: number
+          p_dnb_vat_ore: number
+          p_has_rest: boolean
+          p_has_total: boolean
+          p_has_vat: boolean
+          p_order_id: string
+          p_payments: Json
+          p_use_balance: boolean
+        }
+        Returns: undefined
+      }
+      record_advance_confirmation: {
+        Args: {
+          p_confirmed_ore: number
+          p_invoice_draft_id: string
+          p_order_id: string
+        }
+        Returns: number
+      }
+      record_advance_offset: {
+        Args: {
+          p_ceiling_ore: number
+          p_invoice_draft_id: string
+          p_order_id: string
+          p_surplus_ore: number
+        }
+        Returns: number
+      }
+      record_dnb_transfer: {
+        Args: {
+          p_accounting_invoice_id: string
+          p_accounting_invoice_number: string
+          p_detail: string
+          p_dnb_paid_on: string
+          p_dnb_rest_ore: number
+          p_dnb_status: string
+          p_dnb_total_ore: number
+          p_dnb_vat_ore: number
+          p_id: string
+          p_outcome: string
+          p_transfer_error: string
+          p_transfer_status: string
+        }
+        Returns: undefined
+      }
       register_order_delivery: {
         Args: {
-          p_order_id: string
+          p_delivered_by: string
           p_delivered_on: string
           p_idempotency_key: string
           p_lines: Json
-          p_delivered_by: string
+          p_order_id: string
         }
         Returns: string
       }
+      reserve_shop_pieces: {
+        Args: {
+          p_expires_at: string
+          p_payment_kind?: string
+          p_physical_pieces: number
+          p_pieces: number
+          p_product_id: string
+        }
+        Returns: string
+      }
+      resolve_billing_legal_entity: {
+        Args: { p_customer_id: string }
+        Returns: string
+      }
+      slugify_name: { Args: { input: string }; Returns: string }
       submit_shift_report: {
         Args: {
-          p_actual_quantity_received?: number | null
+          p_actual_quantity_received?: number
           p_customer_id: string
-          p_delivery_correct?: boolean | null
-          p_delivery_id?: string | null
-          p_guest_feedback_rating?:
-            | Database["public"]["Enums"]["feedback_rating"]
-            | null
-          p_guest_feedback_text?: string | null
+          p_delivery_correct?: boolean
+          p_delivery_id?: string
+          p_guest_feedback_rating?: Database["public"]["Enums"]["feedback_rating"]
+          p_guest_feedback_text?: string
           p_lines?: Json
           p_preparation_issue?: boolean
-          p_preparation_issue_text?: string | null
+          p_preparation_issue_text?: string
         }
         Returns: string
       }
     }
     Enums: {
-      app_role: "admin" | "ops" | "employee" | "venue"
-      feedback_rating: "positive" | "mixed" | "negative"
-      gold_lot_event_type: "created" | "packed" | "handover" | "closed" | "reopened" | "recalled"
-      gold_lot_status: "produced" | "packed" | "handed_over" | "closed" | "recalled"
+      app_role: "admin" | "venue" | "ops" | "employee"
       commercial_route: "direct" | "via_wholesaler"
-      crm_activity_kind: "call" | "email" | "meeting" | "tasting" | "note"
-      customer_order_status: "draft" | "pending_confirmation" | "changes_requested" | "confirmed" | "cancelled"
-      customer_segment: "restaurant" | "hotel" | "event" | "bar"
+      customer_order_status:
+        | "draft"
+        | "pending_confirmation"
+        | "confirmed"
+        | "cancelled"
+        | "changes_requested"
       customer_type: "venue" | "wholesaler"
+      feedback_rating: "positive" | "mixed" | "negative"
+      gold_lot_event_type:
+        | "created"
+        | "packed"
+        | "handover"
+        | "closed"
+        | "recalled"
+        | "reopened"
+      gold_lot_status:
+        | "produced"
+        | "handed_over"
+        | "closed"
+        | "recalled"
+        | "packed"
       handover_ownership: "gold" | "villa"
       invoice_draft_status: "draft" | "sent" | "credited" | "cancelled"
       partnership_level: "gold_partner" | "gold_supply"
-      sales_status: "prospect" | "contacted" | "interested" | "tasting" | "pilot_order" | "active_customer" | "waiting" | "not_relevant"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -2233,19 +2146,35 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: ["admin", "ops", "employee", "venue"],
-      feedback_rating: ["positive", "mixed", "negative"],
-      gold_lot_event_type: ["created", "packed", "handover", "closed", "reopened", "recalled"],
-      gold_lot_status: ["produced", "packed", "handed_over", "closed", "recalled"],
+      app_role: ["admin", "venue", "ops", "employee"],
       commercial_route: ["direct", "via_wholesaler"],
-      crm_activity_kind: ["call", "email", "meeting", "tasting", "note"],
-      customer_order_status: ["draft", "pending_confirmation", "changes_requested", "confirmed", "cancelled"],
-      customer_segment: ["restaurant", "hotel", "event", "bar"],
+      customer_order_status: [
+        "draft",
+        "pending_confirmation",
+        "confirmed",
+        "cancelled",
+        "changes_requested",
+      ],
       customer_type: ["venue", "wholesaler"],
+      feedback_rating: ["positive", "mixed", "negative"],
+      gold_lot_event_type: [
+        "created",
+        "packed",
+        "handover",
+        "closed",
+        "recalled",
+        "reopened",
+      ],
+      gold_lot_status: [
+        "produced",
+        "handed_over",
+        "closed",
+        "recalled",
+        "packed",
+      ],
       handover_ownership: ["gold", "villa"],
       invoice_draft_status: ["draft", "sent", "credited", "cancelled"],
       partnership_level: ["gold_partner", "gold_supply"],
-      sales_status: ["prospect", "contacted", "interested", "tasting", "pilot_order", "active_customer", "waiting", "not_relevant"],
     },
   },
 } as const
