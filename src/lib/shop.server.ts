@@ -182,7 +182,7 @@ async function writeWaitlist(
     .from("shop_waitlist")
     .update({
       lang: input.lang,
-      discovery_source: input.discovery,
+      ...(input.discovery ? { discovery_source: input.discovery } : {}),
       newsletter_consent: input.newsletterConsent,
       notified_at: null,
     })
@@ -212,7 +212,7 @@ async function writeLaunchNotice(
     .from("shop_launch_notices")
     .update({
       lang: input.lang,
-      discovery_source: input.discovery,
+      ...(input.discovery ? { discovery_source: input.discovery } : {}),
       newsletter_consent: input.newsletterConsent,
       notified_at: null,
     })

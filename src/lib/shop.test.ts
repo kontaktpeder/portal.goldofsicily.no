@@ -219,6 +219,27 @@ test("waitlist input keeps newsletter consent separate and rejects a missing cho
   });
   assert.equal(launchOnly?.launchNotice, true);
   assert.equal(launchOnly?.restockNotice, false);
+  const quiet = parseWaitlist({
+    email: "ada@example.com",
+    flavor: "nduja",
+    lang: "no",
+    newsletterConsent: false,
+    launchNotice: true,
+    restockNotice: false,
+  });
+  assert.equal(quiet?.discovery, null);
+  assert.equal(
+    parseWaitlist({
+      email: "ada@example.com",
+      flavor: "nduja",
+      lang: "no",
+      discovery: "billboard",
+      newsletterConsent: false,
+      launchNotice: true,
+      restockNotice: false,
+    }),
+    null,
+  );
   assert.equal(
     parseWaitlist({
       email: "ada@example.com",

@@ -333,11 +333,19 @@ export type WaitlistInput = {
   email: string;
   flavor: ShopFlavorSlug;
   lang: "no" | "en";
-  discovery: DiscoverySource;
+  discovery: DiscoverySource | null;
   newsletterConsent: boolean;
   launchNotice: boolean;
   restockNotice: boolean;
 };
+
+function readDiscovery(value: unknown): DiscoverySource | null | undefined {
+  if (value == null || value === "") return null;
+  if (typeof value !== "string") return undefined;
+  return (DISCOVERY_SOURCES as readonly string[]).includes(value)
+    ? (value as DiscoverySource)
+    : undefined;
+}
 
 /** Older clients omit the flags and stay on the flavor waitlist only. */
 export function noticeFlags(
@@ -368,17 +376,15 @@ export function parseWaitlist(body: unknown): WaitlistInput | null {
   const consentRaw = row["newsletterConsent"];
   const langRaw = row["lang"];
   if (typeof emailRaw !== "string" || typeof flavorRaw !== "string") return null;
-  if (typeof discoveryRaw !== "string" || typeof consentRaw !== "boolean") return null;
+  if (typeof consentRaw !== "boolean") return null;
   const email = normalizeEmail(emailRaw);
   const flavor = (SHOP_FLAVOR_SLUGS as readonly string[]).includes(flavorRaw)
     ? (flavorRaw as ShopFlavorSlug)
     : null;
   const lang = langRaw === "en" || langRaw === "no" ? langRaw : null;
-  const discovery = (DISCOVERY_SOURCES as readonly string[]).includes(discoveryRaw)
-    ? (discoveryRaw as DiscoverySource)
-    : null;
+  const discovery = readDiscovery(discoveryRaw);
   const notices = noticeFlags(row["launchNotice"], row["restockNotice"]);
-  if (!email || !flavor || !lang || !discovery || !notices) return null;
+  if (!email || !flavor || !lang || discovery === undefined || !notices) return null;
   return {
     email,
     flavor,

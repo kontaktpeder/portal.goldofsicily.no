@@ -1856,7 +1856,7 @@ export type Database = {
           id: string
           email: string
           lang: string
-          discovery_source: string
+          discovery_source: string | null
           newsletter_consent: boolean
           created_at: string
           notified_at: string | null
@@ -1865,7 +1865,7 @@ export type Database = {
           id?: string
           email: string
           lang: string
-          discovery_source: string
+          discovery_source?: string | null
           newsletter_consent?: boolean
           created_at?: string
           notified_at?: string | null
@@ -1874,7 +1874,7 @@ export type Database = {
           id?: string
           email?: string
           lang?: string
-          discovery_source?: string
+          discovery_source?: string | null
           newsletter_consent?: boolean
           created_at?: string
           notified_at?: string | null
@@ -1887,7 +1887,7 @@ export type Database = {
           email: string
           flavor_slug: string
           lang: string
-          discovery_source: string
+          discovery_source: string | null
           newsletter_consent: boolean
           created_at: string
           notified_at: string | null
@@ -1897,7 +1897,7 @@ export type Database = {
           email: string
           flavor_slug: string
           lang: string
-          discovery_source: string
+          discovery_source?: string | null
           newsletter_consent?: boolean
           created_at?: string
           notified_at?: string | null
@@ -1907,7 +1907,7 @@ export type Database = {
           email?: string
           flavor_slug?: string
           lang?: string
-          discovery_source?: string
+          discovery_source?: string | null
           newsletter_consent?: boolean
           created_at?: string
           notified_at?: string | null
