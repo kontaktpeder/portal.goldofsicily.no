@@ -10,6 +10,7 @@ import {
   flavorSlug,
   parseWaitlist,
   physicalPiecesByProduct,
+  canOpenCheckout,
   publicShop,
   reservationDecision,
   restockMessage,
@@ -120,6 +121,35 @@ test("waitlist mail goes only to people still waiting on a flavor that has a box
   assert.doesNotMatch(restockMessage("no", "’Nduja").text, /@/);
 });
 
+test("product text stays unverified, so checkout cannot open on a payment flag alone", () => {
+  const written = {
+    ingredients: "ris",
+    allergens: "melk",
+    storage: "fryst",
+    prep: "ovn",
+  };
+  assert.equal(canOpenCheckout(true, { verified: false, ...written }), false);
+  assert.equal(canOpenCheckout(false, { verified: true, ...written }), false);
+  assert.equal(canOpenCheckout(true, { verified: true, ...written, allergens: " " }), false);
+  assert.equal(canOpenCheckout(true, { verified: true, ...written }), true);
+  const shop = publicShop(
+    shopFlavors(
+      [
+        { id: "p1", slug: "nduja", lotLetter: "N", active: true, facts: written },
+        { id: "p2", slug: "truffle", lotLetter: "T", active: true },
+      ],
+      new Map([["p1", 50]]),
+    ),
+    true,
+  );
+  assert.equal(shop.purchaseGate.open, false);
+  assert.equal(shop.paymentOpen, false);
+  assert.equal(shop.flavors[0]?.facts.verified, false);
+  assert.equal(shop.flavors[0]?.facts.ingredients, "ris");
+  assert.ok(shop.purchaseGate.missing.includes("nduja:allergens"));
+  assert.ok(shop.purchaseGate.missing.includes("truffle:storage"));
+});
+
 test("waitlist input keeps newsletter consent separate and rejects a missing choice", () => {
   const parsed = parseWaitlist({
     email: " Ada@Example.com ",
@@ -130,6 +160,31 @@ test("waitlist input keeps newsletter consent separate and rejects a missing cho
   });
   assert.equal(parsed?.email, "ada@example.com");
   assert.equal(parsed?.newsletterConsent, false);
+  assert.equal(parsed?.launchNotice, false);
+  assert.equal(parsed?.restockNotice, true);
+  const launchOnly = parseWaitlist({
+    email: "ada@example.com",
+    flavor: "nduja",
+    lang: "no",
+    discovery: "friends",
+    newsletterConsent: true,
+    launchNotice: true,
+    restockNotice: false,
+  });
+  assert.equal(launchOnly?.launchNotice, true);
+  assert.equal(launchOnly?.restockNotice, false);
+  assert.equal(
+    parseWaitlist({
+      email: "ada@example.com",
+      flavor: "nduja",
+      lang: "no",
+      discovery: "friends",
+      newsletterConsent: false,
+      launchNotice: false,
+      restockNotice: false,
+    }),
+    null,
+  );
   assert.equal(
     parseWaitlist({
       email: "ada@example.com",

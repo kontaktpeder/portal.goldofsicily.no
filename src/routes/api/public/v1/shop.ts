@@ -23,7 +23,7 @@ export const Route = createFileRoute("/api/public/v1/shop")({
       },
       POST: async ({ request }) => {
         const { parseWaitlist } = await import("@/lib/shop");
-        const { notifyAvailableFlavors, saveWaitlist } = await import("@/lib/shop.server");
+        const { saveShopNotices } = await import("@/lib/shop.server");
         let body: unknown;
         try {
           body = await request.json();
@@ -32,9 +32,8 @@ export const Route = createFileRoute("/api/public/v1/shop")({
         }
         const input = parseWaitlist(body);
         if (!input) return shopJson(request, { error: "invalid" }, 400);
-        const saved = await saveWaitlist(input);
+        const saved = await saveShopNotices(input);
         if (!saved.ok) return shopJson(request, { error: "unavailable" }, 503);
-        await notifyAvailableFlavors();
         return shopJson(request, { ok: true });
       },
       OPTIONS: async ({ request }) => corsPreflight(request, SHOP_METHODS),

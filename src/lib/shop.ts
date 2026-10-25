@@ -17,6 +17,48 @@ const FLAVOR_LABEL: Record<ShopFlavorSlug, { nameNo: string; nameEn: string }> =
   truffle: { nameNo: "Trøffel", nameEn: "Truffle" },
 };
 
+export const CONSUMER_FACT_KEYS = ["ingredients", "allergens", "storage", "prep"] as const;
+export type ConsumerFactKey = (typeof CONSUMER_FACT_KEYS)[number];
+
+export type FlavorFacts = {
+  verified: boolean;
+  ingredients: string | null;
+  allergens: string | null;
+  storage: string | null;
+  prep: string | null;
+};
+
+export type FactText = {
+  ingredients: string | null;
+  allergens: string | null;
+  storage: string | null;
+  prep: string | null;
+};
+
+function blankFacts(): FactText {
+  return { ingredients: null, allergens: null, storage: null, prep: null };
+}
+
+function filledFact(value: string | null | undefined): string | null {
+  if (typeof value !== "string") return null;
+  const text = value.trim();
+  return text.length > 0 ? text : null;
+}
+
+export function consumerFactGaps(slug: string, facts: FlavorFacts): string[] {
+  const gaps: string[] = [];
+  for (const key of CONSUMER_FACT_KEYS) {
+    if (!facts.verified || !facts[key]?.trim()) gaps.push(`${slug}:${key}`);
+  }
+  return gaps;
+}
+
+/** A later payment flag is not enough. Mandatory facts must be verified and filled in. */
+export function canOpenCheckout(paymentRequested: boolean, facts: FlavorFacts): boolean {
+  if (!paymentRequested || !facts.verified) return false;
+  return CONSUMER_FACT_KEYS.every((key) => Boolean(facts[key]?.trim()));
+}
+
 /** Stripe is already paid. Invoice still follows the existing invoice flow. */
 export function saleNeedsInvoice(kind: PaymentKind): boolean {
   return kind === "invoice";
@@ -87,6 +129,7 @@ export type ShopProduct = {
   slug: string;
   lotLetter: string | null;
   active: boolean;
+  facts?: FactText;
 };
 
 export function flavorSlug(product: {
@@ -105,6 +148,7 @@ export type ShopFlavorView = {
   nameEn: string;
   pieces: number;
   boxes50: number;
+  facts: FlavorFacts;
 };
 
 export function shopFlavors(
@@ -112,20 +156,34 @@ export function shopFlavors(
   piecesByProduct: ReadonlyMap<string, number>,
 ): ShopFlavorView[] {
   const pieces = new Map<ShopFlavorSlug, number>(SHOP_FLAVOR_SLUGS.map((slug) => [slug, 0]));
+  const texts = new Map<ShopFlavorSlug, FactText>(
+    SHOP_FLAVOR_SLUGS.map((slug) => [slug, blankFacts()]),
+  );
   for (const product of products) {
     if (!product.active) continue;
     const slug = flavorSlug(product);
     if (!slug) continue;
     pieces.set(slug, (pieces.get(slug) ?? 0) + (piecesByProduct.get(product.id) ?? 0));
+    const incoming = product.facts;
+    if (!incoming) continue;
+    const current = texts.get(slug) ?? blankFacts();
+    texts.set(slug, {
+      ingredients: current.ingredients ?? filledFact(incoming.ingredients),
+      allergens: current.allergens ?? filledFact(incoming.allergens),
+      storage: current.storage ?? filledFact(incoming.storage),
+      prep: current.prep ?? filledFact(incoming.prep),
+    });
   }
   return SHOP_FLAVOR_SLUGS.map((slug) => {
     const count = pieces.get(slug) ?? 0;
+    const text = texts.get(slug) ?? blankFacts();
     return {
       slug,
       nameNo: FLAVOR_LABEL[slug].nameNo,
       nameEn: FLAVOR_LABEL[slug].nameEn,
       pieces: count,
       boxes50: boxesFromPieces(count, PACK_FIFTY),
+      facts: { verified: false, ...text },
     };
   });
 }
@@ -136,6 +194,7 @@ export type PublicShop = {
   currency: "NOK";
   vatIncluded: true;
   flavors: Array<Omit<ShopFlavorView, "pieces">>;
+  purchaseGate: { open: false; missing: string[] };
   packs: {
     six: { size: 6; priceOre: typeof PRICE_SIX_ORE; purchasable: false; status: "coming_soon" };
     fifty: { size: 50; priceOre: typeof PRICE_FIFTY_ORE; purchasable: false; status: "stock" };
@@ -143,17 +202,23 @@ export type PublicShop = {
 };
 
 export function publicShop(flavors: readonly ShopFlavorView[], stockKnown: boolean): PublicShop {
+  const published = flavors.map(({ slug, nameNo, nameEn, boxes50, facts }) => ({
+    slug,
+    nameNo,
+    nameEn,
+    boxes50,
+    facts,
+  }));
   return {
     paymentOpen: false,
     stockKnown,
     currency: "NOK",
     vatIncluded: true,
-    flavors: flavors.map(({ slug, nameNo, nameEn, boxes50 }) => ({
-      slug,
-      nameNo,
-      nameEn,
-      boxes50,
-    })),
+    flavors: published,
+    purchaseGate: {
+      open: false,
+      missing: published.flatMap((flavor) => consumerFactGaps(flavor.slug, flavor.facts)),
+    },
     packs: {
       six: { size: 6, priceOre: PRICE_SIX_ORE, purchasable: false, status: "coming_soon" },
       fifty: { size: 50, priceOre: PRICE_FIFTY_ORE, purchasable: false, status: "stock" },
@@ -204,7 +269,22 @@ export type WaitlistInput = {
   lang: "no" | "en";
   discovery: DiscoverySource;
   newsletterConsent: boolean;
+  launchNotice: boolean;
+  restockNotice: boolean;
 };
+
+/** Older clients omit the flags and stay on the flavor waitlist only. */
+export function noticeFlags(
+  launchRaw: unknown,
+  restockRaw: unknown,
+): { launchNotice: boolean; restockNotice: boolean } | null {
+  const hasLaunch = typeof launchRaw === "boolean";
+  const hasRestock = typeof restockRaw === "boolean";
+  const launchNotice = hasLaunch ? launchRaw : false;
+  const restockNotice = hasRestock ? restockRaw : !hasLaunch;
+  if (!launchNotice && !restockNotice) return null;
+  return { launchNotice, restockNotice };
+}
 
 export function normalizeEmail(value: string): string | null {
   const email = value.trim().toLowerCase();
@@ -231,8 +311,17 @@ export function parseWaitlist(body: unknown): WaitlistInput | null {
   const discovery = (DISCOVERY_SOURCES as readonly string[]).includes(discoveryRaw)
     ? (discoveryRaw as DiscoverySource)
     : null;
-  if (!email || !flavor || !lang || !discovery) return null;
-  return { email, flavor, lang, discovery, newsletterConsent: consentRaw };
+  const notices = noticeFlags(row["launchNotice"], row["restockNotice"]);
+  if (!email || !flavor || !lang || !discovery || !notices) return null;
+  return {
+    email,
+    flavor,
+    lang,
+    discovery,
+    newsletterConsent: consentRaw,
+    launchNotice: notices.launchNotice,
+    restockNotice: notices.restockNotice,
+  };
 }
 
 export function isShopSchemaError(
@@ -244,6 +333,8 @@ export function isShopSchemaError(
     error.code === "42P01" ||
     error.code === "PGRST205" ||
     error.code === "42703" ||
-    /shop_waitlist|shop_reservations|reserve_shop_pieces|schema cache/i.test(message)
+    /shop_waitlist|shop_launch_notices|shop_reservations|reserve_shop_pieces|schema cache/i.test(
+      message,
+    )
   );
 }

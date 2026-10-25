@@ -42,7 +42,7 @@ async function readPublicShop(): Promise<PublicShop> {
 
   const productsRes = await admin
     .from("products")
-    .select("id, slug, lot_letter, active")
+    .select("id, slug, lot_letter, active, ingredients_no, allergens_no, storage_no, prep_no")
     .eq("active", true);
   if (productsRes.error) return emptyPublicShop(false);
 
@@ -51,6 +51,12 @@ async function readPublicShop(): Promise<PublicShop> {
     slug: product.slug,
     lotLetter: product.lot_letter,
     active: product.active,
+    facts: {
+      ingredients: product.ingredients_no,
+      allergens: product.allergens_no,
+      storage: product.storage_no,
+      prep: product.prep_no,
+    },
   }));
 
   await admin
@@ -138,6 +144,54 @@ async function writeWaitlist(
     .eq("flavor_slug", input.flavor);
   if (updated.error) return { ok: false, reason: "unavailable" };
   return { ok: true };
+}
+
+async function writeLaunchNotice(
+  input: WaitlistInput,
+): Promise<{ ok: true } | { ok: false; reason: "unavailable" }> {
+  const admin = await adminClient();
+  if (!admin) return { ok: false, reason: "unavailable" };
+
+  const inserted = await admin.from("shop_launch_notices").insert({
+    email: input.email,
+    lang: input.lang,
+    discovery_source: input.discovery,
+    newsletter_consent: input.newsletterConsent,
+  });
+  if (!inserted.error) return { ok: true };
+  if (isShopSchemaError(inserted.error)) return { ok: false, reason: "unavailable" };
+  if (inserted.error.code !== "23505") return { ok: false, reason: "unavailable" };
+
+  const updated = await admin
+    .from("shop_launch_notices")
+    .update({
+      lang: input.lang,
+      discovery_source: input.discovery,
+      newsletter_consent: input.newsletterConsent,
+      notified_at: null,
+    })
+    .eq("email", input.email);
+  if (updated.error) return { ok: false, reason: "unavailable" };
+  return { ok: true };
+}
+
+export async function saveShopNotices(
+  input: WaitlistInput,
+): Promise<{ ok: true } | { ok: false; reason: "unavailable" }> {
+  try {
+    if (input.restockNotice) {
+      const saved = await writeWaitlist(input);
+      if (!saved.ok) return saved;
+    }
+    if (input.launchNotice) {
+      const saved = await writeLaunchNotice(input);
+      if (!saved.ok) return saved;
+    }
+    if (input.restockNotice) await notifyAvailableFlavors();
+    return { ok: true };
+  } catch {
+    return { ok: false, reason: "unavailable" };
+  }
 }
 
 function mailFrom(): { key: string; from: string } | null {

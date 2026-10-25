@@ -1836,6 +1836,36 @@ export type Database = {
           },
         ]
       }
+      shop_launch_notices: {
+        Row: {
+          id: string
+          email: string
+          lang: string
+          discovery_source: string
+          newsletter_consent: boolean
+          created_at: string
+          notified_at: string | null
+        }
+        Insert: {
+          id?: string
+          email: string
+          lang: string
+          discovery_source: string
+          newsletter_consent?: boolean
+          created_at?: string
+          notified_at?: string | null
+        }
+        Update: {
+          id?: string
+          email?: string
+          lang?: string
+          discovery_source?: string
+          newsletter_consent?: boolean
+          created_at?: string
+          notified_at?: string | null
+        }
+        Relationships: []
+      }
       shop_waitlist: {
         Row: {
           id: string
