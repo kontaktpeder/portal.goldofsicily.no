@@ -1695,6 +1695,120 @@ export type Database = {
         }
         Relationships: []
       }
+      shop_settings: {
+        Row: { id: number; binding_orders_open: boolean }
+        Insert: { id?: number; binding_orders_open?: boolean }
+        Update: { id?: number; binding_orders_open?: boolean }
+        Relationships: []
+      }
+      shop_orders: {
+        Row: {
+          id: string
+          order_number: string
+          status: string
+          payment_kind: string
+          flavor_slug: string
+          product_id: string | null
+          boxes: number
+          pieces: number
+          unit_price_ore: number
+          total_ore: number
+          customer_name: string
+          email: string
+          phone: string
+          address_line: string
+          postal_code: string
+          city: string
+          org_number: string | null
+          fulfillment: string
+          binding: boolean
+          reservation_id: string | null
+          customer_id: string | null
+          customer_order_id: string | null
+          offer_boxes: number | null
+          offer_total_ore: number | null
+          offer_token: string | null
+          lang: string
+          received_mail_at: string | null
+          confirmed_mail_at: string | null
+          mail_error: string | null
+          approval_token: string | null
+          expires_at: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          order_number?: string
+          status: string
+          payment_kind?: string
+          flavor_slug: string
+          product_id?: string | null
+          boxes: number
+          pieces: number
+          unit_price_ore: number
+          total_ore: number
+          customer_name: string
+          email: string
+          phone: string
+          address_line: string
+          postal_code: string
+          city: string
+          org_number?: string | null
+          fulfillment: string
+          binding?: boolean
+          reservation_id?: string | null
+          customer_id?: string | null
+          customer_order_id?: string | null
+          offer_boxes?: number | null
+          offer_total_ore?: number | null
+          offer_token?: string | null
+          lang?: string
+          received_mail_at?: string | null
+          confirmed_mail_at?: string | null
+          mail_error?: string | null
+          approval_token?: string | null
+          expires_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          order_number?: string
+          status?: string
+          payment_kind?: string
+          flavor_slug?: string
+          product_id?: string | null
+          boxes?: number
+          pieces?: number
+          unit_price_ore?: number
+          total_ore?: number
+          customer_name?: string
+          email?: string
+          phone?: string
+          address_line?: string
+          postal_code?: string
+          city?: string
+          org_number?: string | null
+          fulfillment?: string
+          binding?: boolean
+          reservation_id?: string | null
+          customer_id?: string | null
+          customer_order_id?: string | null
+          offer_boxes?: number | null
+          offer_total_ore?: number | null
+          offer_token?: string | null
+          lang?: string
+          received_mail_at?: string | null
+          confirmed_mail_at?: string | null
+          mail_error?: string | null
+          approval_token?: string | null
+          expires_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       shop_reservations: {
         Row: {
           created_at: string
@@ -1962,6 +2076,7 @@ export type Database = {
         }
         Returns: string
       }
+      sweep_shop_orders: { Args: never; Returns: number }
       reserve_shop_pieces: {
         Args: {
           p_expires_at: string

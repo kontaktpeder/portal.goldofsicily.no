@@ -35,6 +35,7 @@ type AdminPath =
   | "/admin/products"
   | "/admin/lots"
   | "/admin/stock"
+  | "/admin/shop-orders"
   | "/admin/staff";
 
 export function AdminShell({
@@ -85,6 +86,7 @@ export function AdminShell({
   const [menuOpen, setMenuOpen] = useState(false);
   const salesActive =
     path.startsWith("/admin/orders") ||
+    path.startsWith("/admin/shop-orders") ||
     path.startsWith("/admin/sales") ||
     path.startsWith("/admin/venues") ||
     path.startsWith("/admin/wholesalers") ||
@@ -147,6 +149,15 @@ export function AdminShell({
               onNavigate={close}
               nested
             />
+            {operations ? (
+              <SideLink
+                to="/admin/shop-orders"
+                label={t("nav_shop_orders")}
+                path={path}
+                onNavigate={close}
+                nested
+              />
+            ) : null}
             {commercial ? (
               <SideLink
                 to="/admin/sales"
@@ -349,6 +360,11 @@ export function AdminShortcuts({
       {approver ? (
         <Link to="/admin/orders" className={itemClass}>
           {t("home_approve")}
+        </Link>
+      ) : null}
+      {operations ? (
+        <Link to="/admin/shop-orders" className={itemClass}>
+          {t("nav_shop_orders")}
         </Link>
       ) : null}
       {operations ? (

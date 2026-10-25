@@ -66,6 +66,7 @@ const LOT_SELECT =
 type Admin = typeof import("@/integrations/supabase/client.server").supabaseAdmin;
 
 async function adminClient(): Promise<Admin | null> {
+  if (!process.env["SUPABASE_URL"] || !process.env["SUPABASE_SERVICE_ROLE_KEY"]) return null;
   try {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     return supabaseAdmin;
@@ -106,11 +107,7 @@ async function readPublicShop(): Promise<PublicShop> {
     products = (wide.data ?? []).map((product) => toShopProduct(product));
   }
 
-  await admin
-    .from("shop_reservations")
-    .update({ status: "released" })
-    .eq("status", "held")
-    .lte("expires_at", new Date().toISOString());
+  await releaseExpiredHolds(admin);
 
   const lotsRes = await admin
     .from("gold_lots")
@@ -151,7 +148,28 @@ async function readPublicShop(): Promise<PublicShop> {
     physical.set(productId, Math.max(0, pieces - activeReservedPieces(holds, productId, now)));
   }
 
-  return publicShop(shopFlavors(products, physical), true);
+  const settings = await admin
+    .from("shop_settings")
+    .select("binding_orders_open")
+    .eq("id", 1)
+    .maybeSingle();
+  const bindingOpen = !settings.error && settings.data?.binding_orders_open === true;
+  return publicShop(shopFlavors(products, physical), true, bindingOpen);
+}
+
+/** Sweep drops expired public holds. A missing function must not hide the shop. */
+async function releaseExpiredHolds(admin: NonNullable<Awaited<ReturnType<typeof adminClient>>>) {
+  try {
+    const swept = await admin.rpc("sweep_shop_orders");
+    if (!swept.error) return;
+  } catch {
+    // The table can exist before sql/36 is applied.
+  }
+  await admin
+    .from("shop_reservations")
+    .update({ status: "released" })
+    .eq("status", "held")
+    .lte("expires_at", new Date().toISOString());
 }
 
 export async function saveWaitlist(

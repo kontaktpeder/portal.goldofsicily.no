@@ -260,6 +260,7 @@ export type PublicShop = {
   stockKnown: boolean;
   currency: "NOK";
   vatIncluded: true;
+  ordering: { bindingOpen: false | true };
   flavors: Array<Omit<ShopFlavorView, "pieces">>;
   purchaseGate: { open: false; missing: string[] };
   packs: {
@@ -268,7 +269,11 @@ export type PublicShop = {
   };
 };
 
-export function publicShop(flavors: readonly ShopFlavorView[], stockKnown: boolean): PublicShop {
+export function publicShop(
+  flavors: readonly ShopFlavorView[],
+  stockKnown: boolean,
+  bindingOpen = false,
+): PublicShop {
   const published = flavors.map(({ slug, nameNo, nameEn, boxes50, facts }) => ({
     slug,
     nameNo,
@@ -281,6 +286,7 @@ export function publicShop(flavors: readonly ShopFlavorView[], stockKnown: boole
     stockKnown,
     currency: "NOK",
     vatIncluded: true,
+    ordering: { bindingOpen },
     flavors: published,
     purchaseGate: {
       open: false,
@@ -294,7 +300,7 @@ export function publicShop(flavors: readonly ShopFlavorView[], stockKnown: boole
 }
 
 export function emptyPublicShop(stockKnown: boolean): PublicShop {
-  return publicShop(shopFlavors([], new Map()), stockKnown);
+  return publicShop(shopFlavors([], new Map()), stockKnown, false);
 }
 
 export type WaitlistSubscriber = {
