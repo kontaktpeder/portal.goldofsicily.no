@@ -380,7 +380,8 @@ export async function listShopOrders(): Promise<ShopOrderRow[]> {
 async function retryFailedMail(admin: Admin, rows: readonly DbOrder[]) {
   let attempts = 0;
   for (const row of rows) {
-    if (attempts >= 3 || row.mail_error !== "failed") continue;
+    if (attempts >= 3 || (row.mail_error !== "failed" && row.mail_error !== "unconfigured"))
+      continue;
     const flavorName = FLAVOR_NAME[row.flavor_slug === "truffle" ? "truffle" : "nduja"];
     const lang = row.lang === "en" ? "en" : "no";
     if (!row.received_mail_at && (row.status === "received" || row.status === "quote")) {
