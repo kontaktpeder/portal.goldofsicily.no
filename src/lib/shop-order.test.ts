@@ -6,6 +6,7 @@ import {
   approvalLock,
   classifyShopOrder,
   confirmedMail,
+  isWaitingShopOrder,
   offerDecision,
   orderTotalOre,
   parseShopOrder,
@@ -198,6 +199,29 @@ test("a changed offer is not an order until the customer accepts it", () => {
     }).text,
     /frakt/,
   );
+  assert.match(
+    confirmedMail({
+      lang: "no",
+      number: "N-0001",
+      flavorName: "Trøffel",
+      boxes: 1,
+      totalOre: PRICE_FIFTY_ORE,
+    }).text,
+    /utenfor Smalgangen 31, 0188 Oslo/,
+  );
+  assert.doesNotMatch(
+    confirmedMail({
+      lang: "no",
+      number: "N-0001",
+      flavorName: "Trøffel",
+      boxes: 1,
+      totalOre: PRICE_FIFTY_ORE,
+    }).text,
+    /Majorstua/,
+  );
+  assert.equal(isWaitingShopOrder("quote"), true);
+  assert.equal(isWaitingShopOrder("confirmed"), false);
+  assert.equal(isWaitingShopOrder("declined"), false);
 });
 
 test("the approval card stays on one step and ignores a second click while the lock is fresh", () => {

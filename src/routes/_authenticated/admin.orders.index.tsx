@@ -4,6 +4,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { useState, type FormEvent } from "react";
 import { toast } from "sonner";
 import { PrimaryButton, TextField } from "@/components/field";
+import { ShopOrderNotice } from "@/components/shop-order-notice";
 import { RecordCard } from "@/components/record-card";
 import { supabase } from "@/integrations/supabase/client";
 import { listProductionStaff } from "@/lib/admin.functions";
@@ -232,6 +233,7 @@ function OrdersPage() {
         ) : null}
       </div>
       <p className="mt-2 max-w-2xl text-sm text-muted-foreground">{t("orders_intro")}</p>
+      <ShopOrderNotice />
       {orders.data?.pendingSql ? (
         <p className="mt-4 text-sm text-muted-foreground">{t("orders_pending_sql")}</p>
       ) : null}

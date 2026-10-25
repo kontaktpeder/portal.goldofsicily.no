@@ -362,19 +362,22 @@ function approvalView(row: DbOrder, reservation: ReservationView | null): Approv
   };
 }
 
-export async function listShopOrders(): Promise<ShopOrderRow[]> {
+export async function listShopOrders(): Promise<{
+  orders: ShopOrderRow[];
+  unavailable: boolean;
+}> {
   const admin = await adminClient();
-  if (!admin) return [];
+  if (!admin) return { orders: [], unavailable: true };
   await sweepQuiet(admin);
   const listed = await admin
     .from("shop_orders")
     .select("*")
     .order("created_at", { ascending: false })
     .limit(40);
-  if (listed.error) return [];
+  if (listed.error) return { orders: [], unavailable: true };
   const rows = (listed.data ?? []) as DbOrder[];
   await retryFailedMail(admin, rows);
-  return rows.map((row) => toView(row));
+  return { orders: rows.map((row) => toView(row)), unavailable: false };
 }
 
 async function retryFailedMail(admin: Admin, rows: readonly DbOrder[]) {
@@ -634,7 +637,7 @@ export async function approveShopOrder(
       .eq("approval_token", token);
   }
 
-  const orderNotes = `Nettbestilling ${current.order_number}. Henting på ${PICKUP_PLACE}. Faktura etter levering. Ingen bedriftspris.`;
+  const orderNotes = `Nettbestilling ${current.order_number}. Henting utenfor ${PICKUP_PLACE}. Faktura etter levering. Ingen bedriftspris.`;
   let order = await admin
     .from("customer_orders")
     .insert({

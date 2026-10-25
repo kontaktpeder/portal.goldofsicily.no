@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { AdminShortcuts } from "@/components/admin-shell";
+import { ShopOrderNotice } from "@/components/shop-order-notice";
 import { RecordCard } from "@/components/record-card";
 import { useLotPrerequisites } from "@/hooks/use-lot-prerequisites";
 import { useOpsHome } from "@/hooks/use-ops-home";
@@ -68,6 +69,7 @@ function OpsHome() {
   return (
     <main className="mx-auto w-full max-w-5xl px-5 pb-16">
       <h1 className="pt-8 text-3xl font-semibold">{t("nav_home")}</h1>
+      <ShopOrderNotice />
 
       <div className="mt-6 grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_17rem]">
         <div className="space-y-4">

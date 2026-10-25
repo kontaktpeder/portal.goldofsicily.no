@@ -3,7 +3,14 @@ import { PACK_FIFTY, PRICE_FIFTY_ORE, type PaymentKind, type ShopFlavorSlug } fr
 export const SHOP_ORDER_HOLD_HOURS = 48;
 export const SHOP_APPROVAL_LOCK_MS = 45_000;
 export const SHOP_APPROVED_HOLD_DAYS = 365;
-export const PICKUP_PLACE = "Majorstua";
+export const PICKUP_PLACE = "Smalgangen 31, 0188 Oslo";
+
+/** Handover is outside the restaurant whose kitchen is rented. */
+export function pickupSentence(lang: "no" | "en"): string {
+  return lang === "en"
+    ? `Pickup is outside ${PICKUP_PLACE}. We meet you outside the restaurant.`
+    : `Henting utenfor ${PICKUP_PLACE}. Vi møter deg utenfor restauranten.`;
+}
 
 export const SHOP_ORDER_STATUSES = [
   "received",
@@ -15,6 +22,19 @@ export const SHOP_ORDER_STATUSES = [
   "expired",
 ] as const;
 export type ShopOrderStatus = (typeof SHOP_ORDER_STATUSES)[number];
+
+const WAITING_SHOP_ORDER: ReadonlySet<ShopOrderStatus> = new Set([
+  "received",
+  "quote",
+  "offer",
+  "confirming",
+  "expired",
+]);
+
+/** Still needs a person. Confirmed and declined stay off Hjem and Ordrer. */
+export function isWaitingShopOrder(status: ShopOrderStatus): boolean {
+  return WAITING_SHOP_ORDER.has(status);
+}
 
 export type ShopFulfillment = "pickup" | "delivery_request";
 
@@ -239,14 +259,14 @@ export function receivedMail(input: {
     const subject = `Received ${input.number}`;
     const text =
       input.kind === "binding"
-        ? `${input.number} is received.\n${input.boxes} box${input.boxes === 1 ? "" : "es"} · ${input.flavorName}\n${total}\nPickup at ${PICKUP_PLACE}. Invoice after delivery.\nThis is not an invoice.`
+        ? `${input.number} is received.\n${input.boxes} box${input.boxes === 1 ? "" : "es"} · ${input.flavorName}\n${total}\n${pickupSentence("en")}\nInvoice after delivery.\nThis is not an invoice.`
         : `${input.number} is a request, not an order.\n${input.boxes} box${input.boxes === 1 ? "" : "es"} · ${input.flavorName}\n${total} is the product price. Delivery time and freight are not agreed.\nWe will write if we can take it.`;
     return { subject, text };
   }
   const subject = `Mottatt ${input.number}`;
   const handoff =
     input.fulfillment === "pickup"
-      ? `Henting på ${PICKUP_PLACE}.`
+      ? pickupSentence("no")
       : "Levering er en forespørsel. Frakt og tid er ikke avtalt.";
   const text =
     input.kind === "binding"
@@ -266,12 +286,12 @@ export function confirmedMail(input: {
   if (input.lang === "en") {
     return {
       subject: `Order confirmed ${input.number}`,
-      text: `${input.number} is confirmed.\n${input.boxes} box${input.boxes === 1 ? "" : "es"} · ${input.flavorName}\n${total}\nPickup at ${PICKUP_PLACE}.\nInvoice follows after delivery. This mail is not an invoice.`,
+      text: `${input.number} is confirmed.\n${input.boxes} box${input.boxes === 1 ? "" : "es"} · ${input.flavorName}\n${total}\n${pickupSentence("en")}\nInvoice follows after delivery. This mail is not an invoice.`,
     };
   }
   return {
     subject: `Ordre bekreftet ${input.number}`,
-    text: `${input.number} er bekreftet.\n${input.boxes} eske${input.boxes === 1 ? "" : "r"} · ${input.flavorName}\n${total}\nHenting på ${PICKUP_PLACE}.\nFaktura kommer etter levering. Denne e-posten er ikke en faktura.`,
+    text: `${input.number} er bekreftet.\n${input.boxes} eske${input.boxes === 1 ? "" : "r"} · ${input.flavorName}\n${total}\n${pickupSentence("no")}\nFaktura kommer etter levering. Denne e-posten er ikke en faktura.`,
   };
 }
 
@@ -303,12 +323,12 @@ export function offerMail(input: {
   if (input.lang === "en") {
     return {
       subject: `Offer ${input.number}`,
-      text: `The terms for ${input.number} changed.\n${input.boxes} box${input.boxes === 1 ? "" : "es"} · ${input.flavorName}\n${total}\nPickup at ${PICKUP_PLACE}. Invoice after delivery.\nAccept before it becomes an order: ${input.acceptUrl}`,
+      text: `The terms for ${input.number} changed.\n${input.boxes} box${input.boxes === 1 ? "" : "es"} · ${input.flavorName}\n${total}\n${pickupSentence("en")}\nInvoice after delivery.\nAccept before it becomes an order: ${input.acceptUrl}`,
     };
   }
   return {
     subject: `Tilbud ${input.number}`,
-    text: `Vilkårene for ${input.number} er endret.\n${input.boxes} eske${input.boxes === 1 ? "" : "r"} · ${input.flavorName}\n${total}\nHenting på ${PICKUP_PLACE}. Faktura etter levering.\nGodta før den blir en bestilling: ${input.acceptUrl}`,
+    text: `Vilkårene for ${input.number} er endret.\n${input.boxes} eske${input.boxes === 1 ? "" : "r"} · ${input.flavorName}\n${total}\n${pickupSentence("no")}\nFaktura etter levering.\nGodta før den blir en bestilling: ${input.acceptUrl}`,
   };
 }
 

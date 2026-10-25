@@ -120,8 +120,8 @@ const dict = {
   nav_stock: { no: "Lager", en: "Stock" },
   nav_shop_orders: { no: "Nettbestillinger", en: "Web orders" },
   shop_orders_intro: {
-    no: "Godkjenn henting på Majorstua her. Pakking, LOT og faktura fortsetter i den ordinære ordren etter at fakturamottaker er opprettet. Godkjenning sender ikke faktura.",
-    en: "Approve Majorstua pickup here. Packing, LOT and the invoice continue on the ordinary order after an invoice recipient exists. Approval does not send an invoice.",
+    no: "Godkjenn henting utenfor Smalgangen 31 her. Pakking, LOT og faktura fortsetter i den ordinære ordren etter at fakturamottaker er opprettet. Godkjenning sender ikke faktura.",
+    en: "Approve pickup outside Smalgangen 31 here. Packing, LOT and the invoice continue on the ordinary order after an invoice recipient exists. Approval does not send an invoice.",
   },
   shop_order_pending: { no: "Til godkjenning", en: "To approve" },
   shop_order_quote: { no: "Forespørsel", en: "Request" },
@@ -136,7 +136,10 @@ const dict = {
   shop_order_boxes_plural: { no: "esker", en: "boxes" },
   shop_order_customer: { no: "Kunde", en: "Customer" },
   shop_order_handoff: { no: "Utlevering", en: "Handover" },
-  shop_order_pickup: { no: "Henting · Majorstua", en: "Pickup · Majorstua" },
+  shop_order_pickup: {
+    no: "Henting utenfor Smalgangen 31, 0188 Oslo",
+    en: "Pickup outside Smalgangen 31, 0188 Oslo",
+  },
   shop_order_delivery: { no: "Levering · forespørsel", en: "Delivery · request" },
   shop_order_reserved: { no: "Reservert lager", en: "Reserved stock" },
   shop_order_pieces: { no: "stk", en: "pcs" },
@@ -166,9 +169,26 @@ const dict = {
   },
   shop_order_open: { no: "Åpne ordren", en: "Open the order" },
   shop_order_empty: { no: "Ingen nettbestillinger ennå.", en: "No web orders yet." },
-  shop_order_stock: { no: "Lageret rakk ikke. Kontroller på nytt.", en: "Stock was gone. Check it again." },
-  shop_order_busy: { no: "Noen andre behandler den. Prøv igjen.", en: "Someone else is handling it. Try again." },
-  shop_order_mail: { no: "E-posten ble ikke sendt. Den prøves på nytt.", en: "The email was not sent. It will be tried again." },
+  shop_order_unavailable: {
+    no: "Nettbestillingene kunne ikke hentes.",
+    en: "The web orders could not be loaded.",
+  },
+  shop_order_notice: {
+    no: "Dette er en nettbestilling. Den ligger ikke i Ordrer før den er godkjent.",
+    en: "This is a web order. It stays off Orders until it is approved.",
+  },
+  shop_order_stock: {
+    no: "Lageret rakk ikke. Kontroller på nytt.",
+    en: "Stock was gone. Check it again.",
+  },
+  shop_order_busy: {
+    no: "Noen andre behandler den. Prøv igjen.",
+    en: "Someone else is handling it. Try again.",
+  },
+  shop_order_mail: {
+    no: "E-posten ble ikke sendt. Den prøves på nytt.",
+    en: "The email was not sent. It will be tried again.",
+  },
   packing_pick: {
     no: "Velg en LOT. Forhåndsvisningen viser etiketten som skrives ut, med LOT, variant, antall og best før.",
     en: "Choose a LOT. The preview shows the label that will be printed, with the LOT, variant, count and best before.",

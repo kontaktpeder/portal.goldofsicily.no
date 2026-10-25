@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { useI18n, type TranslationKey } from "@/lib/i18n";
 import {
   formatOre,
+  isWaitingShopOrder,
   staffActions,
   type ShopFulfillment,
   type ShopOrderStatus,
@@ -53,14 +54,6 @@ const STATUS_KEY: Record<ShopOrderStatus, TranslationKey> = {
   expired: "shop_order_expired",
 };
 
-const OPEN: ReadonlySet<ShopOrderStatus> = new Set([
-  "received",
-  "quote",
-  "offer",
-  "confirming",
-  "expired",
-]);
-
 function ShopOrdersPage() {
   const { t, lang } = useI18n();
   const queryClient = useQueryClient();
@@ -72,7 +65,7 @@ function ShopOrdersPage() {
   const [boxesById, setBoxesById] = useState<Record<string, string>>({});
   const orders = useQuery({
     queryKey: ["nettbestillinger"],
-    queryFn: () => list() as Promise<Card[]>,
+    queryFn: () => list(),
   });
 
   async function refresh() {
@@ -116,16 +109,21 @@ function ShopOrdersPage() {
     await refresh();
   }
 
-  const cards = [...(orders.data ?? [])].sort(
-    (a, b) => Number(OPEN.has(b.status)) - Number(OPEN.has(a.status)),
+  const listed = orders.data;
+  const cards = [...(listed?.orders ?? [])].sort(
+    (a, b) => Number(isWaitingShopOrder(b.status)) - Number(isWaitingShopOrder(a.status)),
   );
+  const unavailable = orders.isError || listed?.unavailable === true;
 
   return (
     <main className="mx-auto w-full max-w-xl px-5 pb-16">
       <h1 className="pt-8 text-3xl font-semibold">{t("nav_shop_orders")}</h1>
       <p className="mt-2 text-sm text-muted-foreground">{t("shop_orders_intro")}</p>
       {orders.isLoading ? <p className="mt-8 text-sm text-muted-foreground">…</p> : null}
-      {!orders.isLoading && cards.length === 0 ? (
+      {!orders.isLoading && unavailable ? (
+        <p className="mt-8 text-sm text-muted-foreground">{t("shop_order_unavailable")}</p>
+      ) : null}
+      {!orders.isLoading && !unavailable && cards.length === 0 ? (
         <p className="mt-8 text-sm text-muted-foreground">{t("shop_order_empty")}</p>
       ) : null}
       <div className="mt-6 flex flex-col gap-4">
