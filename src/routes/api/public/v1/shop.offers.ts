@@ -26,15 +26,28 @@ export const Route = createFileRoute("/api/public/v1/shop/offers")({
           if (!offer) return shopJson(request, { error: "closed" }, 400);
           const boxes =
             offer.status === "offer" && offer.offerBoxes ? offer.offerBoxes : offer.boxes;
+          const fulfillment =
+            offer.status === "offer" && offer.offerFulfillment
+              ? offer.offerFulfillment
+              : offer.fulfillment;
+          const freightOre =
+            offer.status === "offer"
+              ? offer.offerFulfillment === "pickup"
+                ? 0
+                : offer.offerFreightOre
+              : offer.fulfillment === "pickup"
+                ? 0
+                : offer.freightOre;
+          const goodsOre = orderTotalOre(boxes);
           return shopJson(request, {
             number: offer.orderNumber,
             flavorName: offer.flavorName,
             boxes,
-            totalOre:
-              offer.status === "offer" && offer.offerBoxes
-                ? orderTotalOre(offer.offerBoxes)
-                : offer.totalOre,
-            fulfillment: offer.fulfillment,
+            goodsOre,
+            freightOre,
+            totalOre: goodsOre + (freightOre ?? 0),
+            fulfillment,
+            note: offer.status === "offer" ? offer.offerNote : offer.deliveryNote,
             lang: offer.lang,
             status: offer.status,
           });

@@ -1,3 +1,5 @@
+import { formatDistance } from "@/lib/delivery-zone";
+import { quoteDeliveryAddress } from "@/lib/delivery-zone.server";
 import { flavorSlug, PACK_FIFTY, type ShopFlavorSlug } from "@/lib/shop";
 import { loadPublicShop } from "@/lib/shop.server";
 import {
@@ -7,6 +9,8 @@ import {
   classifyShopOrder,
   confirmedMail,
   declinedMail,
+  formatOre,
+  handoffPriced,
   offerDecision,
   offerMail,
   orderPieces,
@@ -57,6 +61,13 @@ export type ShopOrderRow = {
   binding: boolean;
   customerOrderId: string | null;
   offerBoxes: number | null;
+  freightOre: number | null;
+  distanceM: number | null;
+  deliveryZone: string | null;
+  deliveryNote: string | null;
+  offerFreightOre: number | null;
+  offerFulfillment: ShopFulfillment | null;
+  offerNote: string | null;
   lang: "no" | "en";
   expiresAt: string | null;
   createdAt: string;
@@ -70,6 +81,89 @@ function holdUntil(): string {
 
 function approvedUntil(): string {
   return new Date(Date.now() + SHOP_APPROVED_HOLD_DAYS * 24 * 60 * 60 * 1000).toISOString();
+}
+
+async function pricedHandoff(input: ShopOrderInput): Promise<{
+  priced: boolean;
+  freightOre: number | null;
+  distanceM: number | null;
+  zone: string;
+}> {
+  if (input.fulfillment === "pickup") {
+    return { priced: true, freightOre: 0, distanceM: null, zone: "pickup" };
+  }
+  const quote = await quoteDeliveryAddress(input);
+  if (!quote || quote.freightOre == null) {
+    return {
+      priced: false,
+      freightOre: null,
+      distanceM: quote?.distanceM ?? null,
+      zone: "outside",
+    };
+  }
+  return {
+    priced: true,
+    freightOre: quote.freightOre,
+    distanceM: quote.distanceM,
+    zone: quote.zone,
+  };
+}
+
+async function priceMissingDeliveries(admin: Admin, rows: DbOrder[]) {
+  let attempts = 0;
+  for (const row of rows) {
+    if (attempts >= 4 || row.fulfillment !== "delivery_request" || row.delivery_zone) continue;
+    if (row.status === "confirmed" || row.status === "declined") continue;
+    attempts += 1;
+    const quote = await quoteDeliveryAddress({
+      addressLine: row.address_line,
+      postalCode: row.postal_code,
+      city: row.city,
+    });
+    if (!quote) continue;
+    const saved = await admin
+      .from("shop_orders")
+      .update({
+        delivery_zone: quote.zone,
+        distance_m: quote.distanceM,
+        freight_ore: quote.freightOre,
+      })
+      .eq("id", row.id)
+      .is("delivery_zone", null);
+    if (saved.error) continue;
+    row.delivery_zone = quote.zone;
+    row.distance_m = quote.distanceM;
+    row.freight_ore = quote.freightOre;
+  }
+}
+
+function payableOre(row: DbOrder): number {
+  if (asFulfillment(row.fulfillment) === "pickup") return row.total_ore;
+  return row.total_ore + (typeof row.freight_ore === "number" ? row.freight_ore : 0);
+}
+
+function confirmedHandoff(row: DbOrder, lang: "no" | "en"): string | undefined {
+  if (asFulfillment(row.fulfillment) === "pickup") return undefined;
+  const freight = typeof row.freight_ore === "number" ? formatOre(row.freight_ore) : "—";
+  return lang === "en"
+    ? `Delivery to ${row.address_line}. Freight ${freight}.`
+    : `Levering til ${row.address_line}. Frakt ${freight}.`;
+}
+
+function agreedNotes(current: DbOrder): string {
+  const goods = formatOre(current.total_ore);
+  const freight =
+    current.fulfillment === "pickup"
+      ? formatOre(current.freight_ore ?? 0)
+      : typeof current.freight_ore === "number"
+        ? formatOre(current.freight_ore)
+        : "ikke avtalt";
+  const total = formatOre(payableOre(current));
+  if (current.fulfillment === "pickup") {
+    return `Nettbestilling ${current.order_number}. Henting utenfor ${PICKUP_PLACE}. Varepris ${goods}. Totalt ${total}. Faktura etter levering. Ingen bedriftspris.`;
+  }
+  const when = current.delivery_note ? ` ${current.delivery_note}` : "";
+  return `Nettbestilling ${current.order_number}. Levering til ${current.address_line}, ${current.postal_code} ${current.city}. Varepris ${goods}. Frakt ${freight}. Avtalt total ${total}.${when} Varelinjen er uten frakt, så frakten må med på fakturaen. Ingen bedriftspris.`;
 }
 
 async function sweepQuiet(admin: Admin) {
@@ -136,6 +230,14 @@ type DbOrder = {
   customer_order_id: string | null;
   offer_boxes: number | null;
   offer_token: string | null;
+  offer_total_ore?: number | null;
+  freight_ore?: number | null;
+  distance_m?: number | null;
+  delivery_zone?: string | null;
+  delivery_note?: string | null;
+  offer_freight_ore?: number | null;
+  offer_fulfillment?: string | null;
+  offer_delivery_note?: string | null;
   lang: string;
   received_mail_at: string | null;
   confirmed_mail_at: string | null;
@@ -192,6 +294,16 @@ function toView(row: DbOrder): ShopOrderRow {
     binding: row.binding,
     customerOrderId: row.customer_order_id,
     offerBoxes: row.offer_boxes,
+    freightOre: typeof row.freight_ore === "number" ? row.freight_ore : null,
+    distanceM: typeof row.distance_m === "number" ? row.distance_m : null,
+    deliveryZone: row.delivery_zone ?? null,
+    deliveryNote: row.delivery_note ?? null,
+    offerFreightOre: typeof row.offer_freight_ore === "number" ? row.offer_freight_ore : null,
+    offerFulfillment:
+      row.offer_fulfillment === "pickup" || row.offer_fulfillment === "delivery_request"
+        ? row.offer_fulfillment
+        : null,
+    offerNote: row.offer_delivery_note ?? null,
     lang: row.lang === "en" ? "en" : "no",
     expiresAt: row.expires_at,
     createdAt: row.created_at,
@@ -239,11 +351,13 @@ export async function placeShopOrder(
   const shop = await loadPublicShop();
   if (!shop.stockKnown) return { ok: false, reason: "unavailable" };
   const stock = shop.flavors.find((flavor) => flavor.slug === input.flavor);
+  const priced = await pricedHandoff(input);
   const kind = classifyShopOrder({
     bindingOpen: shop.ordering.bindingOpen,
     fulfillment: input.fulfillment,
     boxes: input.boxes,
     boxesAvailable: stock?.boxes50 ?? 0,
+    priced: priced.priced,
   });
   if (kind === "short") return { ok: false, reason: "short" };
   const productId = await productFor(admin, input.flavor);
@@ -286,6 +400,9 @@ export async function placeShopOrder(
       reservation_id: reservationId,
       lang: input.lang,
       expires_at: kind === "binding" ? expiresAt : null,
+      freight_ore: priced.freightOre,
+      distance_m: priced.distanceM,
+      delivery_zone: priced.zone,
     })
     .select("*")
     .single();
@@ -304,6 +421,8 @@ export async function placeShopOrder(
     totalOre: order.totalOre,
     kind,
     fulfillment: input.fulfillment,
+    freightOre: priced.freightOre,
+    distanceLabel: priced.distanceM == null ? null : formatDistance(priced.distanceM, input.lang),
   });
   const mailed = await sendText({ to: input.email, subject: message.subject, text: message.text });
   await markMail(admin, order.id, "received_mail_at", mailed);
@@ -359,6 +478,7 @@ function approvalView(row: DbOrder, reservation: ReservationView | null): Approv
     reservation,
     customerOrderId: row.customer_order_id,
     customerId: row.customer_id,
+    freightOre: typeof row.freight_ore === "number" ? row.freight_ore : null,
   };
 }
 
@@ -376,6 +496,7 @@ export async function listShopOrders(): Promise<{
     .limit(40);
   if (listed.error) return { orders: [], unavailable: true };
   const rows = (listed.data ?? []) as DbOrder[];
+  await priceMissingDeliveries(admin, rows);
   await retryFailedMail(admin, rows);
   return { orders: rows.map((row) => toView(row)), unavailable: false };
 }
@@ -397,6 +518,9 @@ async function retryFailedMail(admin: Admin, rows: readonly DbOrder[]) {
         totalOre: row.total_ore,
         kind: row.binding ? "binding" : "quote",
         fulfillment: asFulfillment(row.fulfillment),
+        freightOre: typeof row.freight_ore === "number" ? row.freight_ore : null,
+        distanceLabel:
+          typeof row.distance_m === "number" ? formatDistance(row.distance_m, lang) : null,
       });
       const mailed = await sendText({
         to: row.email,
@@ -406,12 +530,14 @@ async function retryFailedMail(admin: Admin, rows: readonly DbOrder[]) {
       await markMail(admin, row.id, "received_mail_at", mailed);
     } else if (!row.confirmed_mail_at && row.status === "confirmed") {
       attempts += 1;
+      const handoff = confirmedHandoff(row, lang);
       const message = confirmedMail({
         lang,
         number: row.order_number,
         flavorName,
         boxes: row.boxes,
-        totalOre: row.total_ore,
+        totalOre: payableOre(row),
+        ...(handoff ? { handoff } : {}),
       });
       const mailed = await sendText({
         to: row.email,
@@ -637,7 +763,7 @@ export async function approveShopOrder(
       .eq("approval_token", token);
   }
 
-  const orderNotes = `Nettbestilling ${current.order_number}. Henting utenfor ${PICKUP_PLACE}. Faktura etter levering. Ingen bedriftspris.`;
+  const orderNotes = agreedNotes(current);
   let order = await admin
     .from("customer_orders")
     .insert({
@@ -694,12 +820,14 @@ export async function approveShopOrder(
     .eq("id", current.id)
     .eq("approval_token", token);
 
+  const handoff = confirmedHandoff(current, current.lang === "en" ? "en" : "no");
   const message = confirmedMail({
     lang: current.lang === "en" ? "en" : "no",
     number: current.order_number,
     flavorName: FLAVOR_NAME[current.flavor_slug === "truffle" ? "truffle" : "nduja"],
     boxes: current.boxes,
-    totalOre: current.total_ore,
+    totalOre: payableOre(current),
+    ...(handoff ? { handoff } : {}),
   });
   const mailed = await sendText({
     to: current.email,
@@ -741,17 +869,22 @@ export async function declineShopOrder(
 
 export async function reviseShopOrder(
   id: string,
-  boxes: number,
+  terms: { boxes: number; fulfillment: ShopFulfillment; freightOre: number; note: string },
   origin: string,
 ): Promise<{ ok: true } | { ok: false; reason: "unavailable" | "closed" | "same" }> {
   const admin = await adminClient();
   if (!admin) return { ok: false, reason: "unavailable" };
   const row = await loadOrder(admin, id);
   if (!row) return { ok: false, reason: "unavailable" };
+  const freightOre = terms.fulfillment === "pickup" ? 0 : terms.freightOre;
   const decision = offerDecision({
     status: asStatus(row.status),
     boxes: row.boxes,
-    nextBoxes: boxes,
+    nextBoxes: terms.boxes,
+    fulfillment: asFulfillment(row.fulfillment),
+    freightOre: typeof row.freight_ore === "number" ? row.freight_ore : null,
+    nextFulfillment: terms.fulfillment,
+    nextFreightOre: freightOre,
   });
   if (decision.action === "stop") return { ok: false, reason: decision.reason };
   const token = crypto.randomUUID();
@@ -759,8 +892,11 @@ export async function reviseShopOrder(
     .from("shop_orders")
     .update({
       status: "offer",
-      offer_boxes: boxes,
-      offer_total_ore: orderTotalOre(boxes),
+      offer_boxes: terms.boxes,
+      offer_total_ore: orderTotalOre(terms.boxes) + freightOre,
+      offer_freight_ore: freightOre,
+      offer_fulfillment: terms.fulfillment,
+      offer_delivery_note: terms.note || null,
       offer_token: token,
     })
     .eq("id", id)
@@ -771,8 +907,11 @@ export async function reviseShopOrder(
     lang: row.lang === "en" ? "en" : "no",
     number: row.order_number,
     flavorName: FLAVOR_NAME[row.flavor_slug === "truffle" ? "truffle" : "nduja"],
-    boxes,
-    totalOre: orderTotalOre(boxes),
+    boxes: terms.boxes,
+    totalOre: orderTotalOre(terms.boxes),
+    freightOre,
+    fulfillment: terms.fulfillment,
+    note: terms.note,
     acceptUrl: `${origin}/kjop/tilbud?token=${token}`,
   });
   await sendText({ to: row.email, subject: message.subject, text: message.text });
@@ -805,12 +944,20 @@ export async function acceptShopOffer(
     existingHold && reservationCovers(existingHold, existingHold.pieces, new Date())
       ? Math.floor(existingHold.pieces / PACK_FIFTY)
       : 0;
+  const acceptedFulfillment = asFulfillment(row.offer_fulfillment ?? row.fulfillment);
+  const acceptedFreight =
+    acceptedFulfillment === "pickup"
+      ? 0
+      : typeof row.offer_freight_ore === "number"
+        ? row.offer_freight_ore
+        : null;
   const decision = acceptOfferDecision({
     status: asStatus(row.status),
     offerBoxes: row.offer_boxes,
     boxesAvailable: (stock?.boxes50 ?? 0) + ownBoxes,
-    fulfillment: asFulfillment(row.fulfillment),
+    fulfillment: acceptedFulfillment,
     bindingOpen: shop.ordering.bindingOpen,
+    priced: handoffPriced(acceptedFulfillment, acceptedFreight),
   });
   if (decision.action === "stop") return { ok: false, reason: decision.reason };
   const boxes = decision.boxes;
@@ -878,6 +1025,17 @@ export async function acceptShopOffer(
       boxes,
       pieces,
       total_ore: orderTotalOre(boxes),
+      fulfillment: acceptedFulfillment,
+      freight_ore: acceptedFreight,
+      delivery_zone:
+        acceptedFulfillment === "pickup"
+          ? "pickup"
+          : row.delivery_zone === "km5" ||
+              row.delivery_zone === "km10" ||
+              row.delivery_zone === "km15"
+            ? row.delivery_zone
+            : "agreed",
+      delivery_note: row.offer_delivery_note ?? null,
       binding,
       reservation_id: reservationId,
       expires_at: binding ? holdUntil() : null,

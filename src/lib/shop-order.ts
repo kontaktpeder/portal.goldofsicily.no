@@ -66,17 +66,28 @@ export function orderTotalOre(boxes: number): number {
   return orderPieces(boxes) * piecePriceOre();
 }
 
-/** Pickup can bind only when the server setting is open. Delivery stays a request. */
+/** A priced handover can bind when the server setting is open. Unpriced delivery stays a request. */
 export function classifyShopOrder(input: {
   bindingOpen: boolean;
   fulfillment: ShopFulfillment;
   boxes: number;
   boxesAvailable: number;
+  priced?: boolean;
 }): OrderKind {
   if (!Number.isInteger(input.boxes) || input.boxes < 1) return "short";
-  if (input.fulfillment !== "pickup" || !input.bindingOpen) return "quote";
+  const priced = input.priced ?? input.fulfillment === "pickup";
+  if (!input.bindingOpen || !priced) return "quote";
   if (input.boxes > input.boxesAvailable) return "short";
   return "binding";
+}
+
+/** Pickup is priced. Delivery is priced once freight øre is stored. */
+export function handoffPriced(
+  fulfillment: ShopFulfillment,
+  freightOre: number | null | undefined,
+): boolean {
+  if (fulfillment === "pickup") return true;
+  return typeof freightOre === "number" && freightOre >= 0;
 }
 
 export function parseShopOrder(value: unknown): ShopOrderInput | null {
@@ -138,6 +149,7 @@ export type ApprovalView = {
   reservation: ReservationView | null;
   customerOrderId: string | null;
   customerId: string | null;
+  freightOre?: number | null;
 };
 
 export type ApprovalDecision =
@@ -154,7 +166,8 @@ export function approvalDecision(order: ApprovalView, now: Date): ApprovalDecisi
   if (order.status === "declined" || order.status === "expired" || order.status === "confirmed") {
     return { action: "stop", reason: "closed" };
   }
-  if (order.fulfillment !== "pickup") return { action: "stop", reason: "closed" };
+  if (!handoffPriced(order.fulfillment, order.freightOre))
+    return { action: "stop", reason: "closed" };
   if (order.status !== "received" && order.status !== "quote")
     return { action: "stop", reason: "closed" };
   if (order.binding) {
@@ -177,21 +190,44 @@ export function approvalLock(input: {
   return input.now.getTime() - updated >= SHOP_APPROVAL_LOCK_MS ? "take" : "wait";
 }
 
+export type StaffSituation =
+  "ready" | "clarify" | "waiting" | "working" | "confirmed" | "declined" | "expired";
+
+/** What the employee should do next. The technical status stays underneath. */
+export function staffSituation(order: {
+  status: ShopOrderStatus;
+  fulfillment: ShopFulfillment;
+  freightOre?: number | null;
+  customerOrderId: string | null;
+}): StaffSituation {
+  if (order.customerOrderId || order.status === "confirmed") return "confirmed";
+  if (order.status === "declined") return "declined";
+  if (order.status === "expired") return "expired";
+  if (order.status === "confirming") return "working";
+  if (order.status === "offer") return "waiting";
+  if (!handoffPriced(order.fulfillment, order.freightOre)) return "clarify";
+  return "ready";
+}
+
 export function staffActions(order: {
   status: ShopOrderStatus;
   fulfillment: ShopFulfillment;
   customerOrderId: string | null;
-}): { approve: boolean; decline: boolean; offer: boolean } {
+  freightOre?: number | null;
+}): { approve: boolean; decline: boolean; offer: boolean; revise: boolean } {
   const open =
     order.customerOrderId == null && order.status !== "confirmed" && order.status !== "declined";
+  const priced = handoffPriced(order.fulfillment, order.freightOre);
+  const editable =
+    order.status === "received" || order.status === "quote" || order.status === "offer";
   return {
     approve:
       open &&
-      order.fulfillment === "pickup" &&
+      priced &&
       (order.status === "received" || order.status === "quote" || order.status === "confirming"),
     decline: open && order.status !== "confirming",
-    offer:
-      open && (order.status === "received" || order.status === "quote" || order.status === "offer"),
+    offer: open && !priced && editable,
+    revise: open && priced && (order.status === "received" || order.status === "quote"),
   };
 }
 
@@ -211,6 +247,10 @@ export function offerDecision(input: {
   status: ShopOrderStatus;
   boxes: number;
   nextBoxes: number;
+  fulfillment?: ShopFulfillment;
+  freightOre?: number | null;
+  nextFulfillment?: ShopFulfillment;
+  nextFreightOre?: number | null;
 }): OfferDecision {
   if (input.status !== "received" && input.status !== "quote" && input.status !== "offer") {
     return { action: "stop", reason: "closed" };
@@ -218,8 +258,20 @@ export function offerDecision(input: {
   if (!Number.isInteger(input.nextBoxes) || input.nextBoxes < 1 || input.nextBoxes > 20) {
     return { action: "stop", reason: "closed" };
   }
-  if (input.nextBoxes === input.boxes && input.status !== "quote")
+  if (
+    input.nextFreightOre != null &&
+    (!Number.isInteger(input.nextFreightOre) ||
+      input.nextFreightOre < 0 ||
+      input.nextFreightOre > 500_000)
+  ) {
+    return { action: "stop", reason: "closed" };
+  }
+  const sameHand =
+    (input.nextFulfillment ?? input.fulfillment) === input.fulfillment &&
+    (input.nextFreightOre ?? input.freightOre ?? null) === (input.freightOre ?? null);
+  if (input.nextBoxes === input.boxes && sameHand && input.status !== "quote") {
     return { action: "stop", reason: "same" };
+  }
   return { action: "send" };
 }
 
@@ -229,16 +281,18 @@ export function acceptOfferDecision(input: {
   boxesAvailable: number;
   fulfillment: ShopFulfillment;
   bindingOpen: boolean;
+  priced?: boolean;
 }):
   | { action: "accept"; kind: OrderKind; boxes: number }
   | { action: "stop"; reason: "closed" | "stock" } {
   if (input.status !== "offer" || input.offerBoxes == null)
     return { action: "stop", reason: "closed" };
   const kind = classifyShopOrder({
-    bindingOpen: input.bindingOpen && input.fulfillment === "pickup",
+    bindingOpen: input.bindingOpen,
     fulfillment: input.fulfillment,
     boxes: input.offerBoxes,
     boxesAvailable: input.boxesAvailable,
+    priced: input.priced ?? input.fulfillment === "pickup",
   });
   if (kind === "short") return { action: "stop", reason: "stock" };
   return { action: "accept", kind, boxes: input.offerBoxes };
@@ -252,9 +306,31 @@ export function receivedMail(input: {
   totalOre: number;
   kind: "binding" | "quote";
   fulfillment: ShopFulfillment;
+  freightOre?: number | null;
+  distanceLabel?: string | null;
 }): { subject: string; text: string } {
   const total = formatOre(input.totalOre);
   const goods = `${input.boxes} eske${input.boxes === 1 ? "" : "r"} · ${input.flavorName}`;
+  if (input.fulfillment !== "pickup" && typeof input.freightOre === "number") {
+    const freight = formatOre(input.freightOre);
+    const payable = formatOre(input.totalOre + input.freightOre);
+    const where = input.distanceLabel ?? "";
+    if (input.lang === "en") {
+      const place = where ? `Delivery ${where}.` : "Delivery price is included.";
+      const line = `${input.boxes} box${input.boxes === 1 ? "" : "es"} · ${input.flavorName}`;
+      const text =
+        input.kind === "binding"
+          ? `${input.number} is received.\n${line}\nGoods ${total}\nFreight ${freight}\nTotal ${payable}\n${place}\nInvoice after delivery.\nThis is not an invoice.`
+          : `${input.number} is a request, not an order.\n${line}\nGoods ${total}\nFreight ${freight}\nTotal ${payable}\n${place}\nWe confirm it before it becomes an order.`;
+      return { subject: `Received ${input.number}`, text };
+    }
+    const place = where ? `Levering ${where}.` : "Levering er priset.";
+    const text =
+      input.kind === "binding"
+        ? `${input.number} er mottatt.\n${goods}\nVarer ${total}\nFrakt ${freight}\nTotalt ${payable}\n${place}\nFaktura kommer etter levering.\nDette er ikke en faktura.`
+        : `${input.number} er en forespørsel, ikke en bestilling.\n${goods}\nVarer ${total}\nFrakt ${freight}\nTotalt ${payable}\n${place}\nVi bekrefter før den blir en bestilling.`;
+    return { subject: `Mottatt ${input.number}`, text };
+  }
   if (input.lang === "en") {
     const subject = `Received ${input.number}`;
     const text =
@@ -281,17 +357,19 @@ export function confirmedMail(input: {
   flavorName: string;
   boxes: number;
   totalOre: number;
+  handoff?: string;
 }): { subject: string; text: string } {
   const total = formatOre(input.totalOre);
+  const handoff = input.handoff ?? pickupSentence(input.lang);
   if (input.lang === "en") {
     return {
       subject: `Order confirmed ${input.number}`,
-      text: `${input.number} is confirmed.\n${input.boxes} box${input.boxes === 1 ? "" : "es"} · ${input.flavorName}\n${total}\n${pickupSentence("en")}\nInvoice follows after delivery. This mail is not an invoice.`,
+      text: `${input.number} is confirmed.\n${input.boxes} box${input.boxes === 1 ? "" : "es"} · ${input.flavorName}\n${total}\n${handoff}\nInvoice follows after delivery. This mail is not an invoice.`,
     };
   }
   return {
     subject: `Ordre bekreftet ${input.number}`,
-    text: `${input.number} er bekreftet.\n${input.boxes} eske${input.boxes === 1 ? "" : "r"} · ${input.flavorName}\n${total}\n${pickupSentence("no")}\nFaktura kommer etter levering. Denne e-posten er ikke en faktura.`,
+    text: `${input.number} er bekreftet.\n${input.boxes} eske${input.boxes === 1 ? "" : "r"} · ${input.flavorName}\n${total}\n${handoff}\nFaktura kommer etter levering. Denne e-posten er ikke en faktura.`,
   };
 }
 
@@ -318,17 +396,28 @@ export function offerMail(input: {
   boxes: number;
   totalOre: number;
   acceptUrl: string;
+  fulfillment?: ShopFulfillment;
+  freightOre?: number;
+  note?: string;
 }): { subject: string; text: string } {
-  const total = formatOre(input.totalOre);
+  const freight = input.freightOre ?? 0;
+  const payable = formatOre(input.totalOre + freight);
+  const note = input.note ? `\n${input.note}` : "";
+  const handoff =
+    input.fulfillment === "delivery_request"
+      ? input.lang === "en"
+        ? `Delivery. Freight ${formatOre(freight)}.${note}`
+        : `Levering. Frakt ${formatOre(freight)}.${note}`
+      : pickupSentence(input.lang);
   if (input.lang === "en") {
     return {
       subject: `Offer ${input.number}`,
-      text: `The terms for ${input.number} changed.\n${input.boxes} box${input.boxes === 1 ? "" : "es"} · ${input.flavorName}\n${total}\n${pickupSentence("en")}\nInvoice after delivery.\nAccept before it becomes an order: ${input.acceptUrl}`,
+      text: `The terms for ${input.number} changed.\n${input.boxes} box${input.boxes === 1 ? "" : "es"} · ${input.flavorName}\n${payable}\n${handoff}\nInvoice after delivery.\nAccept before it becomes an order: ${input.acceptUrl}`,
     };
   }
   return {
     subject: `Tilbud ${input.number}`,
-    text: `Vilkårene for ${input.number} er endret.\n${input.boxes} eske${input.boxes === 1 ? "" : "r"} · ${input.flavorName}\n${total}\n${pickupSentence("no")}\nFaktura etter levering.\nGodta før den blir en bestilling: ${input.acceptUrl}`,
+    text: `Vilkårene for ${input.number} er endret.\n${input.boxes} eske${input.boxes === 1 ? "" : "r"} · ${input.flavorName}\n${payable}\n${handoff}\nFaktura etter levering.\nGodta før den blir en bestilling: ${input.acceptUrl}`,
   };
 }
 

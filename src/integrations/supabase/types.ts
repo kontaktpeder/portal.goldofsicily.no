@@ -1728,6 +1728,13 @@ export type Database = {
           offer_boxes: number | null
           offer_total_ore: number | null
           offer_token: string | null
+          freight_ore: number | null
+          distance_m: number | null
+          delivery_zone: string | null
+          delivery_note: string | null
+          offer_freight_ore: number | null
+          offer_fulfillment: string | null
+          offer_delivery_note: string | null
           lang: string
           received_mail_at: string | null
           confirmed_mail_at: string | null
@@ -1763,6 +1770,13 @@ export type Database = {
           offer_boxes?: number | null
           offer_total_ore?: number | null
           offer_token?: string | null
+          freight_ore?: number | null
+          distance_m?: number | null
+          delivery_zone?: string | null
+          delivery_note?: string | null
+          offer_freight_ore?: number | null
+          offer_fulfillment?: string | null
+          offer_delivery_note?: string | null
           lang?: string
           received_mail_at?: string | null
           confirmed_mail_at?: string | null
@@ -1798,6 +1812,13 @@ export type Database = {
           offer_boxes?: number | null
           offer_total_ore?: number | null
           offer_token?: string | null
+          freight_ore?: number | null
+          distance_m?: number | null
+          delivery_zone?: string | null
+          delivery_note?: string | null
+          offer_freight_ore?: number | null
+          offer_fulfillment?: string | null
+          offer_delivery_note?: string | null
           lang?: string
           received_mail_at?: string | null
           confirmed_mail_at?: string | null

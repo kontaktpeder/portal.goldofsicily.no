@@ -13,6 +13,7 @@ import {
   receivedMail,
   reservationCovers,
   staffActions,
+  staffSituation,
 } from "./shop-order.ts";
 import { PRICE_FIFTY_ORE } from "./shop.ts";
 
@@ -34,6 +35,16 @@ test("binding stays closed for the public, and delivery is never a priced shipme
   );
   assert.equal(
     classifyShopOrder({ bindingOpen: true, fulfillment: "pickup", boxes: 1, boxesAvailable: 5 }),
+    "binding",
+  );
+  assert.equal(
+    classifyShopOrder({
+      bindingOpen: true,
+      fulfillment: "delivery_request",
+      boxes: 1,
+      boxesAvailable: 5,
+      priced: true,
+    }),
     "binding",
   );
   assert.equal(
@@ -236,6 +247,33 @@ test("the approval card stays on one step and ignores a second click while the l
     staffActions({ status: "quote", fulfillment: "delivery_request", customerOrderId: null })
       .approve,
     false,
+  );
+  assert.equal(
+    staffSituation({
+      status: "quote",
+      fulfillment: "delivery_request",
+      customerOrderId: null,
+      freightOre: null,
+    }),
+    "clarify",
+  );
+  assert.equal(
+    staffActions({
+      status: "quote",
+      fulfillment: "delivery_request",
+      customerOrderId: null,
+      freightOre: 6_000,
+    }).approve,
+    true,
+  );
+  assert.equal(
+    staffSituation({
+      status: "quote",
+      fulfillment: "delivery_request",
+      customerOrderId: null,
+      freightOre: 6_000,
+    }),
+    "ready",
   );
   assert.equal(
     staffActions({ status: "offer", fulfillment: "pickup", customerOrderId: null }).approve,

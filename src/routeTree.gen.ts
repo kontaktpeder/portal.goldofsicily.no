@@ -36,6 +36,7 @@ import { Route as AuthenticatedAdminWholesalersIndexRouteImport } from './routes
 import { Route as AuthenticatedAdminWholesalersCustomerIdRouteImport } from './routes/_authenticated/admin.wholesalers.$customerId'
 import { Route as ApiPublicV1ShopRouteImport } from './routes/api/public/v1/shop'
 import { Route as ApiPublicV1VenuesRouteImport } from './routes/api/public/v1/venues'
+import { Route as ApiPublicV1ShopDeliveryRouteImport } from './routes/api/public/v1/shop.delivery'
 import { Route as ApiPublicV1ShopOffersRouteImport } from './routes/api/public/v1/shop.offers'
 import { Route as ApiPublicV1ShopOrdersRouteImport } from './routes/api/public/v1/shop.orders'
 import { Route as ApiPublicV1VenuesSlugRouteImport } from './routes/api/public/v1/venues.$slug'
@@ -190,6 +191,11 @@ const ApiPublicV1VenuesRoute = ApiPublicV1VenuesRouteImport.update({
   path: '/api/public/v1/venues',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicV1ShopDeliveryRoute = ApiPublicV1ShopDeliveryRouteImport.update({
+  id: '/delivery',
+  path: '/delivery',
+  getParentRoute: () => ApiPublicV1ShopRoute,
+} as any)
 const ApiPublicV1ShopOffersRoute = ApiPublicV1ShopOffersRouteImport.update({
   id: '/offers',
   path: '/offers',
@@ -233,6 +239,7 @@ export interface FileRoutesByFullPath {
   '/admin/sales/': typeof AuthenticatedAdminSalesIndexRoute
   '/admin/venues/': typeof AuthenticatedAdminVenuesIndexRoute
   '/admin/wholesalers/': typeof AuthenticatedAdminWholesalersIndexRoute
+  '/api/public/v1/shop/delivery': typeof ApiPublicV1ShopDeliveryRoute
   '/api/public/v1/shop/offers': typeof ApiPublicV1ShopOffersRoute
   '/api/public/v1/shop/orders': typeof ApiPublicV1ShopOrdersRoute
   '/api/public/v1/venues/$slug': typeof ApiPublicV1VenuesSlugRoute
@@ -263,6 +270,7 @@ export interface FileRoutesByTo {
   '/admin/sales': typeof AuthenticatedAdminSalesIndexRoute
   '/admin/venues': typeof AuthenticatedAdminVenuesIndexRoute
   '/admin/wholesalers': typeof AuthenticatedAdminWholesalersIndexRoute
+  '/api/public/v1/shop/delivery': typeof ApiPublicV1ShopDeliveryRoute
   '/api/public/v1/shop/offers': typeof ApiPublicV1ShopOffersRoute
   '/api/public/v1/shop/orders': typeof ApiPublicV1ShopOrdersRoute
   '/api/public/v1/venues/$slug': typeof ApiPublicV1VenuesSlugRoute
@@ -296,6 +304,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/sales/': typeof AuthenticatedAdminSalesIndexRoute
   '/_authenticated/admin/venues/': typeof AuthenticatedAdminVenuesIndexRoute
   '/_authenticated/admin/wholesalers/': typeof AuthenticatedAdminWholesalersIndexRoute
+  '/api/public/v1/shop/delivery': typeof ApiPublicV1ShopDeliveryRoute
   '/api/public/v1/shop/offers': typeof ApiPublicV1ShopOffersRoute
   '/api/public/v1/shop/orders': typeof ApiPublicV1ShopOrdersRoute
   '/api/public/v1/venues/$slug': typeof ApiPublicV1VenuesSlugRoute
@@ -329,6 +338,7 @@ export interface FileRouteTypes {
     | '/admin/sales/'
     | '/admin/venues/'
     | '/admin/wholesalers/'
+    | '/api/public/v1/shop/delivery'
     | '/api/public/v1/shop/offers'
     | '/api/public/v1/shop/orders'
     | '/api/public/v1/venues/$slug'
@@ -359,6 +369,7 @@ export interface FileRouteTypes {
     | '/admin/sales'
     | '/admin/venues'
     | '/admin/wholesalers'
+    | '/api/public/v1/shop/delivery'
     | '/api/public/v1/shop/offers'
     | '/api/public/v1/shop/orders'
     | '/api/public/v1/venues/$slug'
@@ -391,6 +402,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/sales/'
     | '/_authenticated/admin/venues/'
     | '/_authenticated/admin/wholesalers/'
+    | '/api/public/v1/shop/delivery'
     | '/api/public/v1/shop/offers'
     | '/api/public/v1/shop/orders'
     | '/api/public/v1/venues/$slug'
@@ -595,6 +607,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicV1VenuesRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/v1/shop/delivery': {
+      id: '/api/public/v1/shop/delivery'
+      path: '/delivery'
+      fullPath: '/api/public/v1/shop/delivery'
+      preLoaderRoute: typeof ApiPublicV1ShopDeliveryRouteImport
+      parentRoute: typeof ApiPublicV1ShopRoute
+    }
     '/api/public/v1/shop/offers': {
       id: '/api/public/v1/shop/offers'
       path: '/offers'
@@ -685,11 +704,13 @@ const AuthenticatedRouteRouteWithChildren =
   AuthenticatedRouteRoute._addFileChildren(AuthenticatedRouteRouteChildren)
 
 interface ApiPublicV1ShopRouteChildren {
+  ApiPublicV1ShopDeliveryRoute: typeof ApiPublicV1ShopDeliveryRoute
   ApiPublicV1ShopOffersRoute: typeof ApiPublicV1ShopOffersRoute
   ApiPublicV1ShopOrdersRoute: typeof ApiPublicV1ShopOrdersRoute
 }
 
 const ApiPublicV1ShopRouteChildren: ApiPublicV1ShopRouteChildren = {
+  ApiPublicV1ShopDeliveryRoute: ApiPublicV1ShopDeliveryRoute,
   ApiPublicV1ShopOffersRoute: ApiPublicV1ShopOffersRoute,
   ApiPublicV1ShopOrdersRoute: ApiPublicV1ShopOrdersRoute,
 }

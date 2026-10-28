@@ -34,7 +34,15 @@ export const Route = createFileRoute("/api/public/v1/shop/orders")({
           if (!saved.ok && saved.reason === "invalid")
             return shopJson(request, { error: "invalid" }, 400);
           if (!saved.ok) return shopJson(request, { error: "unavailable" }, 503);
-          return shopJson(request, { ok: true, number: saved.order.orderNumber, kind: saved.kind });
+          const freightOre = saved.order.freightOre;
+          return shopJson(request, {
+            ok: true,
+            number: saved.order.orderNumber,
+            kind: saved.kind,
+            freightOre,
+            totalOre: saved.order.totalOre + (freightOre ?? 0),
+            zone: saved.order.deliveryZone,
+          });
         } catch {
           return shopJson(request, { error: "unavailable" }, 503);
         }

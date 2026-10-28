@@ -39,12 +39,24 @@ export const declineNettbestilling = createServerFn({ method: "POST" })
 
 export const reviseNettbestilling = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((data: { id: string; boxes: number }) => data)
+  .inputValidator(
+    (data: { id: string; boxes: number; fulfillment: string; freightKr: number; note: string }) => {
+      const fulfillment = data.fulfillment === "delivery_request" ? "delivery_request" : "pickup";
+      const kroner = Math.round(Number(data.freightKr));
+      return {
+        id: data.id,
+        boxes: Math.floor(Number(data.boxes)),
+        fulfillment,
+        freightOre: fulfillment === "pickup" ? 0 : kroner * 100,
+        note: typeof data.note === "string" ? data.note.trim().slice(0, 160) : "",
+      } as const;
+    },
+  )
   .handler(async ({ data, context }) => {
     await assertOperations(context.supabase as never);
     const { reviseShopOrder } = await import("@/lib/shop-order.server");
     const origin = process.env["SHOP_PUBLIC_ORIGIN"] ?? "https://goldofsicily.no";
-    return reviseShopOrder(data.id, data.boxes, origin);
+    return reviseShopOrder(data.id, data, origin);
   });
 
 /** After a new batch is stored, tell waitlist customers whose flavour now has a 50-box. */
