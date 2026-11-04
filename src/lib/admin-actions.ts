@@ -8,6 +8,7 @@ export const ADMIN_ACTION_TYPES = [
   "approve_delivery",
   "register_priced_delivery",
   "list_accounting_discrepancies",
+  "mark_legacy_delivery",
 ] as const;
 
 export type AdminActionType = (typeof ADMIN_ACTION_TYPES)[number];
@@ -85,6 +86,12 @@ export type CreateDeliveryDraftPayload = {
   note?: string;
   deliveredBy?: string | null;
   lines: DeliveryLineInput[];
+};
+
+export type MarkLegacyDeliveryPayload = {
+  deliveryId: string;
+  rationale: string;
+  documentation?: string;
 };
 
 export function isAdminActionType(value: string): value is AdminActionType {
@@ -360,6 +367,39 @@ export function parseApproveDelivery(payload: unknown): {
   if (idIssue) issues.push(idIssue);
   if (issues.length) return { issues };
   return { issues, data: { draftId: String(draftId) } };
+}
+
+export function parseMarkLegacyDelivery(payload: unknown): {
+  data?: MarkLegacyDeliveryPayload;
+  issues: ValidationIssue[];
+} {
+  const issues: ValidationIssue[] = [];
+  if (!payload || typeof payload !== "object") {
+    return { issues: [issue("invalid_payload", "payload must be an object")] };
+  }
+  const row = payload as Record<string, unknown>;
+  const deliveryId = row.deliveryId ?? row.delivery_id;
+  const rationale = row.rationale ?? row.reason;
+  const documentation =
+    typeof row.documentation === "string"
+      ? row.documentation
+      : typeof row.evidence === "string"
+        ? row.evidence
+        : undefined;
+  const idIssue = requireUuid(deliveryId, "deliveryId");
+  if (idIssue) issues.push(idIssue);
+  if (typeof rationale !== "string" || rationale.trim().length < 8) {
+    issues.push(issue("invalid_rationale", "rationale must be at least 8 characters"));
+  }
+  if (issues.length) return { issues };
+  return {
+    issues,
+    data: {
+      deliveryId: String(deliveryId),
+      rationale: String(rationale).trim(),
+      documentation: documentation?.trim() || undefined,
+    },
+  };
 }
 
 /** Remaining on a lot after handovers and linked deliveries (approved basis). */

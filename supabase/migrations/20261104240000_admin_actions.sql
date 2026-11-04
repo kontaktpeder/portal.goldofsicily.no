@@ -46,7 +46,8 @@ CREATE TABLE IF NOT EXISTS public.admin_action_proposals (
       'set_customer_price',
       'approve_delivery',
       'register_priced_delivery',
-      'list_accounting_discrepancies'
+      'list_accounting_discrepancies',
+      'mark_legacy_delivery'
     )
   )
 );

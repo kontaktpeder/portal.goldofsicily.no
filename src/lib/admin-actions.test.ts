@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   isAdminActionType,
+  parseMarkLegacyDelivery,
   parseRegisterPricedDelivery,
   parseSetCustomerPrice,
   lotRemainingForAllocation,
@@ -10,7 +11,18 @@ import {
 
 test("action type guard", () => {
   assert.equal(isAdminActionType("register_priced_delivery"), true);
+  assert.equal(isAdminActionType("mark_legacy_delivery"), true);
   assert.equal(isAdminActionType("drop_table"), false);
+});
+
+test("parse mark_legacy_delivery", () => {
+  const parsed = parseMarkLegacyDelivery({
+    delivery_id: "58be52bb-517e-44a2-8480-89cf46fc49f4",
+    rationale: "Legacy levering før LOT-system",
+    documentation: "Bekreftet: 136 T + 144 N = 280",
+  });
+  assert.equal(parsed.issues.length, 0);
+  assert.equal(parsed.data?.deliveryId, "58be52bb-517e-44a2-8480-89cf46fc49f4");
 });
 
 test("parse set_customer_price", () => {
