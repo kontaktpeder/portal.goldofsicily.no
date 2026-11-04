@@ -180,7 +180,7 @@ function ReportPage() {
           p_preparation_issue: prepIssue === true,
           p_preparation_issue_text: prepIssue === true && prepText.trim() ? prepText.trim() : null,
           p_lines: linesPayload(lines),
-        })
+        } as never)
       : await supabase.from("shift_reports").insert({
           ...shared,
           sold_this_shift: sold === "" ? 0 : sold,
