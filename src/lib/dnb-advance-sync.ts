@@ -58,7 +58,7 @@ export async function syncOrderAdvance(
     p_dnb_total_ore: check.dnbTotalOre,
     p_has_vat: check.hasVat,
     p_dnb_vat_ore: check.dnbVatOre,
-  });
+  } as never);
   if (recorded.error) {
     if (pendingSql(recorded.error.message)) {
       return { ok: false, reason: "pending_sql", checked: false, confirmedOre: null };

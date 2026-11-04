@@ -212,7 +212,7 @@ function AdminLotDetail() {
           .eq("id", lotId)
           .single();
         if (fallback.error) throw fallback.error;
-        return { ...(fallback.data as LotDetail), gold_lot_producers: [] };
+        return { ...(fallback.data as unknown as LotDetail), gold_lot_producers: [] };
       }
       if (loadError) throw loadError;
       return data as LotDetail;
@@ -285,7 +285,7 @@ function AdminLotDetail() {
           .select("quantity, deliveries(delivered_at, customers!deliveries_customer_id_fkey(name))")
           .eq("gold_lot_id", lotId);
         if (fallback.error) throw fallback.error;
-        return fallback.data ?? [];
+        return (fallback.data ?? []).map((row) => ({ ...row, source_handover_id: null as string | null }));
       }
       throw rich.error;
     },
