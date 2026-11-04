@@ -5,6 +5,7 @@ import {
   parseApproveDelivery,
   parseCorrectionLot,
   parseCreateDeliveryDraft,
+  parseMarkLegacyDelivery,
   parseRegisterPricedDelivery,
   parseSetCustomerPrice,
   validationOf,
@@ -44,36 +45,55 @@ export async function listAccountingDiscrepancies(admin: Admin) {
   const [missingLot, portalSum, accounting, unpriced] = await Promise.all([
     admin
       .from("delivery_lines")
-      .select("quantity, gold_lot_id")
-      .gt("quantity", 0),
+      .select("quantity, gold_lot_id, deliveries!inner(legacy_without_lot)")
+      .gt("quantity", 0)
+      .is("gold_lot_id", null),
     admin.from("delivery_lines").select("quantity"),
     admin.from("accounting_revenue_periods").select("delivered_pcs").eq("active", true).limit(1),
     admin
       .from("delivery_lines")
-      .select("quantity, unit_price_ore, deliveries!inner(commercial_route)")
+      .select("quantity, unit_price_ore, deliveries!inner(commercial_route, legacy_without_lot)")
       .gt("quantity", 0)
       .is("unit_price_ore", null),
   ]);
 
-  const missingLotQty = (missingLot.data ?? [])
-    .filter((row) => row.gold_lot_id == null)
+  const unresolvedMissingLotQty = (missingLot.data ?? [])
+    .filter((row) => {
+      const delivery = Array.isArray(row.deliveries) ? row.deliveries[0] : row.deliveries;
+      return !delivery?.legacy_without_lot;
+    })
+    .reduce((sum, row) => sum + row.quantity, 0);
+  const legacyMissingLotQty = (missingLot.data ?? [])
+    .filter((row) => {
+      const delivery = Array.isArray(row.deliveries) ? row.deliveries[0] : row.deliveries;
+      return Boolean(delivery?.legacy_without_lot);
+    })
     .reduce((sum, row) => sum + row.quantity, 0);
   const portalPcs = (portalSum.data ?? []).reduce((sum, row) => sum + row.quantity, 0);
   const accountingPcs = accounting.data?.[0]?.delivered_pcs ?? 0;
   const unpricedDirect = (unpriced.data ?? [])
     .filter((row) => {
       const delivery = Array.isArray(row.deliveries) ? row.deliveries[0] : row.deliveries;
-      return delivery?.commercial_route === "direct";
+      return delivery?.commercial_route === "direct" && !delivery?.legacy_without_lot;
     })
     .reduce((sum, row) => sum + row.quantity, 0);
 
   return [
-    missingLotQty > 0
+    unresolvedMissingLotQty > 0
       ? {
           code: "missing_lot_link",
-          description: "Leveringslinjer uten gold_lot_id",
-          quantity: missingLotQty,
-          remediation: "Koble linjene til LOT eller lag korrigerings-LOT før lager beregnes.",
+          description: "Leveringslinjer uten gold_lot_id (ikke merket legacy)",
+          quantity: unresolvedMissingLotQty,
+          remediation:
+            "Koble linjene til LOT, lag korrigerings-LOT, eller merk legacy med mark_legacy_delivery.",
+        }
+      : null,
+    legacyMissingLotQty > 0
+      ? {
+          code: "legacy_without_lot",
+          description: "Legacy-leveranser uten LOT (merket)",
+          quantity: legacyMissingLotQty,
+          remediation: "Informativt. Holdes utenfor ok_for_inventory.",
         }
       : null,
     accountingPcs - portalPcs !== 0
@@ -81,7 +101,7 @@ export async function listAccountingDiscrepancies(admin: Admin) {
           code: "portal_vs_accounting_delivered",
           description: "Faktisk levert (regnskap) minus portal-leveranser",
           quantity: accountingPcs - portalPcs,
-          remediation: "Registrer manglende leveranser (f.eks. Bowling 200 stk).",
+          remediation: "Registrer manglende leveranser.",
         }
       : null,
     unpricedDirect > 0
@@ -454,6 +474,35 @@ export async function validateProposal(
     if (!parsed.data) return validationOf(parsed.issues);
     return validateRegisterPricedDelivery(admin, parsed.data);
   }
+  if (actionType === "mark_legacy_delivery") {
+    const parsed = parseMarkLegacyDelivery(payload);
+    if (!parsed.data) return validationOf(parsed.issues);
+    const { data: delivery, error } = await admin
+      .from("deliveries")
+      .select("id, note, legacy_without_lot, delivery_lines(quantity, gold_lot_id)")
+      .eq("id", parsed.data.deliveryId)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    const issues = [...parsed.issues];
+    if (!delivery) {
+      issues.push(issue("delivery_missing", "delivery not found"));
+      return validationOf(issues);
+    }
+    if (delivery.legacy_without_lot) {
+      issues.push(issue("already_legacy", "delivery is already marked legacy_without_lot", false));
+    }
+    const lines = (delivery.delivery_lines ?? []) as Array<{
+      quantity: number;
+      gold_lot_id: string | null;
+    }>;
+    const missingLotLines = lines.filter((line) => line.quantity > 0 && line.gold_lot_id == null);
+    if (missingLotLines.length === 0) {
+      issues.push(
+        issue("no_missing_lot_lines", "delivery has no lines without gold_lot_id to mark as legacy"),
+      );
+    }
+    return validationOf(issues);
+  }
   return validationOf([issue("unknown_action", `unsupported action ${actionType}`)]);
 }
 
@@ -532,6 +581,55 @@ export async function executeProposal(
       lots: createdLots,
       draftId,
       deliveryId,
+    };
+  }
+  if (actionType === "mark_legacy_delivery") {
+    const parsed = parseMarkLegacyDelivery(payload);
+    if (!parsed.data) throw new Error(parsed.issues[0]?.message ?? "invalid payload");
+    const { data: delivery, error: loadError } = await admin
+      .from("deliveries")
+      .select("id, note, legacy_without_lot, delivery_lines(quantity, gold_lot_id)")
+      .eq("id", parsed.data.deliveryId)
+      .maybeSingle();
+    if (loadError) throw new Error(loadError.message);
+    if (!delivery) throw new Error("delivery not found");
+    if (delivery.legacy_without_lot) {
+      return { deliveryId: delivery.id, alreadyMarked: true };
+    }
+    const missingPcs = ((delivery.delivery_lines ?? []) as Array<{
+      quantity: number;
+      gold_lot_id: string | null;
+    }>)
+      .filter((line) => line.quantity > 0 && line.gold_lot_id == null)
+      .reduce((sum, line) => sum + line.quantity, 0);
+    if (missingPcs <= 0) throw new Error("delivery has no lines without gold_lot_id");
+
+    const rationaleBlock = [
+      parsed.data.rationale,
+      parsed.data.documentation ? `Dokumentasjon: ${parsed.data.documentation}` : null,
+      `Merket legacy_without_lot via admin action (${proposalId}).`,
+    ]
+      .filter(Boolean)
+      .join("\n");
+    const existingNote = typeof delivery.note === "string" ? delivery.note.trim() : "";
+    const nextNote = existingNote.includes("Legacy levering før nytt LOT-/pakkesystem")
+      ? existingNote
+      : [existingNote, "Legacy levering før nytt LOT-/pakkesystem"].filter(Boolean).join("\n");
+
+    const { error } = await admin
+      .from("deliveries")
+      .update({
+        legacy_without_lot: true,
+        legacy_marked_at: new Date().toISOString(),
+        legacy_rationale: rationaleBlock,
+        note: nextNote,
+      })
+      .eq("id", parsed.data.deliveryId);
+    if (error) throw new Error(error.message);
+    return {
+      deliveryId: parsed.data.deliveryId,
+      pcsMarkedLegacy: missingPcs,
+      rationale: parsed.data.rationale,
     };
   }
   throw new Error(`unsupported action ${actionType}`);
