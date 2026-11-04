@@ -341,14 +341,14 @@ function AdminDeliveries() {
     let error: { message: string } | null = null;
     const inserted = await supabase
       .from("deliveries")
-      .insert(deliveredBy ? { ...base, delivered_by: deliveredBy } : base)
+      .insert((deliveredBy ? { ...base, delivered_by: deliveredBy } : base) as never)
       .select("id")
       .single();
     created = inserted.data;
     error = inserted.error;
     if (error && deliveredBy && isDeliveryDriverSchemaError(error.message)) {
       driverSkipped = true;
-      const retry = await supabase.from("deliveries").insert(base).select("id").single();
+      const retry = await supabase.from("deliveries").insert(base as never).select("id").single();
       created = retry.data;
       error = retry.error;
     }
@@ -365,7 +365,7 @@ function AdminDeliveries() {
           : flavorQtys,
       );
       if (lines.length > 0) {
-        const { error: lineError } = await supabase.from("delivery_lines").insert(lines);
+        const { error: lineError } = await supabase.from("delivery_lines").insert(lines as never);
         if (lineError) {
           await supabase.from("deliveries").delete().eq("id", created.id);
           setBusy(false);

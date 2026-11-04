@@ -930,7 +930,7 @@ function OrderPage() {
       if (!draftId) {
         const created = await supabase
           .from("invoice_drafts")
-          .insert({ legal_entity_id: row.billing_legal_entity_id })
+          .insert({ legal_entity_id: row.billing_legal_entity_id } as never)
           .select("id")
           .single();
         if (created.error || !created.data) {
@@ -958,7 +958,7 @@ function OrderPage() {
         toast.error(t("invoice_failed"));
         return;
       }
-      const inserted = await supabase.from("invoice_draft_lines").insert(rows);
+      const inserted = await supabase.from("invoice_draft_lines").insert(rows as never);
       if (inserted.error) {
         if (createdNow) await supabase.from("invoice_drafts").delete().eq("id", draftId);
         setBusy(false);

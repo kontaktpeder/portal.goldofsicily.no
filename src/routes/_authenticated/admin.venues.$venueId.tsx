@@ -536,7 +536,7 @@ type VenueProfile = {
   latitude: number | null;
   longitude: number | null;
   public_visible: boolean;
-  public_profile?: "partner" | "listing" | null;
+  public_profile?: "partner" | "listing" | string | null;
   collaboration_text?: string | null;
   serving_story?: string | null;
   video_url?: string | null;

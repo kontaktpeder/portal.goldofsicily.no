@@ -346,7 +346,7 @@ function AdminInvoices() {
     setBusy(true);
     const { data: draft, error } = await supabase
       .from("invoice_drafts")
-      .insert({ legal_entity_id: legalEntityId })
+      .insert({ legal_entity_id: legalEntityId } as never)
       .select("id")
       .single();
     if (error || !draft) {
