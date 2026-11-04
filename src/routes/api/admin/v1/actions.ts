@@ -14,7 +14,9 @@ function json(body: unknown, status = 200) {
 }
 
 function authorized(request: Request): boolean {
-  const expected = process.env["ADMIN_ACTIONS_TOKEN"];
+  // Propose/validate only. Never grants approve/reject.
+  const expected =
+    process.env["ARANCINI_ACTIONS_TOKEN"] ?? process.env["ADMIN_ACTIONS_TOKEN"];
   if (!expected) return false;
   const header = request.headers.get("authorization") ?? "";
   if (!header.startsWith("Bearer ")) return false;
