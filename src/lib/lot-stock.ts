@@ -233,7 +233,7 @@ export function deliveryNeedsStockSourceChoice(
 
 type AssignedLine = {
   productId: string;
-  quantity: number;
+  quantity: number | "";
   goldLotId: string;
   sourceHandoverId?: string;
 };
@@ -247,12 +247,13 @@ export function assignStockSource<T extends AssignedLine>(
 ): T[] {
   const draft: DeliveryStockLine[] = lines.map((line) => ({
     productId: line.productId,
-    quantity: line.quantity,
+    quantity: line.quantity === "" ? 0 : line.quantity,
     goldLotId: "",
     sourceHandoverId: "",
   }));
   return lines.map((line, index) => {
-    if (line.quantity <= 0) {
+    const quantity = line.quantity === "" ? 0 : line.quantity;
+    if (quantity <= 0) {
       draft[index] = {
         productId: line.productId,
         quantity: 0,
@@ -265,7 +266,7 @@ export function assignStockSource<T extends AssignedLine>(
       const picked = suggestVillaHandover(
         villaWithFormReservation(lots, draft, index),
         line.productId,
-        line.quantity,
+        quantity,
         "",
         preferredLotId,
       );
@@ -276,7 +277,7 @@ export function assignStockSource<T extends AssignedLine>(
       };
       draft[index] = {
         productId: line.productId,
-        quantity: line.quantity,
+        quantity: quantity,
         goldLotId: next.goldLotId,
         sourceHandoverId: next.sourceHandoverId,
       };
@@ -285,13 +286,13 @@ export function assignStockSource<T extends AssignedLine>(
     const goldLotId = suggestLotId(
       lotsWithFormReservation(lots, draft, index),
       line.productId,
-      line.quantity,
+      quantity,
       "",
       preferredLotId,
     );
     draft[index] = {
       productId: line.productId,
-      quantity: line.quantity,
+      quantity: quantity,
       goldLotId,
       sourceHandoverId: "",
     };
