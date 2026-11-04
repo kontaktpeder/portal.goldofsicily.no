@@ -359,7 +359,7 @@ function AdminInvoices() {
         invoice_draft_id: draft.id,
         delivery_line_id: line.deliveryLineId,
         ...(line.fulfillmentId ? { order_line_fulfillment_id: line.fulfillmentId } : {}),
-      })),
+      })) as never,
     );
     if (lineError) {
       await supabase.from("invoice_drafts").delete().eq("id", draft.id);

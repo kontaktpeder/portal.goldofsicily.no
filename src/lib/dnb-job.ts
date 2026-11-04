@@ -68,7 +68,7 @@ async function record(admin: Admin, draftId: string, outcome: TransferOutcome) {
     p_dnb_total_ore: outcome.totalOre,
     p_dnb_rest_ore: outcome.restOre,
     p_dnb_vat_ore: outcome.vatOre,
-  });
+  } as never);
   if (error) throw new Error(error.message);
 }
 
