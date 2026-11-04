@@ -98,6 +98,9 @@ function OpsHome() {
       </div>
 
       <h2 className="eyebrow mt-10">{t("ops_stock")}</h2>
+      {(data?.stock ?? []).some((row) => !row.inventoryReliable) ? (
+        <p className="mt-2 text-sm text-muted-foreground">{t("ops_stock_unreliable")}</p>
+      ) : null}
       <div className="mt-3 space-y-3">
         {(data?.stock ?? []).length === 0 ? (
           <p className="text-sm text-muted-foreground">{t("ops_stock_empty")}</p>
@@ -357,13 +360,19 @@ function StockCard({ row, lang }: { row: FlavorStock; lang: "no" | "en" }) {
   );
 }
 
-function Stat({ label, value }: { label: string; value: number }) {
+function Stat({ label, value }: { label: string; value: number | null }) {
   const { t } = useI18n();
   return (
     <div>
       <dt className="text-xs text-muted-foreground">{label}</dt>
       <dd className="mt-0.5 font-semibold tabular-nums">
-        {value} <span className="text-xs font-normal">{t("pcs")}</span>
+        {value == null ? (
+          <span className="text-sm font-medium text-muted-foreground">{t("ops_not_calculated")}</span>
+        ) : (
+          <>
+            {value} <span className="text-xs font-normal">{t("pcs")}</span>
+          </>
+        )}
       </dd>
     </div>
   );

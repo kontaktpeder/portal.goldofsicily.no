@@ -21,14 +21,34 @@ export type OpsProduct = {
   nameEn: string;
 };
 
+export type DeliveryProductTotal = {
+  productId: string;
+  quantity: number;
+  /** Delivered pcs without gold_lot_id — blocks reliable inventory. */
+  missingLotQty: number;
+};
+
 export type FlavorStock = {
   productId: string;
   nameNo: string;
   nameEn: string;
   produced: number;
-  atVilla: number;
+  /** All registered delivery lines for the product (priced or not). */
   delivered: number;
-  available: number;
+  /**
+   * Remaining at Gold for display. Null when lot links are incomplete —
+   * do not invent stock from produced − delivered alone.
+   */
+  available: number | null;
+  /**
+   * Remaining at Villa for display. Null when lot links are incomplete.
+   */
+  atVilla: number | null;
+  /** Lot-based Gold remaining — used for production planning only. */
+  planningAvailable: number;
+  /** Lot-based Villa remaining — used for production planning only. */
+  planningAtVilla: number;
+  inventoryReliable: boolean;
 };
 
 export type NextNeedItem = {
@@ -71,21 +91,38 @@ export function lotsReadyForHandover(lots: OpsLot[]): OpsLot[] {
   return lots.filter((lot) => isOpenLot(lot.status) && goldRemainingOnLot(lot) > 0);
 }
 
-export function flavorStock(products: OpsProduct[], lots: OpsLot[]): FlavorStock[] {
+export function flavorStock(
+  products: OpsProduct[],
+  lots: OpsLot[],
+  deliveryTotals: readonly DeliveryProductTotal[] = [],
+): FlavorStock[] {
+  const deliveredByProduct = new Map(
+    deliveryTotals.map((row) => [row.productId, row] as const),
+  );
   return products.map((product) => {
     const rows = activeLots(lots).filter((lot) => lot.productId === product.id);
     const produced = sumQuantities(rows.map((lot) => lot.producedQty));
-    const delivered = sumQuantities(rows.map((lot) => lot.deliveredQty));
+    const lotLinkedDelivered = sumQuantities(rows.map((lot) => lot.deliveredQty));
     const handedAll = sumQuantities(rows.map((lot) => handedQty(lot)));
     const handedVilla = sumQuantities(rows.map((lot) => handedQty(lot, "villa")));
+    const planningAvailable = remainingAtGold(produced, handedAll);
+    const planningAtVilla = Math.max(0, handedVilla - lotLinkedDelivered);
+    const delivery = deliveredByProduct.get(product.id);
+    const delivered = delivery?.quantity ?? lotLinkedDelivered;
+    const missingLotQty = delivery?.missingLotQty ?? 0;
+    // Incomplete LOT links → hide computed stock. Delivered still counts every registered line.
+    const inventoryReliable = missingLotQty === 0 && delivered === lotLinkedDelivered;
     return {
       productId: product.id,
       nameNo: product.nameNo,
       nameEn: product.nameEn,
       produced,
       delivered,
-      available: remainingAtGold(produced, handedAll),
-      atVilla: Math.max(0, handedVilla - delivered),
+      planningAvailable,
+      planningAtVilla,
+      inventoryReliable,
+      available: inventoryReliable ? planningAvailable : null,
+      atVilla: inventoryReliable ? planningAtVilla : null,
     };
   });
 }
@@ -277,12 +314,12 @@ export function buildNextNeed(
   }
 
   const villaItems = stock
-    .filter((row) => row.atVilla > 0)
+    .filter((row) => row.inventoryReliable && (row.atVilla ?? 0) > 0)
     .map((row) => ({
       id: `villa:${row.productId}`,
       source: "villa" as const,
       title: "Villa",
-      quantity: row.atVilla,
+      quantity: row.atVilla ?? 0,
       flavorName: lang === "en" ? row.nameEn : row.nameNo,
     }));
 

@@ -10,9 +10,9 @@ import type { StoredFlavorLine } from "@/lib/flavors";
 export const Route = createFileRoute("/_authenticated/admin/reports")({
   head: () => ({
     meta: [
-      { title: "Reports — Gold of Sicily admin" },
+      { title: "Skiftrapporter — Gold of Sicily admin" },
       { name: "description", content: "All submitted shift reports across partner venues." },
-      { property: "og:title", content: "Reports — Gold of Sicily admin" },
+      { property: "og:title", content: "Skiftrapporter — Gold of Sicily admin" },
       { property: "og:description", content: "All submitted shift reports across partner venues." },
     ],
   }),
@@ -21,25 +21,32 @@ export const Route = createFileRoute("/_authenticated/admin/reports")({
 
 function AdminReports() {
   const { t, lang } = useI18n();
-  const { data } = useQuery({
-    queryKey: ["admin-reports"],
+  const { data, isPending, isError } = useQuery({
+    queryKey: ["admin-shift-reports"],
     queryFn: async () => {
-      const { data: rows } = await supabase
+      const { data: rows, error } = await supabase
         .from("shift_reports")
         .select(
           "*, customers(name), shift_report_lines(product_id, sold, remaining_stock, next_required_quantity, products(name_no, name_en))",
         )
         .order("created_at", { ascending: false })
         .limit(200);
+      if (error) throw error;
       return rows ?? [];
     },
   });
 
   return (
     <main className="mx-auto w-full max-w-5xl px-5 pb-16">
-      <h1 className="pt-8 text-3xl font-semibold">{t("reports")}</h1>
+      <p className="eyebrow pt-8">{t("reports")}</p>
+      <h1 className="mt-1 text-3xl font-semibold">{t("reports_shift_title")}</h1>
+      <p className="mt-2 max-w-2xl text-sm text-muted-foreground">{t("reports_shift_intro")}</p>
       <div className="mt-6 space-y-3">
-        {(data ?? []).length === 0 ? (
+        {isPending ? (
+          <p className="text-sm text-muted-foreground">…</p>
+        ) : isError ? (
+          <p className="text-sm text-destructive">{t("history_empty")}</p>
+        ) : (data ?? []).length === 0 ? (
           <p className="text-sm text-muted-foreground">{t("history_empty")}</p>
         ) : (
           data?.map((report) => (
