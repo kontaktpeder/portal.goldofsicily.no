@@ -1,0 +1,13 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1793835145668,
+      "tag": "0000_apply_pending_dnb_crm_delivery_zones",
+      "breakpoints": true
+    }
+  ]
+}

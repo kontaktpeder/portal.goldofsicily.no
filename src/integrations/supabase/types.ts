@@ -258,6 +258,99 @@ export type Database = {
           },
         ]
       }
+      crm_activities: {
+        Row: {
+          body: string
+          created_at: string
+          created_by: string | null
+          customer_id: string
+          happened_at: string
+          id: string
+          kind: Database["public"]["Enums"]["crm_activity_kind"]
+        }
+        Insert: {
+          body: string
+          created_at?: string
+          created_by?: string | null
+          customer_id: string
+          happened_at?: string
+          id?: string
+          kind: Database["public"]["Enums"]["crm_activity_kind"]
+        }
+        Update: {
+          body?: string
+          created_at?: string
+          created_by?: string | null
+          customer_id?: string
+          happened_at?: string
+          id?: string
+          kind?: Database["public"]["Enums"]["crm_activity_kind"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crm_activities_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "crm_activities_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      customer_contacts: {
+        Row: {
+          created_at: string
+          customer_id: string | null
+          email: string | null
+          id: string
+          legal_entity_id: string | null
+          name: string
+          phone: string | null
+          role: string | null
+        }
+        Insert: {
+          created_at?: string
+          customer_id?: string | null
+          email?: string | null
+          id?: string
+          legal_entity_id?: string | null
+          name: string
+          phone?: string | null
+          role?: string | null
+        }
+        Update: {
+          created_at?: string
+          customer_id?: string | null
+          email?: string | null
+          id?: string
+          legal_entity_id?: string | null
+          name?: string
+          phone?: string | null
+          role?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "customer_contacts_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "customer_contacts_legal_entity_id_fkey"
+            columns: ["legal_entity_id"]
+            isOneToOne: false
+            referencedRelation: "legal_entities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       customer_order_lines: {
         Row: {
           created_at: string
@@ -500,9 +593,11 @@ export type Database = {
           billing_legal_entity_id: string | null
           city: string | null
           collaboration_text: string | null
+          commercial_ready_at: string | null
           contact_name: string | null
           created_at: string
           default_language: string
+          delivery_address: string | null
           email: string | null
           gallery_urls: string[]
           id: string
@@ -517,6 +612,7 @@ export type Database = {
           menu_material_path: string | null
           menu_material_url: string | null
           name: string
+          next_follow_up_on: string | null
           notes: string | null
           partnership_level:
             | Database["public"]["Enums"]["partnership_level"]
@@ -524,6 +620,10 @@ export type Database = {
           phone: string | null
           public_profile: string | null
           public_visible: boolean
+          sales_owner_id: string | null
+          sales_status: Database["public"]["Enums"]["sales_status"] | null
+          sales_status_changed_at: string | null
+          segment: Database["public"]["Enums"]["customer_segment"] | null
           serving_method: string | null
           serving_story: string | null
           slug: string | null
@@ -539,9 +639,11 @@ export type Database = {
           billing_legal_entity_id?: string | null
           city?: string | null
           collaboration_text?: string | null
+          commercial_ready_at?: string | null
           contact_name?: string | null
           created_at?: string
           default_language?: string
+          delivery_address?: string | null
           email?: string | null
           gallery_urls?: string[]
           id?: string
@@ -556,6 +658,7 @@ export type Database = {
           menu_material_path?: string | null
           menu_material_url?: string | null
           name: string
+          next_follow_up_on?: string | null
           notes?: string | null
           partnership_level?:
             | Database["public"]["Enums"]["partnership_level"]
@@ -563,6 +666,10 @@ export type Database = {
           phone?: string | null
           public_profile?: string | null
           public_visible?: boolean
+          sales_owner_id?: string | null
+          sales_status?: Database["public"]["Enums"]["sales_status"] | null
+          sales_status_changed_at?: string | null
+          segment?: Database["public"]["Enums"]["customer_segment"] | null
           serving_method?: string | null
           serving_story?: string | null
           slug?: string | null
@@ -578,9 +685,11 @@ export type Database = {
           billing_legal_entity_id?: string | null
           city?: string | null
           collaboration_text?: string | null
+          commercial_ready_at?: string | null
           contact_name?: string | null
           created_at?: string
           default_language?: string
+          delivery_address?: string | null
           email?: string | null
           gallery_urls?: string[]
           id?: string
@@ -595,6 +704,7 @@ export type Database = {
           menu_material_path?: string | null
           menu_material_url?: string | null
           name?: string
+          next_follow_up_on?: string | null
           notes?: string | null
           partnership_level?:
             | Database["public"]["Enums"]["partnership_level"]
@@ -602,6 +712,10 @@ export type Database = {
           phone?: string | null
           public_profile?: string | null
           public_visible?: boolean
+          sales_owner_id?: string | null
+          sales_status?: Database["public"]["Enums"]["sales_status"] | null
+          sales_status_changed_at?: string | null
+          segment?: Database["public"]["Enums"]["customer_segment"] | null
           serving_method?: string | null
           serving_story?: string | null
           slug?: string | null
@@ -624,6 +738,13 @@ export type Database = {
             columns: ["legal_entity_id"]
             isOneToOne: false
             referencedRelation: "legal_entities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "customers_sales_owner_id_fkey"
+            columns: ["sales_owner_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
           {
@@ -1371,8 +1492,13 @@ export type Database = {
           organization_number_snapshot: string
           payment_due_on: string | null
           status: Database["public"]["Enums"]["invoice_draft_status"]
+          transfer_attempted_at: string | null
+          transfer_error: string | null
+          transfer_reference: string | null
           transfer_status: string
+          transferred_at: string | null
           updated_at: string
+          vat_percent: number | null
         }
         Insert: {
           accounting_invoice_id?: string | null
@@ -1389,8 +1515,13 @@ export type Database = {
           organization_number_snapshot: string
           payment_due_on?: string | null
           status?: Database["public"]["Enums"]["invoice_draft_status"]
+          transfer_attempted_at?: string | null
+          transfer_error?: string | null
+          transfer_reference?: string | null
           transfer_status?: string
+          transferred_at?: string | null
           updated_at?: string
+          vat_percent?: number | null
         }
         Update: {
           accounting_invoice_id?: string | null
@@ -1407,8 +1538,13 @@ export type Database = {
           organization_number_snapshot?: string
           payment_due_on?: string | null
           status?: Database["public"]["Enums"]["invoice_draft_status"]
+          transfer_attempted_at?: string | null
+          transfer_error?: string | null
+          transfer_reference?: string | null
           transfer_status?: string
+          transferred_at?: string | null
           updated_at?: string
+          vat_percent?: number | null
         }
         Relationships: [
           {
@@ -1416,6 +1552,41 @@ export type Database = {
             columns: ["legal_entity_id"]
             isOneToOne: false
             referencedRelation: "legal_entities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      invoice_transfer_events: {
+        Row: {
+          created_at: string
+          detail: string | null
+          external_invoice_id: string | null
+          id: string
+          invoice_draft_id: string
+          outcome: string
+        }
+        Insert: {
+          created_at?: string
+          detail?: string | null
+          external_invoice_id?: string | null
+          id?: string
+          invoice_draft_id: string
+          outcome: string
+        }
+        Update: {
+          created_at?: string
+          detail?: string | null
+          external_invoice_id?: string | null
+          id?: string
+          invoice_draft_id?: string
+          outcome?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "invoice_transfer_events_invoice_draft_id_fkey"
+            columns: ["invoice_draft_id"]
+            isOneToOne: false
+            referencedRelation: "invoice_drafts"
             referencedColumns: ["id"]
           },
         ]
@@ -2078,14 +2249,21 @@ export type Database = {
           customer_id: string | null
           customer_name: string
           customer_order_id: string | null
+          delivery_note: string | null
+          delivery_zone: string | null
+          distance_m: number | null
           email: string
           expires_at: string | null
           flavor_slug: string
+          freight_ore: number | null
           fulfillment: string
           id: string
           lang: string
           mail_error: string | null
           offer_boxes: number | null
+          offer_delivery_note: string | null
+          offer_freight_ore: number | null
+          offer_fulfillment: string | null
           offer_token: string | null
           offer_total_ore: number | null
           order_number: string
@@ -2113,14 +2291,21 @@ export type Database = {
           customer_id?: string | null
           customer_name: string
           customer_order_id?: string | null
+          delivery_note?: string | null
+          delivery_zone?: string | null
+          distance_m?: number | null
           email: string
           expires_at?: string | null
           flavor_slug: string
+          freight_ore?: number | null
           fulfillment: string
           id?: string
           lang?: string
           mail_error?: string | null
           offer_boxes?: number | null
+          offer_delivery_note?: string | null
+          offer_freight_ore?: number | null
+          offer_fulfillment?: string | null
           offer_token?: string | null
           offer_total_ore?: number | null
           order_number?: string
@@ -2148,14 +2333,21 @@ export type Database = {
           customer_id?: string | null
           customer_name?: string
           customer_order_id?: string | null
+          delivery_note?: string | null
+          delivery_zone?: string | null
+          distance_m?: number | null
           email?: string
           expires_at?: string | null
           flavor_slug?: string
+          freight_ore?: number | null
           fulfillment?: string
           id?: string
           lang?: string
           mail_error?: string | null
           offer_boxes?: number | null
+          offer_delivery_note?: string | null
+          offer_freight_ore?: number | null
+          offer_fulfillment?: string | null
           offer_token?: string | null
           offer_total_ore?: number | null
           order_number?: string
@@ -2385,6 +2577,7 @@ export type Database = {
       can_manage_commercial: { Args: never; Returns: boolean }
       can_manage_operations: { Args: never; Returns: boolean }
       can_register_orders: { Args: never; Returns: boolean }
+      claim_dnb_transfer: { Args: { p_id: string }; Returns: boolean }
       current_customer_id: { Args: never; Returns: string }
       has_role: {
         Args: {
@@ -2526,12 +2719,14 @@ export type Database = {
         | "failed"
       app_role: "admin" | "venue" | "ops" | "employee"
       commercial_route: "direct" | "via_wholesaler"
+      crm_activity_kind: "call" | "email" | "meeting" | "tasting" | "note"
       customer_order_status:
         | "draft"
         | "pending_confirmation"
         | "confirmed"
         | "cancelled"
         | "changes_requested"
+      customer_segment: "restaurant" | "hotel" | "event" | "bar"
       customer_type: "venue" | "wholesaler"
       feedback_rating: "positive" | "mixed" | "negative"
       gold_lot_event_type:
@@ -2550,6 +2745,15 @@ export type Database = {
       handover_ownership: "gold" | "villa"
       invoice_draft_status: "draft" | "sent" | "credited" | "cancelled"
       partnership_level: "gold_partner" | "gold_supply"
+      sales_status:
+        | "prospect"
+        | "contacted"
+        | "interested"
+        | "tasting"
+        | "pilot_order"
+        | "active_customer"
+        | "waiting"
+        | "not_relevant"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -2687,6 +2891,7 @@ export const Constants = {
       ],
       app_role: ["admin", "venue", "ops", "employee"],
       commercial_route: ["direct", "via_wholesaler"],
+      crm_activity_kind: ["call", "email", "meeting", "tasting", "note"],
       customer_order_status: [
         "draft",
         "pending_confirmation",
@@ -2694,6 +2899,7 @@ export const Constants = {
         "cancelled",
         "changes_requested",
       ],
+      customer_segment: ["restaurant", "hotel", "event", "bar"],
       customer_type: ["venue", "wholesaler"],
       feedback_rating: ["positive", "mixed", "negative"],
       gold_lot_event_type: [
@@ -2714,6 +2920,16 @@ export const Constants = {
       handover_ownership: ["gold", "villa"],
       invoice_draft_status: ["draft", "sent", "credited", "cancelled"],
       partnership_level: ["gold_partner", "gold_supply"],
+      sales_status: [
+        "prospect",
+        "contacted",
+        "interested",
+        "tasting",
+        "pilot_order",
+        "active_customer",
+        "waiting",
+        "not_relevant",
+      ],
     },
   },
 } as const
