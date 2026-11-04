@@ -16,6 +16,7 @@ import { Route as AuthenticatedAdminRouteImport } from './routes/_authenticated/
 import { Route as AuthenticatedHistoryRouteImport } from './routes/_authenticated/history'
 import { Route as AuthenticatedReportRouteImport } from './routes/_authenticated/report'
 import { Route as AuthenticatedAdminIndexRouteImport } from './routes/_authenticated/admin.index'
+import { Route as AuthenticatedAdminActionsRouteImport } from './routes/_authenticated/admin.actions'
 import { Route as AuthenticatedAdminDeliveriesRouteImport } from './routes/_authenticated/admin.deliveries'
 import { Route as AuthenticatedAdminInvoicesRouteImport } from './routes/_authenticated/admin.invoices'
 import { Route as AuthenticatedAdminProductsRouteImport } from './routes/_authenticated/admin.products'
@@ -34,6 +35,7 @@ import { Route as AuthenticatedAdminVenuesIndexRouteImport } from './routes/_aut
 import { Route as AuthenticatedAdminVenuesVenueIdRouteImport } from './routes/_authenticated/admin.venues.$venueId'
 import { Route as AuthenticatedAdminWholesalersIndexRouteImport } from './routes/_authenticated/admin.wholesalers.index'
 import { Route as AuthenticatedAdminWholesalersCustomerIdRouteImport } from './routes/_authenticated/admin.wholesalers.$customerId'
+import { Route as ApiAdminV1ActionsRouteImport } from './routes/api/admin/v1/actions'
 import { Route as ApiPublicV1ShopRouteImport } from './routes/api/public/v1/shop'
 import { Route as ApiPublicV1VenuesRouteImport } from './routes/api/public/v1/venues'
 import { Route as ApiPublicV1ShopDeliveryRouteImport } from './routes/api/public/v1/shop.delivery'
@@ -75,6 +77,12 @@ const AuthenticatedAdminIndexRoute = AuthenticatedAdminIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AuthenticatedAdminRoute,
 } as any)
+const AuthenticatedAdminActionsRoute =
+  AuthenticatedAdminActionsRouteImport.update({
+    id: '/actions',
+    path: '/actions',
+    getParentRoute: () => AuthenticatedAdminRoute,
+  } as any)
 const AuthenticatedAdminDeliveriesRoute =
   AuthenticatedAdminDeliveriesRouteImport.update({
     id: '/deliveries',
@@ -181,6 +189,11 @@ const AuthenticatedAdminWholesalersCustomerIdRoute =
     path: '/wholesalers/$customerId',
     getParentRoute: () => AuthenticatedAdminRoute,
   } as any)
+const ApiAdminV1ActionsRoute = ApiAdminV1ActionsRouteImport.update({
+  id: '/api/admin/v1/actions',
+  path: '/api/admin/v1/actions',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicV1ShopRoute = ApiPublicV1ShopRouteImport.update({
   id: '/api/public/v1/shop',
   path: '/api/public/v1/shop',
@@ -218,6 +231,7 @@ export interface FileRoutesByFullPath {
   '/admin': typeof AuthenticatedAdminRouteWithChildren
   '/history': typeof AuthenticatedHistoryRoute
   '/report': typeof AuthenticatedReportRoute
+  '/admin/actions': typeof AuthenticatedAdminActionsRoute
   '/admin/deliveries': typeof AuthenticatedAdminDeliveriesRoute
   '/admin/invoices': typeof AuthenticatedAdminInvoicesRoute
   '/admin/products': typeof AuthenticatedAdminProductsRoute
@@ -232,6 +246,7 @@ export interface FileRoutesByFullPath {
   '/admin/sales/$customerId': typeof AuthenticatedAdminSalesCustomerIdRoute
   '/admin/venues/$venueId': typeof AuthenticatedAdminVenuesVenueIdRoute
   '/admin/wholesalers/$customerId': typeof AuthenticatedAdminWholesalersCustomerIdRoute
+  '/api/admin/v1/actions': typeof ApiAdminV1ActionsRoute
   '/api/public/v1/shop': typeof ApiPublicV1ShopRouteWithChildren
   '/api/public/v1/venues': typeof ApiPublicV1VenuesRouteWithChildren
   '/admin/lots/': typeof AuthenticatedAdminLotsIndexRoute
@@ -249,6 +264,7 @@ export interface FileRoutesByTo {
   '/setup': typeof SetupRoute
   '/history': typeof AuthenticatedHistoryRoute
   '/report': typeof AuthenticatedReportRoute
+  '/admin/actions': typeof AuthenticatedAdminActionsRoute
   '/admin/deliveries': typeof AuthenticatedAdminDeliveriesRoute
   '/admin/invoices': typeof AuthenticatedAdminInvoicesRoute
   '/admin/products': typeof AuthenticatedAdminProductsRoute
@@ -263,6 +279,7 @@ export interface FileRoutesByTo {
   '/admin/sales/$customerId': typeof AuthenticatedAdminSalesCustomerIdRoute
   '/admin/venues/$venueId': typeof AuthenticatedAdminVenuesVenueIdRoute
   '/admin/wholesalers/$customerId': typeof AuthenticatedAdminWholesalersCustomerIdRoute
+  '/api/admin/v1/actions': typeof ApiAdminV1ActionsRoute
   '/api/public/v1/shop': typeof ApiPublicV1ShopRouteWithChildren
   '/api/public/v1/venues': typeof ApiPublicV1VenuesRouteWithChildren
   '/admin/lots': typeof AuthenticatedAdminLotsIndexRoute
@@ -283,6 +300,7 @@ export interface FileRoutesById {
   '/_authenticated/admin': typeof AuthenticatedAdminRouteWithChildren
   '/_authenticated/history': typeof AuthenticatedHistoryRoute
   '/_authenticated/report': typeof AuthenticatedReportRoute
+  '/_authenticated/admin/actions': typeof AuthenticatedAdminActionsRoute
   '/_authenticated/admin/deliveries': typeof AuthenticatedAdminDeliveriesRoute
   '/_authenticated/admin/invoices': typeof AuthenticatedAdminInvoicesRoute
   '/_authenticated/admin/products': typeof AuthenticatedAdminProductsRoute
@@ -297,6 +315,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/sales/$customerId': typeof AuthenticatedAdminSalesCustomerIdRoute
   '/_authenticated/admin/venues/$venueId': typeof AuthenticatedAdminVenuesVenueIdRoute
   '/_authenticated/admin/wholesalers/$customerId': typeof AuthenticatedAdminWholesalersCustomerIdRoute
+  '/api/admin/v1/actions': typeof ApiAdminV1ActionsRoute
   '/api/public/v1/shop': typeof ApiPublicV1ShopRouteWithChildren
   '/api/public/v1/venues': typeof ApiPublicV1VenuesRouteWithChildren
   '/_authenticated/admin/lots/': typeof AuthenticatedAdminLotsIndexRoute
@@ -317,6 +336,7 @@ export interface FileRouteTypes {
     | '/admin'
     | '/history'
     | '/report'
+    | '/admin/actions'
     | '/admin/deliveries'
     | '/admin/invoices'
     | '/admin/products'
@@ -331,6 +351,7 @@ export interface FileRouteTypes {
     | '/admin/sales/$customerId'
     | '/admin/venues/$venueId'
     | '/admin/wholesalers/$customerId'
+    | '/api/admin/v1/actions'
     | '/api/public/v1/shop'
     | '/api/public/v1/venues'
     | '/admin/lots/'
@@ -348,6 +369,7 @@ export interface FileRouteTypes {
     | '/setup'
     | '/history'
     | '/report'
+    | '/admin/actions'
     | '/admin/deliveries'
     | '/admin/invoices'
     | '/admin/products'
@@ -362,6 +384,7 @@ export interface FileRouteTypes {
     | '/admin/sales/$customerId'
     | '/admin/venues/$venueId'
     | '/admin/wholesalers/$customerId'
+    | '/api/admin/v1/actions'
     | '/api/public/v1/shop'
     | '/api/public/v1/venues'
     | '/admin/lots'
@@ -381,6 +404,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin'
     | '/_authenticated/history'
     | '/_authenticated/report'
+    | '/_authenticated/admin/actions'
     | '/_authenticated/admin/deliveries'
     | '/_authenticated/admin/invoices'
     | '/_authenticated/admin/products'
@@ -395,6 +419,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/sales/$customerId'
     | '/_authenticated/admin/venues/$venueId'
     | '/_authenticated/admin/wholesalers/$customerId'
+    | '/api/admin/v1/actions'
     | '/api/public/v1/shop'
     | '/api/public/v1/venues'
     | '/_authenticated/admin/lots/'
@@ -412,6 +437,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   SetupRoute: typeof SetupRoute
+  ApiAdminV1ActionsRoute: typeof ApiAdminV1ActionsRoute
   ApiPublicV1ShopRoute: typeof ApiPublicV1ShopRouteWithChildren
   ApiPublicV1VenuesRoute: typeof ApiPublicV1VenuesRouteWithChildren
 }
@@ -465,6 +491,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/admin/'
       preLoaderRoute: typeof AuthenticatedAdminIndexRouteImport
+      parentRoute: typeof AuthenticatedAdminRoute
+    }
+    '/_authenticated/admin/actions': {
+      id: '/_authenticated/admin/actions'
+      path: '/actions'
+      fullPath: '/admin/actions'
+      preLoaderRoute: typeof AuthenticatedAdminActionsRouteImport
       parentRoute: typeof AuthenticatedAdminRoute
     }
     '/_authenticated/admin/deliveries': {
@@ -593,6 +626,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminWholesalersCustomerIdRouteImport
       parentRoute: typeof AuthenticatedAdminRoute
     }
+    '/api/admin/v1/actions': {
+      id: '/api/admin/v1/actions'
+      path: '/api/admin/v1/actions'
+      fullPath: '/api/admin/v1/actions'
+      preLoaderRoute: typeof ApiAdminV1ActionsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/v1/shop': {
       id: '/api/public/v1/shop'
       path: '/api/public/v1/shop'
@@ -639,6 +679,7 @@ declare module '@tanstack/react-router' {
 }
 
 interface AuthenticatedAdminRouteChildren {
+  AuthenticatedAdminActionsRoute: typeof AuthenticatedAdminActionsRoute
   AuthenticatedAdminDeliveriesRoute: typeof AuthenticatedAdminDeliveriesRoute
   AuthenticatedAdminInvoicesRoute: typeof AuthenticatedAdminInvoicesRoute
   AuthenticatedAdminProductsRoute: typeof AuthenticatedAdminProductsRoute
@@ -661,6 +702,7 @@ interface AuthenticatedAdminRouteChildren {
 }
 
 const AuthenticatedAdminRouteChildren: AuthenticatedAdminRouteChildren = {
+  AuthenticatedAdminActionsRoute: AuthenticatedAdminActionsRoute,
   AuthenticatedAdminDeliveriesRoute: AuthenticatedAdminDeliveriesRoute,
   AuthenticatedAdminInvoicesRoute: AuthenticatedAdminInvoicesRoute,
   AuthenticatedAdminProductsRoute: AuthenticatedAdminProductsRoute,
@@ -734,6 +776,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   SetupRoute: SetupRoute,
+  ApiAdminV1ActionsRoute: ApiAdminV1ActionsRoute,
   ApiPublicV1ShopRoute: ApiPublicV1ShopRouteWithChildren,
   ApiPublicV1VenuesRoute: ApiPublicV1VenuesRouteWithChildren,
 }

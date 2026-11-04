@@ -29,6 +29,7 @@ type AdminPath =
   | "/admin/orders"
   | "/admin/venues"
   | "/admin/reports"
+  | "/admin/actions"
   | "/admin/deliveries"
   | "/admin/wholesalers"
   | "/admin/invoices"
@@ -276,6 +277,15 @@ export function AdminShell({
               label={t("invoices")}
               path={path}
               icon={FileText}
+              onNavigate={close}
+            />
+          ) : null}
+          {operations ? (
+            <SideLink
+              to="/admin/actions"
+              label={t("actions_nav")}
+              path={path}
+              icon={ClipboardList}
               onNavigate={close}
             />
           ) : null}
