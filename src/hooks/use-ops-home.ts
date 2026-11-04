@@ -145,6 +145,7 @@ export function useOpsHome(lang: "no" | "en", viewer: HomeViewer, enabled = true
       const [
         productsRes,
         lotsRes,
+        deliveriesRes,
         reportsRes,
         orderLinesRes,
         approvalRes,
@@ -164,6 +165,7 @@ export function useOpsHome(lang: "no" | "en", viewer: HomeViewer, enabled = true
           )
           .neq("status", "recalled")
           .limit(400),
+        supabase.from("delivery_lines").select("product_id, quantity, gold_lot_id"),
         supabase
           .from("shift_reports")
           .select(
@@ -191,6 +193,7 @@ export function useOpsHome(lang: "no" | "en", viewer: HomeViewer, enabled = true
 
       if (productsRes.error) throw productsRes.error;
       if (lotsRes.error && !isGoldLotSchemaError(lotsRes.error)) throw lotsRes.error;
+      if (deliveriesRes.error) throw deliveriesRes.error;
 
       const products: OpsProduct[] = (productsRes.data ?? []).map((product) => ({
         id: product.id,
@@ -203,7 +206,23 @@ export function useOpsHome(lang: "no" | "en", viewer: HomeViewer, enabled = true
       const reports = reportsRes.error
         ? []
         : toNeedReports((reportsRes.data ?? []) as ReportQueryRow[]);
-      const stock = flavorStock(products, lots);
+      const deliveryTotals = new Map<
+        string,
+        { productId: string; quantity: number; missingLotQty: number }
+      >();
+      for (const line of deliveriesRes.data ?? []) {
+        const current = deliveryTotals.get(line.product_id) ?? {
+          productId: line.product_id,
+          quantity: 0,
+          missingLotQty: 0,
+        };
+        current.quantity += line.quantity;
+        if (line.quantity > 0 && line.gold_lot_id == null) {
+          current.missingLotQty += line.quantity;
+        }
+        deliveryTotals.set(line.product_id, current);
+      }
+      const stock = flavorStock(products, lots, [...deliveryTotals.values()]);
       const handoverLots = lotsReadyForHandover(lots);
       const orderLines = orderLinesRes.error ? [] : (orderLinesRes.data ?? []);
       const production = productionNeed(
@@ -216,7 +235,11 @@ export function useOpsHome(lang: "no" | "en", viewer: HomeViewer, enabled = true
           ),
           confirmed: oneStatus(line.customer_orders) === "confirmed",
         })),
-        stock,
+        stock.map((row) => ({
+          productId: row.productId,
+          available: row.planningAvailable,
+          atVilla: row.planningAtVilla,
+        })),
       ).map((row) => {
         const product = products.find((item) => item.id === row.productId);
         return {

@@ -723,8 +723,18 @@ const dict = {
   ops_at_villa: { no: "Hos Villa", en: "At Villa" },
   ops_delivered: { no: "Levert", en: "Delivered" },
   ops_available: { no: "Tilgjengelig", en: "Available" },
+  ops_not_calculated: { no: "Ikke beregnet", en: "Not calculated" },
+  ops_stock_unreliable: {
+    no: "Noen leveranser mangler LOT-kobling. Tilgjengelig lager vises ikke før det er ryddet.",
+    en: "Some deliveries lack a LOT link. Available stock is hidden until that is fixed.",
+  },
   ops_need_empty: { no: "Ingen neste behov registrert.", en: "No upcoming demand recorded." },
   ops_estimated: { no: "estimert", en: "estimated" },
+  reports_shift_title: { no: "Skiftrapporter", en: "Shift reports" },
+  reports_shift_intro: {
+    no: "Innsendte skiftrapporter fra serveringssteder. Dette er ikke økonomirapporten.",
+    en: "Submitted shift reports from venues. This is not the finance report.",
+  },
 
   staff: { no: "Ansatte", en: "Staff" },
   staff_title: { no: "Ansatte", en: "Staff" },

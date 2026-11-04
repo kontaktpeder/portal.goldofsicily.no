@@ -43,8 +43,11 @@ test("flavor stock follows Gold → Villa → venue", () => {
       nameNo: "Trøffel",
       nameEn: "Truffle",
       produced: 420,
-      atVilla: 300,
       delivered: 80,
+      planningAvailable: 40,
+      planningAtVilla: 300,
+      inventoryReliable: true,
+      atVilla: 300,
       available: 40,
     },
   );
@@ -55,11 +58,26 @@ test("flavor stock follows Gold → Villa → venue", () => {
       nameNo: "'Nduja",
       nameEn: "'Nduja",
       produced: 360,
-      atVilla: 240,
       delivered: 80,
+      planningAvailable: 40,
+      planningAtVilla: 240,
+      inventoryReliable: true,
+      atVilla: 240,
       available: 40,
     },
   );
+});
+
+test("unlinked deliveries count as delivered but hide available stock", () => {
+  const stock = flavorStock(products, lots, [
+    { productId: "truffle", quantity: 280, missingLotQty: 200 },
+  ]);
+  const truffle = stock.find((row) => row.productId === "truffle");
+  assert.equal(truffle?.delivered, 280);
+  assert.equal(truffle?.inventoryReliable, false);
+  assert.equal(truffle?.available, null);
+  assert.equal(truffle?.atVilla, null);
+  assert.equal(truffle?.planningAvailable, 40);
 });
 
 test("lots with remaining at Gold are ready for Villa handover", () => {
