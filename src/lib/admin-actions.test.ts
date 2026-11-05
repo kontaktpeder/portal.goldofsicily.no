@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  actionAccess,
   isAdminActionType,
+  isOwnerActionType,
+  parseCreateCustomer,
   parseMarkLegacyDelivery,
   parseRegisterPricedDelivery,
   parseSetCustomerPrice,
@@ -12,7 +15,61 @@ import {
 test("action type guard", () => {
   assert.equal(isAdminActionType("register_priced_delivery"), true);
   assert.equal(isAdminActionType("mark_legacy_delivery"), true);
+  assert.equal(isAdminActionType("create_customer"), true);
+  assert.equal(isOwnerActionType("create_customer"), true);
+  assert.equal(isOwnerActionType("mark_legacy_delivery"), false);
   assert.equal(isAdminActionType("drop_table"), false);
+});
+
+test("the actions token is owner until a separate owner token is set", () => {
+  assert.equal(
+    actionAccess({
+      authorizationHeader: "Bearer grok-token",
+      actionsToken: "grok-token",
+    }),
+    "owner",
+  );
+  assert.equal(
+    actionAccess({
+      authorizationHeader: "Bearer grok-token",
+      actionsToken: "grok-token",
+      ownerToken: "owner-token",
+    }),
+    "propose",
+  );
+  assert.equal(
+    actionAccess({
+      authorizationHeader: "Bearer owner-token",
+      actionsToken: "grok-token",
+      ownerToken: "owner-token",
+    }),
+    "owner",
+  );
+  assert.equal(
+    actionAccess({ authorizationHeader: "Bearer other", actionsToken: "grok-token" }),
+    "none",
+  );
+});
+
+test("parse create_customer", () => {
+  const parsed = parseCreateCustomer({
+    name: "Antonietta",
+    city: "Oslo",
+    segment: "restaurant",
+    contact_name: "Antonietta",
+    email: "hei@example.com",
+    active: false,
+  });
+  assert.equal(parsed.issues.length, 0);
+  assert.equal(parsed.data?.name, "Antonietta");
+  assert.equal(parsed.data?.segment, "restaurant");
+  assert.equal(parsed.data?.confirmDuplicate, false);
+  assert.equal(parseCreateCustomer({ name: " " }).data, undefined);
+  assert.ok(
+    parseCreateCustomer({ name: "Bar", segment: "kiosk" }).issues.some(
+      (row) => row.code === "invalid_segment",
+    ),
+  );
 });
 
 test("parse mark_legacy_delivery", () => {
