@@ -257,8 +257,8 @@ const dict = {
   actions_eyebrow: { no: "Kontrollert AI", en: "Controlled AI" },
   actions_title: { no: "Handlinger til godkjenning", en: "Actions awaiting approval" },
   actions_intro: {
-    no: "Grok kan foreslå rettinger. Du godkjenner før portalen skriver til databasen.",
-    en: "Grok can propose fixes. You approve before the portal writes to the database.",
+    no: "Grok har eier-tilgang og kan opprette kunder og utføre handlinger. Alt som skrives logges her.",
+    en: "Grok has owner access and can create customers and run actions. Every write is logged here.",
   },
   actions_empty: { no: "Ingen åpne forslag.", en: "No open proposals." },
   actions_approve: { no: "Godkjenn og utfør", en: "Approve and run" },

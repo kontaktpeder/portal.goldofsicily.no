@@ -1,4 +1,7 @@
-/** Controlled admin actions for AI/MCP: propose → validate → approve → execute. */
+/** Controlled admin actions for AI/MCP. Grok with the actions token is eier. */
+
+const CUSTOMER_SEGMENTS = ["restaurant", "hotel", "event", "bar"] as const;
+type CustomerSegment = (typeof CUSTOMER_SEGMENTS)[number];
 
 export const ADMIN_ACTION_TYPES = [
   "create_delivery_draft",
@@ -9,17 +12,42 @@ export const ADMIN_ACTION_TYPES = [
   "register_priced_delivery",
   "list_accounting_discrepancies",
   "mark_legacy_delivery",
+  "create_customer",
 ] as const;
 
 export type AdminActionType = (typeof ADMIN_ACTION_TYPES)[number];
 
+/** Commercial writes. Drift can approve the other actions; these stay eier. */
+export const OWNER_ACTION_TYPES = ["create_customer"] as const;
+
+export function isOwnerActionType(value: string): boolean {
+  return (OWNER_ACTION_TYPES as readonly string[]).includes(value);
+}
+
+export type ActionAccess = "none" | "propose" | "owner";
+
+/**
+ * The actions token is eier unless a separate owner token is configured.
+ * Then the actions token can only propose, and the owner token can execute.
+ */
+export function actionAccess(input: {
+  authorizationHeader: string | null;
+  actionsToken?: string;
+  ownerToken?: string;
+}): ActionAccess {
+  const header = input.authorizationHeader ?? "";
+  if (!header.startsWith("Bearer ")) return "none";
+  const token = header.slice("Bearer ".length);
+  if (!token) return "none";
+  const ownerToken = input.ownerToken?.trim() || undefined;
+  const actionsToken = input.actionsToken?.trim() || undefined;
+  if (ownerToken && token === ownerToken) return "owner";
+  if (actionsToken && token === actionsToken) return ownerToken ? "propose" : "owner";
+  return "none";
+}
+
 export type AdminActionStatus =
-  | "proposed"
-  | "validated"
-  | "rejected"
-  | "approved"
-  | "executed"
-  | "failed";
+  "proposed" | "validated" | "rejected" | "approved" | "executed" | "failed";
 
 export type ValidationIssue = {
   code: string;
@@ -92,6 +120,20 @@ export type MarkLegacyDeliveryPayload = {
   deliveryId: string;
   rationale: string;
   documentation?: string;
+};
+
+export type CreateCustomerPayload = {
+  name: string;
+  city: string | null;
+  segment: CustomerSegment | null;
+  contactName: string | null;
+  phone: string | null;
+  email: string | null;
+  active: boolean;
+  nextFollowUpOn: string | null;
+  legalEntityId: string | null;
+  notes: string | null;
+  confirmDuplicate: boolean;
 };
 
 export function isAdminActionType(value: string): value is AdminActionType {
@@ -230,9 +272,7 @@ export function parseRegisterPricedDelivery(payload: unknown): {
           quantity,
           goldLotId: hasLot && typeof goldLotId === "string" ? goldLotId : null,
           sourceHandoverId:
-            typeof sourceHandoverId === "string" && sourceHandoverId
-              ? sourceHandoverId
-              : null,
+            typeof sourceHandoverId === "string" && sourceHandoverId ? sourceHandoverId : null,
         });
       }
     }
@@ -362,7 +402,8 @@ export function parseApproveDelivery(payload: unknown): {
   if (!payload || typeof payload !== "object") {
     return { issues: [issue("invalid_payload", "payload must be an object")] };
   }
-  const draftId = (payload as Record<string, unknown>).draftId ?? (payload as Record<string, unknown>).draft_id;
+  const draftId =
+    (payload as Record<string, unknown>).draftId ?? (payload as Record<string, unknown>).draft_id;
   const idIssue = requireUuid(draftId, "draftId");
   if (idIssue) issues.push(idIssue);
   if (issues.length) return { issues };
@@ -398,6 +439,100 @@ export function parseMarkLegacyDelivery(payload: unknown): {
       deliveryId: String(deliveryId),
       rationale: String(rationale).trim(),
       documentation: documentation?.trim() || undefined,
+    },
+  };
+}
+
+function optionalText(
+  row: Record<string, unknown>,
+  keys: string[],
+  field: string,
+  issues: ValidationIssue[],
+): string | null {
+  const key = keys.find((candidate) => row[candidate] != null && row[candidate] !== "");
+  if (!key) return null;
+  const value = row[key];
+  if (typeof value !== "string") {
+    issues.push(issue("invalid_field", `${field} must be text`));
+    return null;
+  }
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+export function parseCreateCustomer(payload: unknown): {
+  data?: CreateCustomerPayload;
+  issues: ValidationIssue[];
+} {
+  const issues: ValidationIssue[] = [];
+  if (!payload || typeof payload !== "object") {
+    return { issues: [issue("invalid_payload", "payload must be an object")] };
+  }
+  const row = payload as Record<string, unknown>;
+  const name = typeof row.name === "string" ? row.name.trim() : "";
+  if (!name || name.length > 160) {
+    issues.push(issue("invalid_name", "name is required"));
+  }
+  const city = optionalText(row, ["city"], "city", issues);
+  let segment: CustomerSegment | null = null;
+  if (row.segment != null && row.segment !== "") {
+    if (
+      typeof row.segment !== "string" ||
+      !(CUSTOMER_SEGMENTS as readonly string[]).includes(row.segment)
+    ) {
+      issues.push(issue("invalid_segment", "segment must be restaurant, hotel, event or bar"));
+    } else {
+      segment = row.segment as CustomerSegment;
+    }
+  }
+  const contactName = optionalText(row, ["contactName", "contact_name"], "contactName", issues);
+  const phone = optionalText(row, ["phone"], "phone", issues);
+  const email = optionalText(row, ["email"], "email", issues);
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    issues.push(issue("invalid_email", "email must look like an email address"));
+  }
+  let active = false;
+  if (row.active != null) {
+    if (typeof row.active !== "boolean") {
+      issues.push(issue("invalid_active", "active must be true or false"));
+    } else {
+      active = row.active;
+    }
+  }
+  const followRaw = row.nextFollowUpOn ?? row.next_follow_up_on;
+  let nextFollowUpOn: string | null = null;
+  if (followRaw != null && followRaw !== "") {
+    const dateIssue = requireDate(followRaw, "nextFollowUpOn");
+    if (dateIssue) issues.push(dateIssue);
+    else nextFollowUpOn = String(followRaw);
+  }
+  const legalRaw = row.legalEntityId ?? row.legal_entity_id;
+  let legalEntityId: string | null = null;
+  if (legalRaw != null && legalRaw !== "") {
+    const idIssue = requireUuid(legalRaw, "legalEntityId");
+    if (idIssue) issues.push(idIssue);
+    else legalEntityId = String(legalRaw);
+  }
+  const notes = optionalText(row, ["notes"], "notes", issues);
+  const confirmRaw = row.confirmDuplicate ?? row.confirm_duplicate ?? false;
+  if (typeof confirmRaw !== "boolean") {
+    issues.push(issue("invalid_confirm", "confirmDuplicate must be true or false"));
+  }
+  if (issues.some((item) => item.blocking)) return { issues };
+  return {
+    issues,
+    data: {
+      name,
+      city,
+      segment,
+      contactName,
+      phone,
+      email,
+      active,
+      nextFollowUpOn,
+      legalEntityId,
+      notes,
+      confirmDuplicate: confirmRaw === true,
     },
   };
 }

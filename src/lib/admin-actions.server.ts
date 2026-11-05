@@ -1,9 +1,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { findDuplicateSite, newDeliverySiteRow } from "@/lib/crm";
 import {
   issue,
   lotRemainingForAllocation,
   parseApproveDelivery,
   parseCorrectionLot,
+  parseCreateCustomer,
   parseCreateDeliveryDraft,
   parseMarkLegacyDelivery,
   parseRegisterPricedDelivery,
@@ -11,6 +13,7 @@ import {
   validationOf,
   type AdminActionType,
   type CorrectionLotInput,
+  type CreateCustomerPayload,
   type DeliveryLineInput,
   type RegisterPricedDeliveryPayload,
   type SetCustomerPricePayload,
@@ -434,7 +437,11 @@ export async function validateProposal(
   if (actionType === "create_delivery_draft" || actionType === "validate_delivery") {
     const parsed = parseCreateDeliveryDraft(payload);
     if (!parsed.data) return validationOf(parsed.issues);
-    return validateRegisterPricedDelivery(admin, { ...parsed.data, ensurePrices: [], createLots: [] });
+    return validateRegisterPricedDelivery(admin, {
+      ...parsed.data,
+      ensurePrices: [],
+      createLots: [],
+    });
   }
   if (actionType === "approve_delivery") {
     const parsed = parseApproveDelivery(payload);
@@ -449,12 +456,14 @@ export async function validateProposal(
       return validationOf([issue("draft_cancelled", "delivery draft is cancelled")]);
     }
     if (draft.status === "committed") return validationOf([]);
-    const lines = ((draft.delivery_draft_lines ?? []) as Array<{
-      product_id: string;
-      quantity: number;
-      gold_lot_id: string | null;
-      source_handover_id: string | null;
-    }>).map((line) => ({
+    const lines = (
+      (draft.delivery_draft_lines ?? []) as Array<{
+        product_id: string;
+        quantity: number;
+        gold_lot_id: string | null;
+        source_handover_id: string | null;
+      }>
+    ).map((line) => ({
       productId: line.product_id,
       quantity: line.quantity,
       goldLotId: line.gold_lot_id,
@@ -473,6 +482,11 @@ export async function validateProposal(
     const parsed = parseRegisterPricedDelivery(payload);
     if (!parsed.data) return validationOf(parsed.issues);
     return validateRegisterPricedDelivery(admin, parsed.data);
+  }
+  if (actionType === "create_customer") {
+    const parsed = parseCreateCustomer(payload);
+    if (!parsed.data) return validationOf(parsed.issues);
+    return validateCreateCustomer(admin, parsed.data);
   }
   if (actionType === "mark_legacy_delivery") {
     const parsed = parseMarkLegacyDelivery(payload);
@@ -498,12 +512,87 @@ export async function validateProposal(
     const missingLotLines = lines.filter((line) => line.quantity > 0 && line.gold_lot_id == null);
     if (missingLotLines.length === 0) {
       issues.push(
-        issue("no_missing_lot_lines", "delivery has no lines without gold_lot_id to mark as legacy"),
+        issue(
+          "no_missing_lot_lines",
+          "delivery has no lines without gold_lot_id to mark as legacy",
+        ),
       );
     }
     return validationOf(issues);
   }
   return validationOf([issue("unknown_action", `unsupported action ${actionType}`)]);
+}
+
+async function validateCreateCustomer(
+  admin: Admin,
+  input: CreateCustomerPayload,
+): Promise<ValidationResult> {
+  const issues: ValidationIssue[] = [];
+  const { data: existing, error } = await admin
+    .from("customers")
+    .select("id, name, city")
+    .eq("type", "venue");
+  if (error) throw new Error(error.message);
+  const match = findDuplicateSite(
+    { name: input.name, city: input.city },
+    (existing ?? []).map((row) => ({
+      id: row.id,
+      name: row.name,
+      city: row.city,
+    })),
+  );
+  if (match && !input.confirmDuplicate) {
+    issues.push(
+      issue("duplicate_customer", `customer already exists: ${match.name} (${match.id})`),
+    );
+  }
+  if (input.legalEntityId) {
+    const { data: entity, error: entityError } = await admin
+      .from("legal_entities")
+      .select("id")
+      .eq("id", input.legalEntityId)
+      .maybeSingle();
+    if (entityError) throw new Error(entityError.message);
+    if (!entity) issues.push(issue("legal_entity_missing", "legal entity not found"));
+  }
+  return validationOf(issues);
+}
+
+async function createCustomer(admin: Admin, input: CreateCustomerPayload) {
+  const site = newDeliverySiteRow({
+    name: input.name,
+    segment: input.segment,
+    city: input.city ?? "",
+    deliveryAddress: "",
+    active: input.active,
+    salesOwnerId: null,
+    nextFollowUpOn: input.nextFollowUpOn,
+    legalEntityId: input.legalEntityId,
+  });
+  const { data, error } = await admin
+    .from("customers")
+    .insert({
+      ...site,
+      contact_name: input.contactName,
+      email: input.email,
+      phone: input.phone,
+      notes: input.notes,
+    })
+    .select("id")
+    .single();
+  if (error || !data) throw new Error(error?.message ?? "Could not create customer");
+  if (input.contactName) {
+    const { error: contactError } = await admin.from("customer_contacts").insert({
+      customer_id: data.id,
+      legal_entity_id: null,
+      name: input.contactName,
+      phone: input.phone,
+      email: input.email,
+      role: "site",
+    });
+    if (contactError) throw new Error(contactError.message);
+  }
+  return { customerId: data.id, name: input.name };
 }
 
 export async function executeProposal(
@@ -583,6 +672,17 @@ export async function executeProposal(
       deliveryId,
     };
   }
+  if (actionType === "create_customer") {
+    const parsed = parseCreateCustomer(payload);
+    if (!parsed.data) throw new Error(parsed.issues[0]?.message ?? "invalid payload");
+    const validation = await validateCreateCustomer(admin, parsed.data);
+    if (!validation.ok) {
+      throw new Error(
+        validation.issues.find((row) => row.blocking)?.message ?? "validation failed",
+      );
+    }
+    return createCustomer(admin, parsed.data);
+  }
   if (actionType === "mark_legacy_delivery") {
     const parsed = parseMarkLegacyDelivery(payload);
     if (!parsed.data) throw new Error(parsed.issues[0]?.message ?? "invalid payload");
@@ -596,10 +696,12 @@ export async function executeProposal(
     if (delivery.legacy_without_lot) {
       return { deliveryId: delivery.id, alreadyMarked: true };
     }
-    const missingPcs = ((delivery.delivery_lines ?? []) as Array<{
-      quantity: number;
-      gold_lot_id: string | null;
-    }>)
+    const missingPcs = (
+      (delivery.delivery_lines ?? []) as Array<{
+        quantity: number;
+        gold_lot_id: string | null;
+      }>
+    )
       .filter((line) => line.quantity > 0 && line.gold_lot_id == null)
       .reduce((sum, line) => sum + line.quantity, 0);
     if (missingPcs <= 0) throw new Error("delivery has no lines without gold_lot_id");
@@ -663,9 +765,16 @@ export async function proposeAdminAction(
     .select("*")
     .single();
   if (error) throw new Error(error.message);
-  await logEvent(admin, data.id, "proposed", input.proposedBy ?? "grok", input.proposedByUserId ?? null, {
-    validation,
-  });
+  await logEvent(
+    admin,
+    data.id,
+    "proposed",
+    input.proposedBy ?? "grok",
+    input.proposedByUserId ?? null,
+    {
+      validation,
+    },
+  );
   if (validation.ok) {
     await logEvent(admin, data.id, "validated", "system", null, { validation });
   }
@@ -699,9 +808,7 @@ export async function approveAdminAction(
       .update({ status: "proposed", validation, error_message: "validation failed before approve" })
       .eq("id", proposalId);
     await logEvent(admin, proposalId, "validation_failed", actor, approvedByUserId, { validation });
-    throw new Error(
-      validation.issues.find((row) => row.blocking)?.message ?? "validation failed",
-    );
+    throw new Error(validation.issues.find((row) => row.blocking)?.message ?? "validation failed");
   }
 
   await admin
@@ -753,6 +860,7 @@ export async function rejectAdminAction(
   proposalId: string,
   rejectedByUserId: string | null,
   reason?: string,
+  actor = "human",
 ) {
   const { data, error } = await admin
     .from("admin_action_proposals")
@@ -766,7 +874,7 @@ export async function rejectAdminAction(
     .select("*")
     .single();
   if (error) throw new Error(error.message);
-  await logEvent(admin, proposalId, "rejected", "human", rejectedByUserId, { reason });
+  await logEvent(admin, proposalId, "rejected", actor, rejectedByUserId, { reason });
   return data;
 }
 
