@@ -46,8 +46,7 @@ DROP VIEW IF EXISTS ai_read.data_quality;
 DROP VIEW IF EXISTS ai_read.delivery_totals;
 DROP VIEW IF EXISTS ai_read.deliveries;
 
-CREATE VIEW ai_read.deliveries
-WITH (security_invoker = true) AS
+CREATE VIEW ai_read.deliveries AS
 SELECT
   d.id AS delivery_id,
   d.delivered_at,
@@ -87,8 +86,7 @@ LEFT JOIN public.gold_lots gl ON gl.id = dl.gold_lot_id;
 COMMENT ON VIEW ai_read.deliveries IS
   'Leveringslinjer med kunde, smak, pris og LOT-status. missing_lot_link=true mangler parti (ekskl. merket legacy).';
 
-CREATE VIEW ai_read.delivery_totals
-WITH (security_invoker = true) AS
+CREATE VIEW ai_read.delivery_totals AS
 WITH lines AS (
   SELECT
     coalesce(nullif(btrim(dl.product_name_snapshot), ''), p.name_no) AS product_name,
@@ -116,8 +114,7 @@ GROUP BY product_name, product_slug;
 COMMENT ON VIEW ai_read.delivery_totals IS
   'Levert volum og prisa leveringsverdi per smak. Uløst missing LOT ekskluderer merket legacy.';
 
-CREATE VIEW ai_read.data_quality
-WITH (security_invoker = true) AS
+CREATE VIEW ai_read.data_quality AS
 WITH prod AS (
   SELECT
     coalesce(sum(produced_qty), 0)::integer AS produced_pcs,
@@ -176,8 +173,7 @@ COMMENT ON VIEW ai_read.data_quality IS
   'Integritetssjekk. Legacy uten LOT telles i pcs_legacy_without_lot og blokkerer ikke ok_for_inventory.';
 
 -- Discrepancies: only unresolved (non-legacy) missing LOT links
-CREATE OR REPLACE VIEW ai_read.accounting_discrepancies
-WITH (security_invoker = true) AS
+CREATE OR REPLACE VIEW ai_read.accounting_discrepancies AS
 SELECT *
 FROM (
   VALUES
@@ -236,8 +232,7 @@ FROM (
 WHERE quantity <> 0;
 
 -- Recreate KPIs (depends on data_quality)
-CREATE VIEW ai_read.kpis
-WITH (security_invoker = true) AS
+CREATE VIEW ai_read.kpis AS
 SELECT
   e.delivered_pcs,
   e.invoiced_pcs,
