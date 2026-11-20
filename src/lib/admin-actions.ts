@@ -14,12 +14,9 @@ export const ADMIN_ACTION_TYPES = [
 export type AdminActionType = (typeof ADMIN_ACTION_TYPES)[number];
 
 export type AdminActionStatus =
-  | "proposed"
-  | "validated"
-  | "rejected"
-  | "approved"
-  | "executed"
-  | "failed";
+  "proposed" | "validated" | "rejected" | "approved" | "executed" | "failed";
+
+export const APPROVABLE_ACTION_STATUSES = ["proposed", "validated", "failed"] as const;
 
 export type ValidationIssue = {
   code: string;
@@ -230,9 +227,7 @@ export function parseRegisterPricedDelivery(payload: unknown): {
           quantity,
           goldLotId: hasLot && typeof goldLotId === "string" ? goldLotId : null,
           sourceHandoverId:
-            typeof sourceHandoverId === "string" && sourceHandoverId
-              ? sourceHandoverId
-              : null,
+            typeof sourceHandoverId === "string" && sourceHandoverId ? sourceHandoverId : null,
         });
       }
     }
@@ -362,7 +357,8 @@ export function parseApproveDelivery(payload: unknown): {
   if (!payload || typeof payload !== "object") {
     return { issues: [issue("invalid_payload", "payload must be an object")] };
   }
-  const draftId = (payload as Record<string, unknown>).draftId ?? (payload as Record<string, unknown>).draft_id;
+  const draftId =
+    (payload as Record<string, unknown>).draftId ?? (payload as Record<string, unknown>).draft_id;
   const idIssue = requireUuid(draftId, "draftId");
   if (idIssue) issues.push(idIssue);
   if (issues.length) return { issues };

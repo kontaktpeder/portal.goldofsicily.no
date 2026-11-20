@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  APPROVABLE_ACTION_STATUSES,
   isAdminActionType,
   parseMarkLegacyDelivery,
   parseRegisterPricedDelivery,
@@ -92,4 +93,11 @@ test("validation status mapping", () => {
   assert.equal(nextActionStatusAfterValidation("proposed", true), "validated");
   assert.equal(nextActionStatusAfterValidation("proposed", false), "proposed");
   assert.equal(nextActionStatusAfterValidation("executed", false), "executed");
+});
+
+test("approval claim excludes in-flight and terminal statuses", () => {
+  assert.deepEqual([...APPROVABLE_ACTION_STATUSES], ["proposed", "validated", "failed"]);
+  assert.equal(APPROVABLE_ACTION_STATUSES.includes("approved" as never), false);
+  assert.equal(APPROVABLE_ACTION_STATUSES.includes("executed" as never), false);
+  assert.equal(APPROVABLE_ACTION_STATUSES.includes("rejected" as never), false);
 });
