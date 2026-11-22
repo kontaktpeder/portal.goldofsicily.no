@@ -420,3 +420,9 @@ export function nextActionStatusAfterValidation(
   if (current === "rejected" || current === "executed" || current === "approved") return current;
   return ok ? "validated" : "proposed";
 }
+
+const APPROVABLE_ACTION_STATUSES = new Set<AdminActionStatus>(["proposed", "validated", "failed"]);
+
+export function isApprovableActionStatus(status: string): status is AdminActionStatus {
+  return APPROVABLE_ACTION_STATUSES.has(status as AdminActionStatus);
+}

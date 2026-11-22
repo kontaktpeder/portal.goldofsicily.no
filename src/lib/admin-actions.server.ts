@@ -8,6 +8,7 @@ import {
   parseMarkLegacyDelivery,
   parseRegisterPricedDelivery,
   parseSetCustomerPrice,
+  isApprovableActionStatus,
   validationOf,
   type AdminActionType,
   type CorrectionLotInput,
@@ -687,6 +688,9 @@ export async function approveAdminAction(
   if (!proposal) throw new Error("proposal not found");
   if (proposal.status === "executed") return proposal;
   if (proposal.status === "rejected") throw new Error("proposal was rejected");
+  if (!isApprovableActionStatus(proposal.status)) {
+    throw new Error("proposal is already being approved");
+  }
 
   const validation = await validateProposal(
     admin,
@@ -704,7 +708,7 @@ export async function approveAdminAction(
     );
   }
 
-  await admin
+  const { data: claimed, error: claimError } = await admin
     .from("admin_action_proposals")
     .update({
       status: "approved",
@@ -713,14 +717,28 @@ export async function approveAdminAction(
       approved_at: new Date().toISOString(),
       error_message: null,
     })
-    .eq("id", proposalId);
+    .eq("id", proposalId)
+    .in("status", ["proposed", "validated", "failed"])
+    .select("*")
+    .maybeSingle();
+  if (claimError) throw new Error(claimError.message);
+  if (!claimed) {
+    const { data: latest, error: latestError } = await admin
+      .from("admin_action_proposals")
+      .select("*")
+      .eq("id", proposalId)
+      .maybeSingle();
+    if (latestError) throw new Error(latestError.message);
+    if (latest?.status === "executed") return latest;
+    throw new Error("proposal is already being approved");
+  }
   await logEvent(admin, proposalId, "approved", actor, approvedByUserId, {});
 
   try {
     const result = await executeProposal(
       admin,
-      proposal.action_type as AdminActionType,
-      proposal.payload,
+      claimed.action_type as AdminActionType,
+      claimed.payload,
       proposalId,
     );
     const { data: executed, error: execError } = await admin

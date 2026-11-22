@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  isApprovableActionStatus,
   isAdminActionType,
   parseMarkLegacyDelivery,
   parseRegisterPricedDelivery,
@@ -92,4 +93,13 @@ test("validation status mapping", () => {
   assert.equal(nextActionStatusAfterValidation("proposed", true), "validated");
   assert.equal(nextActionStatusAfterValidation("proposed", false), "proposed");
   assert.equal(nextActionStatusAfterValidation("executed", false), "executed");
+});
+
+test("only open proposals can be claimed for approval", () => {
+  assert.equal(isApprovableActionStatus("proposed"), true);
+  assert.equal(isApprovableActionStatus("validated"), true);
+  assert.equal(isApprovableActionStatus("failed"), true);
+  assert.equal(isApprovableActionStatus("approved"), false);
+  assert.equal(isApprovableActionStatus("executed"), false);
+  assert.equal(isApprovableActionStatus("rejected"), false);
 });
