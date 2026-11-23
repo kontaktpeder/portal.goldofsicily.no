@@ -10,6 +10,7 @@ import {
   listAdminActionProposals,
   rejectAdminActionFn,
 } from "@/lib/admin-actions.functions";
+import { canApproveAdminActionStatus, type AdminActionStatus } from "@/lib/admin-actions";
 
 export const Route = createFileRoute("/_authenticated/admin/actions")({
   head: () => ({
@@ -88,7 +89,8 @@ function AdminActions() {
           <p className="text-sm text-muted-foreground">{t("actions_empty")}</p>
         ) : (
           open.map((proposal) => {
-            const canDecide =
+            const canApprove = canApproveAdminActionStatus(proposal.status as AdminActionStatus);
+            const canReject =
               proposal.status === "proposed" ||
               proposal.status === "validated" ||
               proposal.status === "failed";
@@ -128,24 +130,28 @@ function AdminActions() {
                     {JSON.stringify(proposal.result, null, 2)}
                   </pre>
                 ) : null}
-                {canDecide ? (
+                {canApprove || canReject ? (
                   <div className="mt-4 flex flex-wrap gap-2">
-                    <PrimaryButton
-                      type="button"
-                      className="w-auto min-h-12 px-6"
-                      disabled={!proposal.validation?.ok || approveMutation.isPending}
-                      onClick={() => approveMutation.mutate(proposal.id)}
-                    >
-                      {t("actions_approve")}
-                    </PrimaryButton>
-                    <button
-                      type="button"
-                      className="rounded-full border border-border px-4 py-2 text-sm font-medium"
-                      disabled={rejectMutation.isPending}
-                      onClick={() => rejectMutation.mutate(proposal.id)}
-                    >
-                      {t("actions_reject")}
-                    </button>
+                    {canApprove ? (
+                      <PrimaryButton
+                        type="button"
+                        className="w-auto min-h-12 px-6"
+                        disabled={!proposal.validation?.ok || approveMutation.isPending}
+                        onClick={() => approveMutation.mutate(proposal.id)}
+                      >
+                        {t("actions_approve")}
+                      </PrimaryButton>
+                    ) : null}
+                    {canReject ? (
+                      <button
+                        type="button"
+                        className="rounded-full border border-border px-4 py-2 text-sm font-medium"
+                        disabled={rejectMutation.isPending}
+                        onClick={() => rejectMutation.mutate(proposal.id)}
+                      >
+                        {t("actions_reject")}
+                      </button>
+                    ) : null}
                   </div>
                 ) : null}
               </article>

@@ -7,6 +7,7 @@ import {
   parseSetCustomerPrice,
   lotRemainingForAllocation,
   nextActionStatusAfterValidation,
+  canApproveAdminActionStatus,
 } from "./admin-actions.ts";
 
 test("action type guard", () => {
@@ -92,4 +93,12 @@ test("validation status mapping", () => {
   assert.equal(nextActionStatusAfterValidation("proposed", true), "validated");
   assert.equal(nextActionStatusAfterValidation("proposed", false), "proposed");
   assert.equal(nextActionStatusAfterValidation("executed", false), "executed");
+});
+
+test("only fresh proposals can be approved", () => {
+  assert.equal(canApproveAdminActionStatus("proposed"), true);
+  assert.equal(canApproveAdminActionStatus("validated"), true);
+  assert.equal(canApproveAdminActionStatus("approved"), false);
+  assert.equal(canApproveAdminActionStatus("failed"), false);
+  assert.equal(canApproveAdminActionStatus("executed"), false);
 });
