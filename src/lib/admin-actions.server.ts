@@ -347,6 +347,9 @@ async function commitDeliveryDraft(admin: Admin, draftId: string) {
   if (draft.status === "committed" && draft.committed_delivery_id) {
     return draft.committed_delivery_id as string;
   }
+  if (draft.status === "committed") {
+    throw new Error("draft is already being committed");
+  }
   if (draft.status === "cancelled") throw new Error("draft is cancelled");
 
   const lines = (draft.delivery_draft_lines ?? []) as Array<{
@@ -358,39 +361,73 @@ async function commitDeliveryDraft(admin: Admin, draftId: string) {
   if (lines.length === 0) throw new Error("draft has no lines");
   const total = lines.reduce((sum, line) => sum + line.quantity, 0);
 
-  const { data: delivery, error: deliveryError } = await admin
-    .from("deliveries")
-    .insert({
-      customer_id: draft.customer_id,
-      quantity: total,
-      delivered_at: draft.delivered_on,
-      note: draft.note,
-      delivered_by: draft.delivered_by,
-    })
+  const { data: claimed, error: claimError } = await admin
+    .from("delivery_drafts")
+    .update({ status: "committed" })
+    .eq("id", draftId)
+    .in("status", ["draft", "ready"])
+    .is("committed_delivery_id", null)
     .select("id")
-    .single();
-  if (deliveryError) throw new Error(deliveryError.message);
-
-  const { error: linesError } = await admin.from("delivery_lines").insert(
-    lines.map((line) => ({
-      delivery_id: delivery.id,
-      product_id: line.product_id,
-      quantity: line.quantity,
-      gold_lot_id: line.gold_lot_id,
-      source_handover_id: line.source_handover_id,
-    })),
-  );
-  if (linesError) {
-    await admin.from("deliveries").delete().eq("id", delivery.id);
-    throw new Error(linesError.message);
+    .maybeSingle();
+  if (claimError) throw new Error(claimError.message);
+  if (!claimed) {
+    const { data: current, error: currentError } = await admin
+      .from("delivery_drafts")
+      .select("status, committed_delivery_id")
+      .eq("id", draftId)
+      .maybeSingle();
+    if (currentError) throw new Error(currentError.message);
+    if (current?.status === "committed" && current.committed_delivery_id) {
+      return current.committed_delivery_id as string;
+    }
+    if (current?.status === "cancelled") throw new Error("draft is cancelled");
+    throw new Error("draft is already being committed");
   }
 
-  const { error: updateError } = await admin
-    .from("delivery_drafts")
-    .update({ status: "committed", committed_delivery_id: delivery.id })
-    .eq("id", draftId);
-  if (updateError) throw new Error(updateError.message);
-  return delivery.id as string;
+  let deliveryId: string | null = null;
+  try {
+    const { data: delivery, error: deliveryError } = await admin
+      .from("deliveries")
+      .insert({
+        customer_id: draft.customer_id,
+        quantity: total,
+        delivered_at: draft.delivered_on,
+        note: draft.note,
+        delivered_by: draft.delivered_by,
+      })
+      .select("id")
+      .single();
+    if (deliveryError) throw new Error(deliveryError.message);
+    deliveryId = delivery.id as string;
+
+    const { error: linesError } = await admin.from("delivery_lines").insert(
+      lines.map((line) => ({
+        delivery_id: deliveryId,
+        product_id: line.product_id,
+        quantity: line.quantity,
+        gold_lot_id: line.gold_lot_id,
+        source_handover_id: line.source_handover_id,
+      })),
+    );
+    if (linesError) throw new Error(linesError.message);
+
+    const { error: updateError } = await admin
+      .from("delivery_drafts")
+      .update({ committed_delivery_id: deliveryId })
+      .eq("id", draftId);
+    if (updateError) throw new Error(updateError.message);
+    return deliveryId;
+  } catch (err) {
+    if (deliveryId) {
+      await admin.from("deliveries").delete().eq("id", deliveryId);
+    }
+    await admin
+      .from("delivery_drafts")
+      .update({ status: "ready", committed_delivery_id: null })
+      .eq("id", draftId)
+      .is("committed_delivery_id", null);
+    throw err;
+  }
 }
 
 export async function validateProposal(
@@ -434,7 +471,11 @@ export async function validateProposal(
   if (actionType === "create_delivery_draft" || actionType === "validate_delivery") {
     const parsed = parseCreateDeliveryDraft(payload);
     if (!parsed.data) return validationOf(parsed.issues);
-    return validateRegisterPricedDelivery(admin, { ...parsed.data, ensurePrices: [], createLots: [] });
+    return validateRegisterPricedDelivery(admin, {
+      ...parsed.data,
+      ensurePrices: [],
+      createLots: [],
+    });
   }
   if (actionType === "approve_delivery") {
     const parsed = parseApproveDelivery(payload);
@@ -449,12 +490,14 @@ export async function validateProposal(
       return validationOf([issue("draft_cancelled", "delivery draft is cancelled")]);
     }
     if (draft.status === "committed") return validationOf([]);
-    const lines = ((draft.delivery_draft_lines ?? []) as Array<{
-      product_id: string;
-      quantity: number;
-      gold_lot_id: string | null;
-      source_handover_id: string | null;
-    }>).map((line) => ({
+    const lines = (
+      (draft.delivery_draft_lines ?? []) as Array<{
+        product_id: string;
+        quantity: number;
+        gold_lot_id: string | null;
+        source_handover_id: string | null;
+      }>
+    ).map((line) => ({
       productId: line.product_id,
       quantity: line.quantity,
       goldLotId: line.gold_lot_id,
@@ -498,7 +541,10 @@ export async function validateProposal(
     const missingLotLines = lines.filter((line) => line.quantity > 0 && line.gold_lot_id == null);
     if (missingLotLines.length === 0) {
       issues.push(
-        issue("no_missing_lot_lines", "delivery has no lines without gold_lot_id to mark as legacy"),
+        issue(
+          "no_missing_lot_lines",
+          "delivery has no lines without gold_lot_id to mark as legacy",
+        ),
       );
     }
     return validationOf(issues);
@@ -596,10 +642,12 @@ export async function executeProposal(
     if (delivery.legacy_without_lot) {
       return { deliveryId: delivery.id, alreadyMarked: true };
     }
-    const missingPcs = ((delivery.delivery_lines ?? []) as Array<{
-      quantity: number;
-      gold_lot_id: string | null;
-    }>)
+    const missingPcs = (
+      (delivery.delivery_lines ?? []) as Array<{
+        quantity: number;
+        gold_lot_id: string | null;
+      }>
+    )
       .filter((line) => line.quantity > 0 && line.gold_lot_id == null)
       .reduce((sum, line) => sum + line.quantity, 0);
     if (missingPcs <= 0) throw new Error("delivery has no lines without gold_lot_id");
@@ -663,9 +711,16 @@ export async function proposeAdminAction(
     .select("*")
     .single();
   if (error) throw new Error(error.message);
-  await logEvent(admin, data.id, "proposed", input.proposedBy ?? "grok", input.proposedByUserId ?? null, {
-    validation,
-  });
+  await logEvent(
+    admin,
+    data.id,
+    "proposed",
+    input.proposedBy ?? "grok",
+    input.proposedByUserId ?? null,
+    {
+      validation,
+    },
+  );
   if (validation.ok) {
     await logEvent(admin, data.id, "validated", "system", null, { validation });
   }
@@ -699,12 +754,10 @@ export async function approveAdminAction(
       .update({ status: "proposed", validation, error_message: "validation failed before approve" })
       .eq("id", proposalId);
     await logEvent(admin, proposalId, "validation_failed", actor, approvedByUserId, { validation });
-    throw new Error(
-      validation.issues.find((row) => row.blocking)?.message ?? "validation failed",
-    );
+    throw new Error(validation.issues.find((row) => row.blocking)?.message ?? "validation failed");
   }
 
-  await admin
+  const { data: claimed, error: claimError } = await admin
     .from("admin_action_proposals")
     .update({
       status: "approved",
@@ -713,14 +766,31 @@ export async function approveAdminAction(
       approved_at: new Date().toISOString(),
       error_message: null,
     })
-    .eq("id", proposalId);
+    .eq("id", proposalId)
+    .in("status", ["proposed", "validated", "failed"])
+    .select("*")
+    .maybeSingle();
+  if (claimError) throw new Error(claimError.message);
+  if (!claimed) {
+    const { data: current, error: currentError } = await admin
+      .from("admin_action_proposals")
+      .select("*")
+      .eq("id", proposalId)
+      .maybeSingle();
+    if (currentError) throw new Error(currentError.message);
+    if (!current) throw new Error("proposal not found");
+    if (current.status === "executed") return current;
+    if (current.status === "rejected") throw new Error("proposal was rejected");
+    if (current.status === "approved") throw new Error("proposal is already being approved");
+    throw new Error("proposal changed before approval");
+  }
   await logEvent(admin, proposalId, "approved", actor, approvedByUserId, {});
 
   try {
     const result = await executeProposal(
       admin,
-      proposal.action_type as AdminActionType,
-      proposal.payload,
+      claimed.action_type as AdminActionType,
+      claimed.payload,
       proposalId,
     );
     const { data: executed, error: execError } = await admin
